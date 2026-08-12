@@ -34,7 +34,7 @@ export default function Settlements() {
               {payouts.map((p, i) => (
                 <tr key={i}>
                   <td><span className="mono tnum">{p.date || '—'}</span></td>
-                  <td><span className="prov-name">{p.note || p.ref || 'settlement'}</span></td>
+                  <td><span className="prov-name mono" title={p.ref || ''}>{(p.ref || '').slice(0, 8)} · {p.status || p.note || 'settlement'}</span></td>
                   <td className="right mono tnum strong">+{usd(p.usd)}</td>
                 </tr>
               ))}

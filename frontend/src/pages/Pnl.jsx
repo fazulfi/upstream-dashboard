@@ -15,7 +15,14 @@ export default function Pnl() {
   const impair = fin.impairments || [];
   const lossRecords = [
     ...amort.map(a => ({ kind: 'Penyusutan', name: a.id + ' · ' + a.upstream, sub: a.status, qty: a.qty, loss_usd: a.cost_usd })),
-    ...impair.map(im => ({ kind: 'Impairment', name: im.name || im.label, sub: (im.date || '') + ' · ' + (im.kind === 'amort' ? '' : ''), qty: im.qty, loss_usd: im.loss_usd })),
+    ...impair.map(im => ({
+      kind: 'Impairment',
+      name: (im.upstream || '') + ' · ' + (im.label || ''),
+      sub: im.seed_residue ? '⚠ data hilang saat migrasi — loss tidak dihitung' : (im.date || ''),
+      qty: im.qty,
+      loss_usd: im.seed_residue ? null : im.loss_usd,  // seed → tampil '—'
+      seed: im.seed_residue || false,
+    })),
   ];
   const totalLoss = (fin.amort_usd ?? 0) + (fin.total_imp_loss_usd ?? 0);
 
@@ -123,7 +130,7 @@ export default function Pnl() {
                       <td><span className={`tag ${r.kind === 'Impairment' ? 'tag-imp' : 'tag-amort'}`}>{r.kind}</span></td>
                       <td><span className="prov-name">{r.name}</span><div className="prov-sub">{r.sub}</div></td>
                       <td className="right tnum">{r.qty}</td>
-                      <td className="right tnum neg">{r.loss_usd != null ? '$' + Number(r.loss_usd).toFixed(2) : '—'}</td>
+                      <td className="right tnum neg">{r.loss_usd != null ? '$' + Number(r.loss_usd).toFixed(2) : <span className="faint">data hilang</span>}</td>
                     </tr>
                   ))}
                   {!lossRecords.length && <tr><td colSpan={4} className="dt-empty">Belum ada aset mati.</td></tr>}

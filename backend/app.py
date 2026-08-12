@@ -456,13 +456,28 @@ def db_read_finance():
         total_imp_loss = 0.0
         for im in impairments:
             try:
-                loss = float(im.get("loss") or 0)
+                # Seed-residue check: impairment dgn upstream 'upstream-N' adalah
+                # placeholder migrasi ledger lama (akun mati yg detail-nya hilang).
+                # JANGAN hapus baris (jejak audit), tapi JANGAN hitung loss-nya ke
+                # net income karena nilainya tak terverifikasi (Rp 27.167 default template).
+                # Label '[DATA-HILANG]' utk audit trail. (Koreksi Faiz: ini data-hilang,
+                # bukan fiktif — beda: hapus vs zero-kan.)
+                _up = im.get("upstream") or ""
+                seed = _up.startswith("upstream-")
+                loss_raw = float(im.get("loss") or 0)
+                if seed:
+                    loss = 0.0  # zero-kan (jangan ke net income), baris tetap
+                    label_note = " [DATA-HILANG]"
+                else:
+                    loss = loss_raw
+                    label_note = ""
                 loss_usd = loss / kurs if loss > 100 else loss
                 total_imp_loss += loss_usd
                 imp_list.append({
-                    "id": im["id"], "upstream": im.get("upstream") or "",
+                    "id": im["id"], "upstream": _up,
                     "qty": int(im.get("qty") or 0), "loss_usd": round(loss_usd, 2),
-                    "label": im.get("label") or "",
+                    "label": (im.get("label") or "") + label_note,
+                    "seed_residue": seed,
                 })
             except Exception:
                 pass
@@ -1296,8 +1311,9 @@ def api_payouts():
     wd = c["withdrawals"]
     # prefer live API withdrawals; build payout rows
     rows = []
-    for w in wd:
+    for i, w in enumerate(wd, 1):
         rows.append({
+            "ref": w.get("id") or f"payout-{i}",
             "date": (w.get("requestedAt") or "")[:10],
             "note": "Payout · " + (w.get("status") or ""),
             "usd": float(w.get("amountUsdc") or 0),
@@ -1310,8 +1326,8 @@ def api_payouts():
         data = ledger.get("data", ledger) if isinstance(ledger, dict) else {}
         payouts = data.get("payouts", []) if isinstance(data, dict) else []
         rows = [
-            {"date": p.get("date", ""), "note": p.get("note", ""), "usd": float(p.get("usd") or 0)}
-            for p in payouts
+            {"ref": p.get("id") or f"payout-{i+1}", "date": p.get("date", ""), "note": p.get("note", ""), "usd": float(p.get("usd") or 0)}
+            for i, p in enumerate(payouts)
         ]
     total = round(sum(r["usd"] for r in rows), 2)
     return jsonify({"payouts": rows, "total": total, "count": len(rows)})
