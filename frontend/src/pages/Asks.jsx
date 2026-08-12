@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useApi, usd } from '../hooks/useApi';
+import { useApi, usd, apiFetch } from '../hooks/useApi';
 import { SkeletonBlock } from '../components/Skeleton';
 
 const API = import.meta.env.VITE_API_URL || '';
 const num2 = v => v == null ? '—' : (Number(v) < 1 ? Number(v).toFixed(4) : Number(v).toFixed(2));
 
 export default function Asks() {
-  const { data, loading } = useApi('/api/orderbook', 30000);
+  const { data, loading, reload } = useApi('/api/orderbook', 30000);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(null);       // model terpilih utk modal
   const [upSel, setUpSel] = useState('');     // upstream terpilih utk modal
@@ -29,15 +29,27 @@ export default function Asks() {
   };
   const save = async () => {
     if (!sel) return;
-    // cari upstream model yg bisa di-set (punya upstream_catalog_model_id) — pakai yg pertama utk sekarang
-    const target = sel; 
+    const target = sel;
     const ainN = Number(ain), aoutN = Number(aout);
     if (isNaN(ainN) || ainN <= 0) return setMsg('masukkan harga input valid');
     if (target.max_ask != null && ainN > target.max_ask) return setMsg(`melebihi cap max $${target.max_ask}`);
+    const u = target.upstreams?.find(x => x.slug === upSel);
+    const upstream_catalog_model_id = u?.upstream_catalog_model_id;
+    if (!upstream_catalog_model_id) return setMsg('upstream ini tidak punya upstream_catalog_model_id');
     setSaving(true);
     try {
-      // PUT via /api/ask perlu upstream_catalog_model_id — endpoint /api/asks fetch dari asks kita; utk orderbook kita tampilkan daftar; set manual per upstream memakai detail dari /api/asks
-      setMsg('Saved placeholder — verifikasi di halaman /api/asks');
+      const r = await apiFetch('/api/ask', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          upstream_catalog_model_id,
+          askInputPerMtok: ainN,
+          askOutputPerMtok: (isNaN(aoutN) || aoutN <= 0) ? null : aoutN,
+        }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      setMsg('Harga ask tersimpan ✓');
+      reload();
     } catch (e) { setMsg('Error: ' + e.message); } finally { setSaving(false); }
   };
 

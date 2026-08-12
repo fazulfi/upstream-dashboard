@@ -98,7 +98,8 @@ def update_asset_status(aid, status, label=None):
 def add_payout(date, usd, note):
     with conn() as c:
         with c.cursor() as cur:
-            cur.execute("INSERT INTO payouts (date, usd, note) VALUES (%s,%s,%s)", (date, float(usd), note))
+            cur.execute("INSERT INTO payouts (id, date, amount_usdc, status, synced_at) VALUES (gen_random_uuid()::text, %s, %s, 'confirmed', now())",
+                        (date, float(usd)))
         c.commit()
 
 

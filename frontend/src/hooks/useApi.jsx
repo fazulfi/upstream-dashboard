@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const API = import.meta.env.VITE_API_URL || ''; // Vercel rewrites /api -> backend
+const AUTH = import.meta.env.VITE_DASHBOARD_PASSWORD || ''; // password dashboard (X-Auth)
+
+/**
+ * apiFetch — fetch ke backend dengan auth header (X-Auth) & prefix API.
+ * Pakai ini untuk SEMUA request manual (POST/PUT/DELETE) di halaman.
+ */
+export async function apiFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (AUTH) headers['X-Auth'] = AUTH;
+  const url = path.startsWith('/api/') ? `${API}${path}` : path;
+  return fetch(url, { ...options, headers });
+}
 
 /**
  * useApi — fetch with auto-refresh + loading/error state.
@@ -11,17 +23,25 @@ export function useApi(path, pollMs = 0) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const timer = useRef(null);
+  const ac = useRef(null);
 
   const load = useCallback(async () => {
+    const controller = new AbortController();
+    ac.current = controller;
     try {
-      const r = await fetch(`${API}${path}`);
+      const headers = {};
+      if (AUTH) headers['X-Auth'] = AUTH;
+      const r = await fetch(`${API}${path}`, { signal: controller.signal, headers });
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      setData(await r.json());
-      setError(null);
+      const json = await r.json();
+      if (ac.current && !ac.current.signal.aborted) {
+        setData(json);
+        setError(null);
+      }
     } catch (e) {
-      setError(e.message);
+      if (ac.current && !ac.current.signal.aborted) setError(e.message);
     } finally {
-      setLoading(false);
+      if (ac.current && !ac.current.signal.aborted) setLoading(false);
     }
   }, [path]);
 
@@ -29,11 +49,14 @@ export function useApi(path, pollMs = 0) {
     load();
     if (pollMs > 0) {
       timer.current = setInterval(load, pollMs);
-      return () => clearInterval(timer.current);
     }
+    return () => {
+      clearInterval(timer.current);
+      if (ac.current) ac.current.abort();
+    };
   }, [load, pollMs]);
 
-  return { data, loading, error, reload: load };
+  return { data, loading, error, reload: load, refetch: load };
 }
 
 export const usd = v => '$' + (v == null ? '0.00' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));

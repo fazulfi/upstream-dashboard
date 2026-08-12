@@ -34,7 +34,7 @@ export default function FleetHealth() {
   const recheck = async (id) => {
     setBusy(b => ({ ...b, [id]: true })); setNote('');
     try {
-      const r = await fetch(`${API}/api/provider-recheck?id=${encodeURIComponent(id)}`, { method: 'POST' });
+      const r = await apiFetch(`/api/provider-recheck?id=${encodeURIComponent(id)}`, { method: 'POST' });
       const d = await r.json();
       setNote((d && d.ok) ? 'Recheck OK ✓ — status akan refresh 30s' : 'Recheck diproses (lihat flag apiKeyCheckStatus)');
       setTimeout(reload, 2000);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi } from '../hooks/useApi';
+import { useApi, apiFetch } from '../hooks/useApi';
 import Badge from '../components/Badge';
 import { SkeletonBlock } from '../components/Skeleton';
 
@@ -20,7 +20,7 @@ export default function Combos() {
     if (!name.trim() || !slug.trim() || !selected.length) { setMsg('name, slug, model wajib'); return; }
     setBusy(true); setMsg('');
     try {
-      const r = await fetch('/api/combos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), slug: slug.trim(), model_ids: selected }) });
+      const r = await apiFetch('/api/combos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), slug: slug.trim(), model_ids: selected }) });
       const j = await r.json();
       if (r.ok) { setModal(null); setName(''); setSlug(''); setSelected([]); refetch(); setMsg('Combo dibuat ✓ (id didapat via re-sync)'); }
       else setMsg(j.error || 'gagal');
@@ -32,7 +32,7 @@ export default function Combos() {
     if (!confirm('Hapus combo ini?')) return;
     setBusy(true); setMsg('');
     try {
-      await fetch(`/api/combos/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/combos/${id}`, { method: 'DELETE' });
       refetch(); setMsg('Combo dihapus ✓');
     } catch (e) { setMsg(String(e)); }
     setBusy(false);

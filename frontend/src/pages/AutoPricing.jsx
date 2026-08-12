@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useApi } from '../hooks/useApi';
+import { useApi, apiFetch } from '../hooks/useApi';
 import { SkeletonBlock } from '../components/Skeleton';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -58,7 +58,7 @@ export default function AutoPricing() {
   const toggle = async () => {
     setArming(true); setNote('');
     try {
-      const r = await fetch(`${API}/api/auto-pricing/arm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ armed: !data?.armed }) });
+      const r = await apiFetch(`/api/auto-pricing/arm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ armed: !data?.armed }) });
       const d = await r.json();
       setNote(d.armed ? '✓ ARMED — eksekusi PUT harga jual nyata' : '✓ DISARMED — mode dry-run (hitung saja, tanpa PUT)');
       setTimeout(reload, 500);
@@ -76,7 +76,7 @@ export default function AutoPricing() {
     }
     setSaving(key); setNote('');
     try {
-      const r = await fetch(`${API}/api/auto-pricing/config`, {
+      const r = await apiFetch('/api/auto-pricing/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upstream, model_id, trigger_pct: trigger, rebound_pct: rebound }),
@@ -91,7 +91,7 @@ export default function AutoPricing() {
     if (!id) return;
     setSaving(`${upstream}|${model_id}`);
     try {
-      const r = await fetch(`${API}/api/auto-pricing/config/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/auto-pricing/config/${id}`, { method: 'DELETE' });
       const d = await r.json();
       setNote(d.ok ? `✓ ${upstream}/${model_id} → kembali default` : 'Error: ' + (d.error || ''));
       setTimeout(reloadCfg, 300);

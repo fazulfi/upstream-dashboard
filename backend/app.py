@@ -21,9 +21,12 @@ import os
 import math
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
 
 import psycopg
 from psycopg.rows import dict_row
@@ -38,6 +41,21 @@ HISTORY_CAP = 20000  # ~55h at 10s
 
 # ── PostgreSQL (primary store for earning history) ──
 DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+
+# ── Konstanta global (dipindah ke atas supaya tidak NameError di module scope) ──
+# Publisher share: konsumen bayar cost_consumer_usdc; publisher dapat X% (pricing config).
+PUBLISHER_SHARE = 0.80
+USAGE_RANGES = {"24h": 86400, "7d": 604800, "30d": 2592000, "90d": 7776000, "all": 0}
+# ── Range bucketing ──
+RANGES = {
+    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
+    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
+}
+CANDLE_LEN = {
+    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
+    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
+}
+MAX_CANDLES = 120
 
 
 def db_connect():
@@ -214,8 +232,11 @@ def db_import_ledger(ledger):
                           float(im.get("loss") or 0), im.get("label"),
                           str(im.get("date") or "")[:10], datetime.now(timezone.utc)))
                 for p in ledger.get("payouts", []) or []:
-                    cur.execute("INSERT INTO payouts (date, amount_usdc, status) VALUES (%s,%s,'confirmed')",
-                                (str(p.get("date") or "")[:10], float(p.get("usd") or p.get("amount_usdc") or 0)))
+                    pid = p.get("id") or str(uuid.uuid4())
+                    cur.execute(
+                        "INSERT INTO payouts (id, date, amount_usdc, status, synced_at) VALUES (%s,%s,%s,'confirmed',now()) "
+                        "ON CONFLICT (id) DO UPDATE SET date=EXCLUDED.date, amount_usdc=EXCLUDED.amount_usdc, status=EXCLUDED.status",
+                        (pid, str(p.get("date") or "")[:10], float(p.get("usd") or p.get("amount_usdc") or 0)))
                 for k, v in (ledger.get("meta", {}) or {}).items():
                     cur.execute("INSERT INTO ledger_meta (k, v) VALUES (%s,%s) ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
                                 (k, str(v)))
@@ -664,6 +685,32 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
+# ── Auth ──
+def require_auth(f):
+    """Decorator: cek X-Auth header atau ?auth= query terhadap DASHBOARD_PASSWORD."""
+    from functools import wraps
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.headers.get("X-Auth") or request.args.get("auth")
+        if token != DASHBOARD_PASSWORD:
+            return jsonify({"error": "unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+@app.before_request
+def _auth_gate():
+    """Terapkan auth ke SEMUA route kecuali /health dan preflight CORS (OPTIONS)."""
+    if request.path == "/health":
+        return None
+    # CORS preflight (OPTIONS) TIDAK boleh kena auth — browser kirim tanpa header
+    if request.method == "OPTIONS":
+        return None
+    return require_auth(lambda: None)()
+
+
 def load_json(path, default=None):
     try:
         with open(path) as f:
@@ -1056,18 +1103,6 @@ def read_history():
     return read_history_file()
 
 
-# ── Range bucketing ──
-RANGES = {
-    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
-    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
-}
-CANDLE_LEN = {
-    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
-    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
-}
-MAX_CANDLES = 120
-
-
 @app.route("/api/history")
 def api_history():
     hist = read_history()
@@ -1333,7 +1368,12 @@ def api_upstreams():
 def api_earnings_log():
     """Earning per-request terbaru — FETCH LANGSUNG ke InferHub /usage/logs segar tiap request
     (bukan baca DB yang sync lambat ~60s), supaya frontend poll 15s dapat data realtime."""
-    size = int(request.args.get("size", 25))
+    try:
+        size = int(request.args.get("size", 25))
+    except (TypeError, ValueError):
+        size = 25
+    if size > 200:
+        size = 25
     d = inferhub_get("/usage/logs", {"range": "30d", "page": 1, "pageSize": max(size, 25)})
     if not d:
         return jsonify({"rows": [], "total": 0, "error": "unavailable"})
@@ -1359,11 +1399,6 @@ def api_earnings_log():
 def api_earnings_alltime():
     c = get_cache()
     return jsonify(c["earnings_alltime"])
-
-
-# Publisher share: konsumen bayar cost_consumer_usdc; publisher dapat X% (pricing config).
-PUBLISHER_SHARE = 0.80
-USAGE_RANGES = {"24h": 86400, "7d": 604800, "30d": 2592000, "90d": 7776000, "all": 0}
 
 
 def _fetch_all_usage(range_id):
@@ -1544,13 +1579,13 @@ def api_keys():
     """API keys — baca dari DB (full pull + sync)."""
     try:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by, secret FROM api_keys ORDER BY created_at DESC")
+            cur.execute("SELECT id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by FROM api_keys ORDER BY created_at DESC")
             rows = cur.fetchall()
         return jsonify([{
             "id": r["id"], "name": r["name"], "key_prefix": r["key_prefix"],
             "scopes": (r["scopes"] or "").split(",") if r["scopes"] else [],
             "created_at": r["created_at"], "last_used_at": r["last_used_at"],
-            "expires_at": r["expires_at"], "replaced_by": r["replaced_by"], "secret": r["secret"],
+            "expires_at": r["expires_at"], "replaced_by": r["replaced_by"],
         } for r in rows])
     except Exception:
         return jsonify([])
@@ -1640,8 +1675,9 @@ def api_keys_post():
                 VALUES (%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
                 ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret
             """, (d.get("id"), name, d.get("prefix"), "chat,completions,embeddings", d.get("secret"), datetime.now(timezone.utc)))
-    except Exception:
-        pass
+        conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
 
 
@@ -1654,8 +1690,9 @@ def api_keys_rotate(kid):
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("INSERT INTO api_keys (id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by, secret, synced_at) VALUES (%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret",
                         (d.get("id"), d.get("name"), d.get("prefix"), "chat,completions,embeddings", d.get("secret"), datetime.now(timezone.utc)))
-    except Exception:
-        pass
+        conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
 
 
@@ -1667,8 +1704,9 @@ def api_keys_delete(kid):
     try:
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM api_keys WHERE id=%s", (kid,))
-    except Exception:
-        pass
+        conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
 
 
@@ -1718,8 +1756,9 @@ def api_topups_post():
                 ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, qr_data=EXCLUDED.qr_data, qr_svg=EXCLUDED.qr_svg
             """, (d.get("topupKey"), int(amount), pm, "pending", d.get("topupKey"),
                   d.get("qrData"), d.get("qrSvg"), datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc)))
-    except Exception:
-        pass
+        conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
 
 
@@ -1764,8 +1803,9 @@ def api_combos_delete(cid):
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM combos WHERE id=%s", (cid,))
             cur.execute("DELETE FROM combo_models WHERE combo_id=%s", (cid,))
-    except Exception:
-        pass
+        conn.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
 
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi } from '../hooks/useApi';
+import { useApi, apiFetch } from '../hooks/useApi';
 import Badge from '../components/Badge';
 import { SkeletonBlock } from '../components/Skeleton';
 
@@ -16,7 +16,7 @@ export default function Keys() {
     if (!name.trim()) return;
     setBusy(true); setMsg('');
     try {
-      const r = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
+      const r = await apiFetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
       const j = await r.json();
       if (r.ok && j.id) { setModal({ created: j }); setName(''); refetch(); }
       else setMsg(j.error || 'gagal buat key');
@@ -28,7 +28,7 @@ export default function Keys() {
     if (!confirm('Rotate key ini? Key lama tetap aktif 24 jam (grace).')) return;
     setBusy(true); setMsg('');
     try {
-      const r = await fetch(`/api/keys/${id}/rotate`, { method: 'POST' });
+      const r = await apiFetch(`/api/keys/${id}/rotate`, { method: 'POST' });
       const j = await r.json();
       if (r.ok && j.id) { setModal({ created: j }); refetch(); }
       else setMsg('rotate gagal');
@@ -40,7 +40,7 @@ export default function Keys() {
     if (!confirm('Revoke key ini? Akses langsung mati, tidak bisa dibatalkan.')) return;
     setBusy(true); setMsg('');
     try {
-      await fetch(`/api/keys/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/keys/${id}`, { method: 'DELETE' });
       refetch();
     } catch (e) { setMsg(String(e)); }
     setBusy(false);

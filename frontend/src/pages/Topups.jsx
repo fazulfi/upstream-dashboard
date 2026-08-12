@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi, usd } from '../hooks/useApi';
+import { useApi, usd, apiFetch } from '../hooks/useApi';
 import Badge from '../components/Badge';
 import { SkeletonBlock } from '../components/Skeleton';
 
@@ -17,7 +17,7 @@ export default function Topups() {
     if (!amt || amt < 10000) { setMsg('Minimal Rp 10.000'); return; }
     setBusy(true); setMsg('');
     try {
-      const r = await fetch('/api/topups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amt, payment_method: 'qris' }) });
+      const r = await apiFetch('/api/topups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amt, payment_method: 'qris' }) });
       const j = await r.json();
       if (r.ok && j.topup_key) { setModal({ qr: j }); setAmount(''); refetch(); }
       else setMsg(j.error || 'gagal buat topup');
@@ -28,7 +28,7 @@ export default function Topups() {
   async function refresh(topupKey) {
     setBusy(true); setMsg('');
     try {
-      const r = await fetch(`/api/topups/${topupKey}/refresh`, { method: 'POST' });
+      const r = await apiFetch(`/api/topups/${topupKey}/refresh`, { method: 'POST' });
       const j = await r.json();
       setMsg(`status: ${j.status} · paid: ${j.paid}`);
       refetch();
