@@ -1,0 +1,15 @@
+[Unit]
+Description=Auto-pricing algo (CodeBuddy + CodeBuddy CN) - undercut competitor, band 2%/5% official
+After=network.target
+
+[Service]
+Type=simple
+# User-scoped unit → JANGAN set User=/Group= (status=216/GROUP pitfall)
+WorkingDirectory=/home/gamesim
+ExecStart=/home/gamesim/.venv-dash/bin/python3 /home/gamesim/scripts/auto_pricing.py --interval 30
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
