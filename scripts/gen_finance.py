@@ -15,8 +15,50 @@ WB = os.path.join(BASE, "keuangan.xlsx")
 FOREX_KEY = "770c979638c370130d32366c5f89efe9"
 
 def load_ledger():
-    with open(LEDGER) as f:
-        return json.load(f)
+    """Baca dari PostgreSQL (single source of truth) — bentuk dict yg sama dgn ledger.json.
+    assets, payouts, refunds, impairments diambil langsung dari DB."""
+    import subprocess
+    def q(sql):
+        r = subprocess.run(["psql", "-d", "upstream", "-t", "-A", "-F", "\t", "-c", sql],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        if not r.stdout.strip():
+            return []
+        return [line.split("\t") for line in r.stdout.strip().split("\n")]
+
+    assets = []
+    for rid, up, qty, cost, curr, buy, life, status, label in q(
+            "SELECT id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label FROM assets ORDER BY id"):
+        assets.append({
+            "id": rid, "upstream": up, "qty": int(float(qty)),
+            "cost_per": float(cost), "curr": curr,
+            "buy": (buy or "")[:10], "lifespan_d": int(float(life or 30)),
+            "status": status, "label": label or "",
+        })
+
+    payouts = []
+    for pid, amt, st, d in q("SELECT id, amount_usdc, status, date FROM payouts ORDER BY date"):
+        payouts.append({"id": pid, "amount_usdc": float(amt or 0), "status": st or "confirmed", "date": str(d)[:10]})
+
+    refunds = []
+    for rid, up, qty, aidr, ausd, lab, d in q(
+            "SELECT id, upstream, qty, amount_idr, amount_usdc, label, date FROM refunds ORDER BY date"):
+        refunds.append({"id": rid, "upstream": up, "qty": int(float(qty or 0)),
+                        "amount_idr": float(aidr or 0), "amount_usdc": float(ausd or 0),
+                        "label": lab or "", "date": str(d)[:10]})
+
+    impairments = []
+    for iid, up, qty, loss, lab, d in q(
+            "SELECT id, upstream, qty, loss, label, date FROM impairments ORDER BY date"):
+        impairments.append({"id": iid, "upstream": up, "qty": int(float(qty or 0)),
+                            "loss": float(loss or 0), "label": lab or "", "date": str(d)[:10]})
+
+    return {
+        "meta": {"name": "WWMA Publishing — Ledger", "as_of": str(date.today()),
+                 "kurs_idr_usd": 17798.25, "kurs_updated": str(date.today())},
+        "assets": assets, "payouts": payouts, "refunds": refunds, "impairments": impairments,
+    }
 
 def save_ledger(L):
     with open(LEDGER, "w") as f:

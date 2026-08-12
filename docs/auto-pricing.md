@@ -71,3 +71,20 @@ Service `ExecStart` pakai interpreter `.venv-dash/bin/python3` dan interval `--i
 - State cycle: `~/.hermes-suisui/logs/auto-pricing-state.json`
 - Hold/cooldown: `~/.hermes-suisui/logs/auto-pricing-hold.json`
 - Arm flag: `~/.hermes-suisui/logs/auto-pricing-arm`
+
+---
+
+## Fin Ops — Single Source Input
+
+DB PostgreSQL = satu-satunya sumber kebenaran keuangan. Dashboard baca DB.
+`scripts/fin_ops.py` = satu pintu input transaksi → otomatis update DB → regen workbook → dashboard live.
+
+```bash
+python3 scripts/fin_ops.py buy --upstream "X" --qty 2 --cost 6750 --curr IDR [--label ".."]
+python3 scripts/fin_ops.py retire --id A-0xx [--label ".."]
+python3 scripts/fin_ops.py refund --upstream "X" --qty 60 --amount_idr 403910 [--label ".."]
+python3 scripts/fin_ops.py regen        # regen keuangan.xlsx dari DB
+python3 scripts/fin_ops.py list
+```
+
+`gen_finance.py` baca DB (bukan ledger.json). Markdown diupdate manual per transaksi.
