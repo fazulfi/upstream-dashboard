@@ -1,17 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const API = import.meta.env.VITE_API_URL || ''; // Vercel rewrites /api -> backend
-// NOTE SECURITY: password dashboard TIDAK seharusnya di-bundle ke client (VITE_* di-inject ke build).
-// Ini patch sementara — keamanan ditangani terpisah oleh koordinator.
-const AUTH = import.meta.env.VITE_DASHBOARD_PASSWORD || ''; // password dashboard (X-Auth)
+
+// ── Auth: token sesi (aman) > X-Auth password (deprecated, jangan di bundle) ──
+// Frontend login sekali via /api/login -> simpan token di sessionStorage ->
+// kirim `Authorization: Bearer <token>`. Password TIDAK pernah di-bundle.
+const TOKEN_KEY = 'upstream_session_token';
+export function getSessionToken() {
+  try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+}
+export function setSessionToken(tok) {
+  try { if (tok) sessionStorage.setItem(TOKEN_KEY, tok); else sessionStorage.removeItem(TOKEN_KEY); } catch { /* noop */ }
+}
+
+// DEPRECATED: X-Auth password dari env. JANGAN set VITE_DASHBOARD_PASSWORD di
+// produksi — password itu bocor ke bundle publik. Pakai /api/login + token.
+const AUTH = import.meta.env.VITE_DASHBOARD_PASSWORD || '';
+
+async function loginWithPassword(password) {
+  const r = await fetch(`${API}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!r.ok) throw new Error('login failed');
+  const d = await r.json();
+  setSessionToken(d.token);
+  return d.token;
+}
+
+function authHeaders(extra = {}) {
+  const tok = getSessionToken();
+  if (tok) return { ...extra, Authorization: `Bearer ${tok}` };
+  if (AUTH) return { ...extra, 'X-Auth': AUTH };
+  return extra;
+}
 
 /**
- * apiFetch — fetch ke backend dengan auth header (X-Auth) & prefix API.
+ * apiFetch — fetch ke backend dengan auth (Bearer token sesi > X-Auth) & prefix API.
  * Pakai ini untuk SEMUA request manual (POST/PUT/DELETE) di halaman.
  */
 export async function apiFetch(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  if (AUTH) headers['X-Auth'] = AUTH;
+  const headers = authHeaders({ ...(options.headers || {}) });
   const url = path.startsWith('/api/') ? `${API}${path}` : path;
   return fetch(url, { ...options, headers });
 }
@@ -31,8 +61,7 @@ export function useApi(path, pollMs = 0) {
     if (ac.current) ac.current.abort();
     const controller = new AbortController();
     try {
-      const headers = {};
-      if (AUTH) headers['X-Auth'] = AUTH;
+      const headers = authHeaders();
       const r = await fetch(`${API}${path}`, { signal: controller.signal, headers });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const json = await r.json();
@@ -76,4 +105,4 @@ export const usdIdr = (v, kurs) => {
   const i = idr(v, kurs);
   return i ? `${u} (${i})` : u;
 };
-export const API_BASE = API;
+export { loginWithPassword };

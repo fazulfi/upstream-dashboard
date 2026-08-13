@@ -1,10 +1,28 @@
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { usd } from '../hooks/useApi';
+import { usd, loginWithPassword, getSessionToken } from '../hooks/useApi';
 
 export default function Settings() {
   const { data } = useOutletContext();
   const bal = data?.balances || {};
   const fin = data?.finance || {};
+  const [pw, setPw] = useState('');
+  const [loginMsg, setLoginMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const doLogin = async (e) => {
+    e.preventDefault();
+    if (!pw) return;
+    setBusy(true); setLoginMsg('');
+    try {
+      await loginWithPassword(pw);
+      setLoginMsg('Login OK — token sesi aktif (24h). Halaman akan refresh.');
+      setPw('');
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      setLoginMsg('Login gagal: ' + (err.message || 'unauthorized'));
+    } finally { setBusy(false); }
+  };
 
   const items = [
     { label: 'Account', value: data?.account?.displayName || '—', sub: data?.account?.email || '' },
@@ -27,6 +45,18 @@ export default function Settings() {
             </div>
           ))}
         </div>
+      </section>
+      <section className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-head"><div><h2>Session</h2><div className="sub">login sekali — token sesi (24h), password tidak disimpan di browser</div></div>
+          <div className="setting-value">{getSessionToken() ? 'token aktif' : 'belum login'}</div></div>
+        <form onSubmit={doLogin} style={{ padding: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Dashboard password"
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border, #333)', background: 'transparent', color: 'inherit' }} />
+          <button type="submit" disabled={busy} style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent, #3b82f6)', border: 'none', color: '#fff', cursor: 'pointer' }}>
+            {busy ? 'Login…' : 'Login'}
+          </button>
+          {loginMsg && <div className="setting-sub" style={{ color: loginMsg.startsWith('Login OK') ? 'var(--ok, #2ecc71)' : 'var(--danger, #e5484d)' }}>{loginMsg}</div>}
+        </form>
       </section>
       <section className="panel" style={{ marginTop: 16 }}>
         <div className="panel-head"><div><h2>Architecture</h2><div className="sub">hybrid deployment</div></div></div>
