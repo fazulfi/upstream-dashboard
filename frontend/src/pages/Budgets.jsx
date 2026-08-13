@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi } from '../hooks/useApi';
+import { useApi, apiFetch } from '../hooks/useApi';
 import Badge from '../components/Badge';
 import { SkeletonBlock } from '../components/Skeleton';
 
@@ -21,7 +21,7 @@ export default function Budgets() {
     if (!editing) return;
     setMsg('');
     try {
-      const r = await fetch(`/api/budgets/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_input_per_mtok: maxIn || null, max_output_per_mtok: null, min_discount_pct: discount || null, enabled: true }) });
+      const r = await apiFetch(`/api/budgets/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_input_per_mtok: maxIn || null, max_output_per_mtok: null, min_discount_pct: discount || null, enabled: true }) });
       const j = await r.json();
       setMsg(j.ok ? `Budget ${editing.model} disimpan ✓` : 'gagal simpan (cek maxAsk cap)');
       setEditing(null); setMaxIn(''); setDiscount('');
@@ -33,7 +33,7 @@ export default function Budgets() {
     if (!confirm(`Clear budget ${model} ke default pasar?`)) return;
     setMsg('');
     try {
-      const r = await fetch(`/api/budgets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_input_per_mtok: null, max_output_per_mtok: null, min_discount_pct: null, enabled: false }) });
+      const r = await apiFetch(`/api/budgets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_input_per_mtok: null, max_output_per_mtok: null, min_discount_pct: null, enabled: false }) });
       const j = await r.json();
       setMsg(j.ok ? `${model} cleared ✓` : 'gagal clear');
       setTimeout(refetch, 800);

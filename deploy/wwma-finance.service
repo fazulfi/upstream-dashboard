@@ -1,0 +1,16 @@
+[Unit]
+Description=WWMA Finance auto-generator (regen keuangan.xlsx dari DB) - net income = dashboard
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+# User-scoped unit → JANGAN set User=/Group= (status=216/GROUP pitfall)
+WorkingDirectory=/home/gamesim
+ExecStart=/home/gamesim/.venv-dash/bin/python3 /home/gamesim/scripts/gen_finance.py
+# FOREX_KEY dibaca dari env, bukan hardcode. Jika tidak di-set, gen_finance.py
+# fallback ke ~/.hermes-suisui/.env (baris FOREX_KEY=...). Lepas komentar untuk set eksplisit:
+#Environment=FOREX_KEY=xxxxx
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

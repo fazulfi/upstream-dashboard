@@ -11,103 +11,165 @@ Cara pakai (semua tulis ke DB langsung):
   python3 fin_ops.py regen        # panggil gen_finance.py -> regen workbook dari DB
   python3 fin_ops.py list         # daftar aset
 
-Peer auth: konek via unix socket sebagai OS user (gamesim), tanpa password.
+DB akses via psycopg langsung (DSN dari env UPSTREAM_DB). Semua perintah
+atomic (satu transaksi: BEGIN/COMMIT, rollback pada error) + query parameterized
+(tanpa manual quoting) + validasi input.
 """
-import argparse, os, subprocess, sys
+import argparse
+import os
+import subprocess
+import sys
+from datetime import date
+
+import psycopg
+
+# DSN sama dgn backend/app.py & full_sync.py (peer/password auth via env).
+DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+
 
 def db():
-    # libpq subprocess: psql peer auth sebagai gamesim
-    return None  # helper di bawah pakai subprocess psql
+    """Koneksi psycopg baru (auto-commit off — transaksi dikontrol pemanggil)."""
+    return psycopg.connect(DB_DSN)
 
-def run_sql(sql, single=False):
-    """Jalankan SQL via psql peer auth, return rows (list of list) atau [[val]]."""
-    r = subprocess.run(["psql", "-d", "upstream", "-t", "-A", "-F", "\t", "-c", sql],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"psql error: {r.stderr}")
-    if not r.stdout.strip():
-        return [] if single else []
-    rows = [line.split("\t") for line in r.stdout.strip().split("\n")]
-    return rows
 
-def next_asset_id():
-    rows = run_sql("SELECT id FROM assets ORDER BY id")
-    # parse A-0xx, cari max numeric, dukung suffix huruf (A-017a)
+def parse_asset_id_number(aid):
+    """Ambil angka maksimal dari id aset (dukung suffix huruf, mis. 'A-017a')."""
     best = 0
-    for (aid,) in rows:
-        stem = aid.split("-")[-1]
-        digits = ""
-        for ch in stem:
-            if ch.isdigit():
-                digits += ch
-            else:
-                break
-        if digits and int(digits) > best:
-            best = int(digits)
-    nxt = best + 1
-    return f"A-{nxt:03d}"
+    stem = aid.split("-")[-1]
+    digits = ""
+    for ch in stem:
+        if ch.isdigit():
+            digits += ch
+        elif digits:
+            break
+    return int(digits) if digits else 0
 
-def find_last_grow():
-    """Cek max A-0xx yg ada; kembalikan id berikutnya (persis next_asset_id)."""
-    return next_asset_id()
+
+def next_asset_id(conn, cur):
+    """Generate id aset berikutnya DALAM transaksi yang sama (serialized via lock).
+
+    Dipanggil hanya di dalam blok transaksi (setelah conn.rollback/commit),
+    sehingga 2 buy concurrent tidak bisa memilih id yang sama:
+    lock tabel assets (SHARE ROW EXCLUSIVE) dibuat dulu, lalu SELECT max + INSERT
+    dalam satu transaksi yang sama -> atomic, tanpa TOCTOU & tanpa reuse id.
+    """
+    cur.execute("LOCK TABLE assets IN SHARE ROW EXCLUSIVE MODE")
+    cur.execute("SELECT id FROM assets")
+    best = 0
+    for (aid,) in cur.fetchall():
+        n = parse_asset_id_number(aid)
+        if n > best:
+            best = n
+    return f"A-{best + 1:03d}"
+
 
 def cmd_buy(a):
-    aid = next_asset_id()
+    up = (a.upstream or "").strip()
+    if not up:
+        print("✗ --upstream wajib diisi")
+        sys.exit(1)
     qty = a.qty
     cost = a.cost
+    if qty <= 0:
+        print("✗ --qty harus > 0")
+        sys.exit(1)
+    if cost <= 0:
+        print("✗ --cost harus > 0")
+        sys.exit(1)
     curr = a.curr.upper()
-    up = a.upstream
-    buy = a.buy or "2026-08-12"
+    if curr not in ("IDR", "USD"):
+        print("✗ --curr harus IDR atau USD")
+        sys.exit(1)
+    buy = a.buy or date.today().isoformat()
+    import datetime
+    try:
+        datetime.date.fromisoformat(buy)
+    except ValueError:
+        print(f"✗ --buy bukan tanggal ISO ({buy})")
+        sys.exit(1)
     lifespan = a.lifespan or 30
     label = a.label or f"{up} {qty} akun x {cost:,.0f} {curr} ({buy})"
-    lab = label.replace("'", "''")
-    up2 = up.replace("'", "''")
-    sql = (f"INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label) "
-           f"VALUES ('{aid}', '{up2}', {qty}, {cost}, '{curr}', '{buy}', {lifespan}, 'active', '{lab}') "
-           f"ON CONFLICT (id) DO UPDATE SET qty=EXCLUDED.qty, cost_per=EXCLUDED.cost_per, status='active', label=EXCLUDED.label;")
-    run_sql(sql)
+
+    with db() as conn:
+        with conn.cursor() as cur:
+            aid = next_asset_id(conn, cur)  # id di-generate di transaksi yg sama
+            cur.execute(
+                "INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s)",
+                (aid, up, qty, cost, curr, buy, lifespan, label),
+            )
+        conn.commit()
     print(f"✓ BUY  {aid}  {up}  {qty} x {cost:,.0f} {curr}  [{buy}] active")
     print(f"   label: {label}")
-    print(f"   NEXT ID otomatis = {next_asset_id()}")
+
 
 def cmd_retire(a):
-    aid = a.id
-    # cek ada
-    rows = run_sql(f"SELECT id, upstream, qty, cost_per, curr FROM assets WHERE id='{aid}'")
-    if not rows:
-        print(f"✗ asset {aid} tidak ditemukan")
+    aid = (a.id or "").strip()
+    if not aid:
+        print("✗ --id wajib diisi")
         sys.exit(1)
-    lab = (a.label or "").replace("'", "''")
-    sql = f"UPDATE assets SET status='retired'"
-    if lab:
-        sql += f", label='{lab}'"
-    sql += f" WHERE id='{aid}';"
-    run_sql(sql)
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, upstream, qty, cost_per, curr FROM assets WHERE id=%s", (aid,))
+            rows = cur.fetchall()
+            if not rows:
+                print(f"✗ asset {aid} tidak ditemukan")
+                sys.exit(1)
+            if a.label:
+                cur.execute("UPDATE assets SET status='retired', label=%s WHERE id=%s", (a.label, aid))
+            else:
+                cur.execute("UPDATE assets SET status='retired' WHERE id=%s", (aid,))
+        conn.commit()
     print(f"✓ RETIRE  {aid}  ({rows[0][1]}) -> status retired")
 
+
 def cmd_refund(a):
-    # insert refund, tidak mengubah assets (refund = pengurang beban)
+    import datetime
     import uuid
+    up = (a.upstream or "").strip()
+    if not up:
+        print("✗ --upstream wajib diisi")
+        sys.exit(1)
+    d = a.date or date.today().isoformat()
+    try:
+        datetime.date.fromisoformat(d)
+    except ValueError:
+        print(f"✗ --date bukan tanggal ISO ({d})")
+        sys.exit(1)
+    # Minimal satu nominal harus ada.
+    if (a.amount_idr or 0) <= 0 and (a.amount_usdc or 0) <= 0:
+        print("✗ butuh --amount_idr atau --amount_usdc > 0")
+        sys.exit(1)
     rid = f"REF-{uuid.uuid4().hex[:4].upper()}"
-    up = a.upstream.replace("'", "''")
-    lab = (a.label or "").replace("'", "''")
-    d = a.date or "2026-08-12"
-    aidr = a.amount_idr or 0
-    ausd = a.amount_usdc or 0
-    qty = a.qty or 0
-    sql = (f"INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date) "
-           f"VALUES ('{rid}', '{up}', {qty}, {aidr}, {ausd}, '{lab}', '{d}');")
-    run_sql(sql)
-    print(f"✓ REFUND  {rid}  {up}  qty {qty}  IDR {aidr:,.0f}  USDC {ausd}")
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (rid, up, a.qty or 0, a.amount_idr or 0, a.amount_usdc or 0, a.label or "", d),
+            )
+        conn.commit()
+    print(f"✓ REFUND  {rid}  {up}  qty {a.qty or 0}  IDR {a.amount_idr or 0:,.0f}  USDC {a.amount_usdc or 0}")
+
 
 def cmd_list(a):
-    rows = run_sql("SELECT id, upstream, qty, cost_per, curr, status, label FROM assets ORDER BY id")
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, upstream, qty, cost_per, curr, status, label FROM assets ORDER BY id")
+            rows = cur.fetchall()
+            best = 0
+            for r in rows:
+                n = parse_asset_id_number(r[0])
+                if n > best:
+                    best = n
+            nxt = f"A-{best + 1:03d}"
     act = sum(1 for r in rows if r[5] == "active")
     ret = sum(1 for r in rows if r[5] == "retired")
     print(f"ASET ({len(rows)} entry: {act} active, {ret} retired)\n")
     for r in rows:
         print(f"  {r[0]:6s} {r[1]:22s} qty={r[2]:>4}  {float(r[3]):>10,.2f} {r[4]}  {r[5]}")
-    print(f"\n  NEXT ID: {next_asset_id()}")
+    print(f"\n  NEXT ID: {nxt}")
+
 
 def cmd_regen(a):
     r = subprocess.run([sys.executable, "/home/gamesim/scripts/gen_finance.py"], capture_output=True, text=True)
@@ -116,6 +178,7 @@ def cmd_regen(a):
         print("STDERR:", r.stderr[-1500:])
         sys.exit(1)
     print("✓ workbook keuangan.xlsx regenerated dari DB")
+
 
 def main():
     p = argparse.ArgumentParser(description="fin_ops — input transaksi keuangan, DB single source")
@@ -153,6 +216,7 @@ def main():
 
     a = p.parse_args()
     a.fn(a)
+
 
 if __name__ == "__main__":
     main()

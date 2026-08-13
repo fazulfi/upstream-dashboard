@@ -1,23 +1,52 @@
 #!/usr/bin/env python3
 """WWMA Publishing — Finance Auto-Generator.
-Baca ledger.json (single source of truth) -> regenerate workbook + P&L + neraca.
-Mama (Suisui) tambah data di ledger.json saat: Faiz beli akun / akun deaktif / payout.
+Baca dari PostgreSQL (single source of truth) -> regenerate workbook + P&L + neraca.
+Mama (Suisui) tambah data di ledger saat: Faiz beli akun / akun deaktif / payout.
 Script ini jalan tiap malam via systemd timer -> semua laporan update otomatis.
+
+Logika keuangan DISAMAKAN dgn dashboard (`backend/app.py` `db_read_finance`) supaya
+net income workbook == net income dashboard:
+  net_income = payout + refund − amort − impairment − opex
+  - amortisasi = hanya aset `status != 'active'`, FULL cost (bukan pro-rata)
+  - refund   DIKURANG dari beban (income), bukan ditambah
+  - impairment seed (upstream startswith 'upstream-') di-zero-kan (DATA-HILANG)
+  - opex = 0.10
+ FOREX_KEY dibaca dari env (FOREX_KEY) atau `~/.hermes-suisui/.env`, bukan hardcode.
 """
 import json
 import os
+import subprocess
+import sys
 from datetime import date
 from openpyxl import Workbook, load_workbook
 
 BASE = "/home/gamesim/shared-memory/inferhub-business/finance"
 LEDGER = os.path.join(BASE, "ledger.json")
 WB = os.path.join(BASE, "keuangan.xlsx")
-FOREX_KEY = "770c979638c370130d32366c5f89efe9"
+ENV_FILE = os.path.expanduser("~/.hermes-suisui/.env")
+
+
+def load_forex_key():
+    """FOREX_KEY dari env; fallback baca ~/.hermes-suisui/.env. Bukan hardcode."""
+    if os.environ.get("FOREX_KEY"):
+        return os.environ["FOREX_KEY"].strip().strip('"').strip("'")
+    try:
+        with open(ENV_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("FOREX_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return None
+
+
+FOREX_KEY = load_forex_key()
+
 
 def load_ledger():
     """Baca dari PostgreSQL (single source of truth) — bentuk dict yg sama dgn ledger.json.
     assets, payouts, refunds, impairments diambil langsung dari DB."""
-    import subprocess
     def q(sql):
         r = subprocess.run(["psql", "-d", "upstream", "-t", "-A", "-F", "\t", "-c", sql],
                            capture_output=True, text=True)
@@ -60,16 +89,22 @@ def load_ledger():
         "assets": assets, "payouts": payouts, "refunds": refunds, "impairments": impairments,
     }
 
+
 def save_ledger(L):
     with open(LEDGER, "w") as f:
         json.dump(L, f, indent=2, ensure_ascii=False)
         f.write("\n")
+
 
 def fetch_live_kurs():
     """Tarik kurs IDR realtime dari forexrateapi, update ledger.json meta.
     Gagal = keep angka lama (biar report tetap jalan) tapi catat warning."""
     import urllib.request
     L = load_ledger()
+    if not FOREX_KEY:
+        print("⚠️ FOREX_KEY tidak ada (env / ~/.hermes-suisui/.env) — pakai kurs lama %.2f"
+              % L["meta"].get("kurs_idr_usd"))
+        return L["meta"]["kurs_idr_usd"]
     try:
         url = ("https://api.forexrateapi.com/v1/latest?api_key=%s"
                "&base=USD&currencies=IDR" % FOREX_KEY)
@@ -77,7 +112,6 @@ def fetch_live_kurs():
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read().decode())
         kurs = float(data["rates"]["IDR"])
-        from datetime import date
         L["meta"]["kurs_idr_usd"] = kurs
         L["meta"]["kurs_updated"] = str(date.today())
         save_ledger(L)
@@ -90,67 +124,65 @@ def fetch_live_kurs():
 def usd_eq(amount, curr, kurs):
     return amount if curr == "USD" else amount / kurs
 
+
 def main():
     L = load_ledger()
     kurs = fetch_live_kurs()          # selalu tarik kurs realtime, update meta
     today = L["meta"]["as_of"]
 
-    # ---- Akumulasi dari ledger ----
-    total_payout = sum(p.get("amount_usdc", p.get("usd", 0)) for p in L["payouts"])
-    n_payout = len(L["payouts"])
+    # ── Hitung net income — logika SAMA dgn backend/app.py db_read_finance ──
+    # payout (confirmed saja)
+    total_payout = sum(p.get("amount_usdc", p.get("usd", 0))
+                       for p in L["payouts"] if p.get("status", "confirmed") == "confirmed")
+    n_payout = sum(1 for p in L["payouts"] if p.get("status", "confirmed") == "confirmed")
 
-    # Aset
-    total_cost_usd = 0.0
-    total_cost_idr = 0.0
+    # Aset -> cost_usd per asset (seperti db_read_finance: IDR dibagi kurs)
+    asset_list = []
+    total_capital_usd = 0.0
     total_akun = 0
-    total_akun_aktif = 0
-    # Akun yang sudah kena impairment penuh (qty aktif dikurangi) — mapping dari impairments
-    # Ini konservatif: setiap impairment mengurangi qty aktif upstream terkait (default: Codex).
-    impaired_qty_by_ref = {}  # asset_ref -> qty
-    for im in L["impairments"]:
-        ref = im.get("asset_ref")
-        if ref:
-            impaired_qty_by_ref[ref] = impaired_qty_by_ref.get(ref, 0) + im["qty"]
     for a in L["assets"]:
-        total_akun += a["qty"]
-        cost = a["cost_per"] * a["qty"]
-        if a["curr"] == "USD":
-            total_cost_usd += cost
-        else:
-            total_cost_idr += cost
+        cost_per = a["cost_per"]
+        qty = a["qty"]
+        curr = (a.get("curr") or "USD").strip().upper()
+        cost_usd = cost_per * qty / kurs if curr == "IDR" else cost_per * qty
+        total_capital_usd += cost_usd
+        total_akun += qty
+        asset_list.append({**a, "cost_usd": round(cost_usd, 4)})
+    total_akun_aktif = sum(a["qty"] for a in asset_list if (a.get("status") or "active") == "active")
 
-    # Akun aktif = qty asset dgn status 'active' (retired/drained keluar dari aktif)
-    total_akun_aktif = sum(a["qty"] for a in L["assets"] if (a.get("status") or "active") == "active")
+    # Amortisasi = hanya aset status != 'active', FULL cost (bukan pro-rata)
+    amort_assets = [a for a in asset_list if a["status"] != "active"]
+    total_amort_usd = round(sum(a["cost_usd"] for a in amort_assets), 4)
 
-    # Impairment
-    total_imp_idr = 0.0
-    total_imp_qty = 0
+    # Impairment: seed (upstream startswith 'upstream-') di-zero-kan (DATA-HILANG),
+    # loss_usd = loss/kurs jika loss > 100, minus 100 -> pakai raw.
+    total_imp_loss_usd = 0.0
+    impaired_rows = []
     for im in L["impairments"]:
-        total_imp_idr += im["loss"]
-        total_imp_qty += im["qty"]
+        _up = im.get("upstream") or ""
+        seed = _up.startswith("upstream-")
+        loss = 0.0 if seed else im["loss"]
+        loss_usd = loss / kurs if loss > 100 else loss
+        total_imp_loss_usd += loss_usd
+        impaired_rows.append({**im, "loss_usd": round(loss_usd, 2),
+                              "label": (im.get("label") or "") + (" [DATA-HILANG]" if seed else ""),
+                              "seed_residue": seed})
+    total_imp_loss_usd = round(total_imp_loss_usd, 2)
 
-    # Akun aktif = total beli - akun yg impaired (impairment = akun yg dulu aktif, kini invalid)
-    # (total_akun_aktif sudah dihitung dari status 'active' di atas — baris ini cuma fallback)
-    if total_akun_aktif == 0 and total_akun > 0:
-        total_akun_aktif = max(total_akun - total_imp_qty, 0)
+    # Refund = uang kembali (income) — kurangi beban rugi bersih (tdk ditambah)
+    total_refund_usd = 0.0
+    refund_rows = []
+    for rd in L["refunds"]:
+        aidr = rd["amount_idr"]
+        ausd = rd["amount_usdc"]
+        v = ausd if ausd > 0 else (aidr / kurs if aidr > 100 else aidr)
+        total_refund_usd += v
+        refund_rows.append({**rd, "refund_usd": round(v, 4)})
+    total_refund_usd = round(total_refund_usd, 2)
 
-    # Amortisasi proporsional per aset: susut = cost × (hari sejak beli / lifespan), cap 100%.
-    # Akun yang sudah impaired dianggap habis (tidak di-amortize lagi di sini; loss-nya
-    # sudah dicatat terpisah sebagai impairment). Hitung dalam USD eq.
-    from datetime import datetime
-    _asof = datetime.strptime(today, "%Y-%m-%d")
-    total_amort_usd = 0.0
-    for a in L["assets"]:
-        try:
-            _buy = datetime.strptime(a["buy"], "%Y-%m-%d")
-        except Exception:
-            _buy = _asof
-        days = max((_asof - _buy).days, 0)
-        frac = min(days / max(a.get("lifespan_d", 30), 1), 1.0)
-        cost_usd = usd_eq(a["cost_per"], a["curr"], kurs) * a["qty"]
-        total_amort_usd += cost_usd * frac
-    total_amort_usd = round(total_amort_usd, 2)
-
+    opex = 0.10
+    net_income = round(total_payout + total_refund_usd - total_amort_usd
+                       - total_imp_loss_usd - opex, 2)
 
     # ---- Simpan ringkasan ke JSON (untuk ref script lain / debug) ----
     summary = {
@@ -158,17 +190,19 @@ def main():
         "kurs": kurs,
         "total_payout_usd": round(total_payout, 2),
         "n_payout": n_payout,
-        "total_cost_usd": round(total_cost_usd, 2),
-        "total_cost_idr": round(total_cost_idr),
+        "total_refund_usd": total_refund_usd,
+        "total_amort_usd": total_amort_usd,
+        "amort_assets": [{**a, "cost_usd": a["cost_usd"]} for a in amort_assets],
+        "total_imp_loss_usd": total_imp_loss_usd,
+        "opex": opex,
+        "net_income": net_income,
+        "total_capital_usd": round(total_capital_usd, 2),
         "total_akun_assets": total_akun,
         "total_akun_aktif": total_akun_aktif,
-        "total_imp_idr": round(total_imp_idr),
-        "total_imp_qty": total_imp_qty,
     }
     print(json.dumps(summary, indent=2))
 
     # ---- Tulis workbook ----
-    # Membuat workbook baru dari nol (rebuild) biar nggak ada data basi
     wb = Workbook()
 
     # Income Statement (USD only)
@@ -180,20 +214,22 @@ def main():
         [None, None],
         ["PENDAPATAN", None],
         [f"Revenue – Earnings USDC ({n_payout} payout)", total_payout],
-        ["Total Pendapatan", total_payout],
+        [f"Refund ({len(refund_rows)}) — pengurang beban", total_refund_usd],
+        ["Total Pendapatan", round(total_payout + total_refund_usd, 2)],
         [None, None],
         ["BEBAN POKOK (COGS)", None],
-        ["Amortisasi aset (proporsional per hari)", total_amort_usd],
+        ["Amortisasi aset (non-active, full cost)", total_amort_usd],
         ["Total COGS (USD)", total_amort_usd],
         [None, None],
-        ["LABA KOTOR", round(total_payout - total_amort_usd, 2)],
+        ["LABA KOTOR", round(total_payout + total_refund_usd - total_amort_usd, 2)],
         [None, None],
         ["BEBAN OPERASIONAL", None],
-        ["Beban Bank/Gas Fee (est.)", 0.10],
-        [f"Impairment {total_imp_qty} akun invalid (Rp {round(total_imp_idr):,} / kurs)", round(total_imp_idr / kurs, 2)],
-        ["Total Beban Operasional", round(0.10 + total_imp_idr / kurs, 2)],
+        ["Beban Bank/Gas Fee (est.)", opex],
+        [f"Impairment {len(impaired_rows)} akun invalid ({round(total_imp_loss_usd, 2)} USD)",
+         total_imp_loss_usd],
+        ["Total Beban Operasional", round(opex + total_imp_loss_usd, 2)],
         [None, None],
-        ["LABA BERSIH (NET INCOME)", round(total_payout - total_amort_usd - (0.10 + total_imp_idr/kurs), 2)],
+        ["LABA BERSIH (NET INCOME)", net_income],
     ]
     for r in rows_inc:
         ws.append(r)
@@ -201,27 +237,38 @@ def main():
     # Asset Register (USD eq — full USD sesuai operator)
     wsa = wb.create_sheet("Asset Register")
     wsa.append(["ID", "Upstream", "Qty", "Cost/unit (native)", "Cost/unit (USD)", "Total USD eq", "Buy", "Lifespan_d", "Status"])
-    for a in L["assets"]:
+    for a in asset_list:
         cost_usd = usd_eq(a["cost_per"], a["curr"], kurs)
-        wsa.append([a["id"], a["upstream"], a["qty"], a["cost_per"], round(cost_usd, 4), round(cost_usd * a["qty"], 4), a["buy"], a["lifespan_d"], a["status"]])
-    wsa.append(["TOTAL", "", total_akun, "", "", round(total_cost_usd + total_cost_idr / kurs, 2), "", "", ""])
+        wsa.append([a["id"], a["upstream"], a["qty"], a["cost_per"], round(cost_usd, 4),
+                    round(a["cost_usd"], 4), a["buy"], a["lifespan_d"], a["status"]])
+    wsa.append(["TOTAL", "", total_akun, "", "", round(total_capital_usd, 2), "", "", ""])
 
     # Payout register
     wsp = wb.create_sheet("Payouts")
-    wsp.append(["Tanggal", "USD", "Note"])
+    wsp.append(["Tanggal", "USD", "Status", "Note"])
     for p in L["payouts"]:
-        wsp.append([p["date"], p.get("amount_usdc", p.get("usd", 0)), p.get("note", "")])
-    wsp.append(["TOTAL", total_payout, ""])
+        wsp.append([p["date"], p.get("amount_usdc", p.get("usd", 0)), p.get("status", ""), p.get("note", "")])
+    wsp.append(["TOTAL", total_payout, "", ""])
+
+    # Refund register
+    wsr = wb.create_sheet("Refunds")
+    wsr.append(["ID", "Upstream", "Qty", "IDR", "USD", "Refund USD", "Label", "Date"])
+    for rd in refund_rows:
+        wsr.append([rd["id"], rd["upstream"], rd["qty"], rd["amount_idr"], rd["amount_usdc"],
+                    rd["refund_usd"], rd["label"], rd["date"]])
+    wsr.append(["TOTAL", "", "", "", "", total_refund_usd, "", ""])
 
     # Impairment register
     wsi = wb.create_sheet("Impairments")
-    wsi.append(["ID", "Label", "Qty", "Loss", "Curr", "Date"])
-    for im in L["impairments"]:
-        wsi.append([im["id"], im["label"], im["qty"], im["loss"], im.get("curr", "IDR"), im["date"]])
-    wsi.append(["TOTAL", "", total_imp_qty, round(total_imp_idr), "", ""])
+    wsi.append(["ID", "Label", "Qty", "Loss", "Loss USD", "Curr", "Date"])
+    for im in impaired_rows:
+        wsi.append([im["id"], im["label"], im["qty"], im["loss"], im["loss_usd"],
+                    im.get("curr", "IDR"), im["date"]])
+    wsi.append(["TOTAL", "", "", total_imp_loss_usd, "", "", ""])
 
     wb.save(WB)
     print("Workbook regenerated:", WB)
+
 
 if __name__ == "__main__":
     main()
