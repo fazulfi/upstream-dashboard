@@ -1,26 +1,32 @@
 #!/usr/bin/env python3
 """Auto-pricing algo — CodeBuddy + ClinePass + CodeBuddy.CN (per model, per upstream).
 
-Logika final (Faiz spec, 2026-08-12):
+Logika FAIZ v2 (2026-08-13, REBOUND DIHAPUS):
+  position tracking (wajib tiap cycle):
+    total_provider   = len(asksIn) di /catalog utk model itu   (SEMUA harga / semua provider)
+    provider_ok_kita = jumlah provider OK kita utk upstream tsb (/publisher/providers)
+    posisi_kompetitor = total_provider - provider_ok_kita        (kita selalu tahu posisi)
+
   anchor komp  = /market minAskIn (kompetitor SEJATI, bukan catalog/provider sendiri)
-  floor        = official x rebound_pct   (jual wajar minimum utk REBOUND)
-  trigger      = official x trigger_pct   (batas "harga tidak wajar")
+  trigger      = official x trigger_pct   (batas "harga tidak wajar" / range trigger)
 
   Per model per cycle:
     our <= komp                 -> HOLD/leader  (kita sudah termurah, DIAM)
-    komp <= trigger             -> REBOUND ke floor (kompetitor gila murah, balik jual wajar)
-    komp > trigger              -> UNDERCUT ikut komp - 0.1% x official
-                                     (BEBAS di bawah floor, sampai jadi termurah)
+    komp <= trigger             -> IGNORE range trigger.
+                                   UNDERCUT kompetitor NON-TRIGGER terendah:
+                                   = harga terendah di orderbook yg MASIH di luar range trigger
+                                   (level terendah di atas trigger_px), dikurangi offset.
+    komp > trigger              -> UNDERCUT normal ikut komp - 0.1% x official
     our sudah ~= target         -> HOLD (jangan gerak)
 
 Band per upstream (default, bisa di-override config tiap model):
-  codebuddy    -> trigger 2%,  rebound 10%
-  codebuddy-cn -> trigger 2%,  rebound 10%
-  cline-pass   -> deepseek-v4-flash 10/15, lainnya 20/25
+  codebuddy    -> trigger 2%
+  codebuddy-cn -> trigger 5%   (config 08-13)
+  cline-pass   -> deepseek-v4-flash 10%, lainnya 20%
   (conf per model dari DEFAULT_CONFIG_FILE menang atas default)
 
 Anti-loop / stabilitas:
-  - anchor pakai /market (bukan catalog asksIn) -> tidak undercut ke harga diri sendiri
+  - anchor pakai /market + orderbook /catalog (bukan hanya harga diri sendiri)
   - cooldown per model (cb/cbcn=10s, cp=15s) -> tidak gerak ganda dalam 1 cycle
   - HTTP 429/timeout -> skip, jangan retry di cycle yg sama
   - atomic write utk semua state (.tmp + os.replace)
@@ -269,6 +275,63 @@ def get_market_min():
         return {}
 
 
+def get_positions(catalog):
+    """POSISI KOMPETITOR per model (Faiz v2 — wajib tiap cycle).
+
+    Dari /catalog (sudah di-fetch):
+      - asksIn[] per model = harga SEMUA provider di platform utk model itu.
+        total_provider = len(asksIn)  (total di semua harga)
+        histogram orderbook = {price: count}
+      - provider_ok_kita = jumlah provider OK kita utk upstream tsb
+        (diambil dari /publisher/providers sekali per cycle).
+
+    Return {(slug, model_id): {"total_provider", "provider_ok_kita",
+                                "posisi_kompetitor", "levels"}}
+    levels = sorted list of (price, qty) — semua harga, semua provider.
+    """
+    try:
+        st, provs = api("/publisher/providers")
+        ok_kita = {}
+        if st == 200 and isinstance(provs, list):
+            for p in provs:
+                if p.get("enabled") and p.get("apiKeyCheckStatus") == "ok":
+                    s = p.get("upstreamSlug")
+                    ok_kita[s] = ok_kita.get(s, 0) + 1
+    except Exception:
+        pass
+
+    out = {}
+    # catalog struktur sebenarnya: dict keyed by slug -> dict keyed by model -> {asksIn, officialIn}
+    # model key bisa bare ("deepseek-v4-flash") atau prefixed ("cline-pass/deepseek-v4-flash").
+    # normalize ke bare model_id (strip sampai-akhir '/') supaya cocok dgn asks model_id.
+    items_by_slug = catalog.items() if isinstance(catalog, dict) else []
+    for slug, sub in items_by_slug:
+        if not isinstance(sub, dict):
+            continue
+        for mk, m in sub.items():
+            if not isinstance(m, dict):
+                continue
+            asks = m.get("asksIn") or []
+            cnt = {}
+            for price in asks:
+                try:
+                    p = round(float(price), 6)
+                except (TypeError, ValueError):
+                    continue
+                if p > 0:
+                    cnt[p] = cnt.get(p, 0) + 1
+            total = sum(cnt.values())
+            ok = ok_kita.get(slug, 0)
+            mid = mk.split("/")[-1].strip().lower()
+            out[(slug, mid)] = {
+                "total_provider": total,
+                "provider_ok_kita": ok,
+                "posisi_kompetitor": max(total - ok, 0),
+                "levels": sorted(cnt.items()),   # [(price, qty), ...] asc
+            }
+    return out
+
+
 def run_cycle(dry_run=False):
     ARMED = True
     try:
@@ -296,6 +359,8 @@ def run_cycle(dry_run=False):
     now = time.time()
     # anchor kompetitor DARI /market (minAskIn per slug/model) — exclude stress kita sendiri, lintas-upstream.
     market = get_market_min()
+    # POSISI KOMPETITOR per model (Faiz v2) — total provider vs provider OK kita.
+    positions = get_positions(catalog)
 
     for slug in sorted(scope):
         cooldown = COOLDOWN_CP if slug == "cline-pass" else COOLDOWN_CB
@@ -315,7 +380,7 @@ def run_cycle(dry_run=False):
             mid = a["model_id"]
 
             conf = config.get((slug, mid))
-            t_pct, r_pct = band_for(slug, mid, conf)   # trigger% & rebound% (FIX: r_pct dipakai utk rebound)
+            t_pct, _r_pct = band_for(slug, mid, conf)   # trigger% (rebound dihapus v2)
             hk = f"{slug}|{mid}"
             prev = hold.get(hk, {})
             prev_ts = prev.get("ts", 0)
@@ -329,9 +394,7 @@ def run_cycle(dry_run=False):
 
             # ── anchor kompetitor BERSIH & DETERMINISTIK ──
             # kompetitor = /market minAskIn (harga termurah yg tersedia utk upstream-model ini,
-            #   dari platform market — BUKAN sejarah provider kita). Ini satu-satunya kompetitor sejati:
-            #   catalog/asksIn hanya berisi harga kita sendiri (semua provider kita), jadi NGGAK dipakai
-            #   sbg kompetitor (itu yg bikin undercut ke diri sendiri → loop tak berujung).
+            #   dari platform market). catalog/asksIn = SEMUA provider (termasuk kita) → utk posisi.
             comp = market.get((slug, mid))
             if comp is None or comp <= 0:
                 cap = a.get("cheapest_active_pct") or 0
@@ -340,18 +403,21 @@ def run_cycle(dry_run=False):
                 else:
                     comp = None
 
-            # ── LOGIKA FAIZ FINAL ──
-            # floor   = official × rebound%  (jual wajar minimum untuk REBOUND)
-            # trigger = official × trigger%  (batas "harga tidak wajar")
-            # comp    = /market minAskIn (kompetitor sejati dar platform)
-            # - kalau komp <= trigger (kompetitor murah banget, harga gak masuk akal)
-            #     → REBOUND balik ke floor (jual wajar)
-            # - kalau komp > trigger (kompetitor wajar)
-            #     → UNDERCUT ikut komp − 0.1% official (BEBAS di bawah floor, sampai jd termurah)
-            # - kalau our sudah ≈ target → diam (hold)
-            floor_px = round(official * r_pct, 6)
-            if max_in > 0:
-                floor_px = min(floor_px, max_in)
+            # ── POSISI KOMPETITOR (Faiz v2) ──
+            pos = positions.get((slug, mid), {})
+            tot_prov = pos.get("total_provider", 0)
+            ok_kita = pos.get("provider_ok_kita", 0)
+            pos_komp = pos.get("posisi_kompetitor", 0)
+            levels = pos.get("levels", [])          # [(price, qty) asc]
+
+            # ── LOGIKA FAIZ v2 (REBOUND DIHAPUS) ──
+            # trigger = official × trigger% (range "harga tidak wajar")
+            # - our <= komp              → HOLD/leader (kita termurah, DIAM)
+            # - komp <= trigger          → IGNORE range trigger.
+            #                              UNDERCUT kompetitor NON-TRIGGER terendah
+            #                              (level orderbook terendah yang masih DI ATAS trigger_px),
+            #                              minus offset. Fokus di range non-trigger.
+            # - komp > trigger           → UNDERCUT normal ikut komp − 0.1% official
             offset = official * 0.001  # 0.1% dari official price
             trigger_px = round(official * t_pct, 6)
 
@@ -359,22 +425,32 @@ def run_cycle(dry_run=False):
             if comp is None or our <= comp + 1e-6:
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader"})
+                                  "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
 
-            # komp ≤ trigger → REBOUND ke floor (kompetitor gak wajar)
+            # komp di range trigger → IGNORE trigger, undercut non-trigger terendah
             if comp <= trigger_px:
-                target = round(floor_px, 6)
-                if target > max_in > 0:
-                    target = max_in
+                # level orderbook terendah yang MASIH di atas trigger (non-trigger / harga wajar)
+                nontrig = [p for p, _q in levels if p > trigger_px]
+                if nontrig:
+                    target = round(nontrig[0] - offset, 6)
+                else:
+                    # tidak ada level non-trigger → jangan turun ke range trigger, diam
+                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                      "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f}; tdk ada level non-trigger, hold | posisi komp {pos_komp}"})
+                    continue
+                if max_in > 0:
+                    target = min(target, max_in)
+                target = max(0.0, round(target, 6))
                 if abs(target - our) <= 0.5e-4:
                     hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                     decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f}, kita sudah di floor ${target:.4f} - hold"})
+                                      "reason": f"already at non-trigger low ${our:.4f} (komp ${comp:.4f} di trigger) - hold | posisi komp {pos_komp}"})
                     continue
-                action = "rebound"
+                action = "undercut"
             else:
-                # komp > trigger → UNDERCUT ikut komp (bebas bawah floor)
+                # komp > trigger → UNDERCUT normal ikut komp (bebas bawah floor)
                 target = round(comp - offset, 6)
                 if max_in > 0:
                     target = min(target, max_in)
@@ -382,22 +458,22 @@ def run_cycle(dry_run=False):
                 if abs(target - our) <= 0.5e-4:
                     hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                     decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"already at ${our:.4f} (comp ${comp:.4f}) - hold"})
+                                      "reason": f"already at ${our:.4f} (comp ${comp:.4f}) - hold | posisi komp {pos_komp}"})
                     continue
                 action = "undercut"
 
             if effective_dry:
-                log(f"  [{slug}] {mid}: our=${our:.4f} floor=${floor_px:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> {action}=${target:.4f} [{'DRY' if not ARMED else 'ARMED'}]")
+                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} -> {action}=${target:.4f} [{'DRY' if not ARMED else 'ARMED'}]")
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"{action} ke ${target:.4f} (comp ${comp or 0:.4f}, trigger ${trigger_px:.4f})"})
+                                  "reason": f"{action} ke ${target:.4f} (comp ${comp or 0:.4f}, trigger ${trigger_px:.4f}) | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
             st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
             status = "OK" if st in (200, 204) else f"HTTP{st}"
-            log(f"  [{slug}] {mid}: our=${our:.4f} floor=${floor_px:.4f} comp=${comp or 0:.4f} -> {action}=${target:.4f} [{status}]")
+            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action}=${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"{action} ke ${target:.4f}", "http": st})
+                                  "reason": f"{action} ke ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
             elif st in (429, 0):
                 log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip, no retry this cycle")
                 decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
