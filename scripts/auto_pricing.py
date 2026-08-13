@@ -562,15 +562,8 @@ def run_cycle(dry_run=False):
                                   "reason": f"komp ${comp:.4f} di trigger ${trigger_px:.4f}; tdk ada level non-trigger kompetitor utk diundercut, hold di ${our:.4f} | posisi komp {pos_komp}"})
                 continue
 
-            # undias acuan = level NON-TRIGGER terendah; kita undias 0.1% di bawahnya
+            # acuan = level NON-TRIGGER terendah di orderbook
             ref_price = nontrig_prices[0]
-            # kalau level non-trigger terendah SUDAH di atas harga kita → kita termurah
-            # di area wajar → HOLD (jangan 'undercut naik'). Under cut = turun, bukan naik.
-            if ref_price >= our - 1e-6:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"kita termurah di area wajar (our ${our:.4f} ≤ non-trigger low ${ref_price:.4f}) - hold | posisi komp {pos_komp}"})
-                continue
             target = round(ref_price - offset, 6)
             # jangan pernah masuk ke range trigger
             target = max(target, trigger_px)
@@ -583,22 +576,24 @@ def run_cycle(dry_run=False):
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"already at ${our:.4f} (non-trigger low ${ref_price:.4f} - 0.1%) - hold | posisi komp {pos_komp}"})
                 continue
-            action = "undercut"
+            # arah: turun = undercut; naik = jemput kompetitor (resume) —
+            # kalau hanya kita di harga itu, kita naik ke level kompetitor di atas.
+            action = "undercut" if target < our else "resume"
 
             if effective_dry:
-                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> undercut non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
+                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> {action} non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"undercut 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
+                                  "reason": f"{action} 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
             st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
             status = "OK" if st in (200, 204) else f"HTTP{st}"
-            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> undercut non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
+            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 # AP-6: sukses → reset backoff (buang skip_until)
                 hold[hk].pop("skip_until", None)
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"undercut 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
+                                  "reason": f"{action} 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
             elif st in (429, 0):
                 # AP-6: 429/timeout → backoff: skip model ini selama BACKOFF detik
                 hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts,
@@ -612,7 +607,7 @@ def run_cycle(dry_run=False):
 
     save_hold_state(hold)
     n_lead = sum(1 for d in decisions if d["action"] == "leader")
-    n_und = sum(1 for d in decisions if d["action"] in ("undercut", "undercut_floor"))
+    n_und = sum(1 for d in decisions if d["action"] in ("undercut", "undercut_floor", "resume"))
     n_hold = sum(1 for d in decisions if d["action"] in ("hold", "stable"))
     n_cd = sum(1 for d in decisions if d["action"] == "cooldown")
     n_stable = sum(1 for d in decisions if d["action"] == "stable")
