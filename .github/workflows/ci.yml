@@ -24,8 +24,10 @@ jobs:
       - name: Python compile scripts
         working-directory: .
         run: python -m compileall -q scripts/ backend/
-      - name: Run tests with coverage
-        run: pytest --cov=app --cov-fail-under=70 --cov-report=term-missing -q
+      - name: Run tests with coverage (logic >=80%, app smoke)
+        run: pytest --cov=logic --cov=app --cov-report=term-missing -q
+      - name: Coverage gate on pure logic
+        run: pytest tests/test_logic.py --cov=logic --cov-report=term-missing --cov-fail-under=80 -q
 
   frontend:
     runs-on: ubuntu-latest

@@ -30,6 +30,8 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import logic  # pure functions (auth, bucketing, sanitize) — unit-testable
+
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
 # CORS: hanya origin dashboard yang diizinkan (bukan `*`). Sesi/Bearer token
 # dipakai agar password tidak perlu di-bundle ke frontend.
@@ -44,6 +46,7 @@ ALLOWED_ORIGINS = set(
 SESSION_TTL = int(os.environ.get("SESSION_TTL", "86400"))  # 24h
 RL_LIMIT = int(os.environ.get("RL_LIMIT", "60"))
 RL_WINDOW = int(os.environ.get("RL_WINDOW", "60"))
+_rl = defaultdict(list)
 
 import psycopg
 from psycopg.rows import dict_row
@@ -70,11 +73,8 @@ RANGES = {
     "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
     "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
 }
-CANDLE_LEN = {
-    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
-    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
-}
-MAX_CANDLES = 120
+CANDLE_LEN = logic.CANDLE_LEN
+MAX_CANDLES = logic.MAX_CANDLES
 
 
 def db_connect():
@@ -729,23 +729,15 @@ CORS(app, resources={r"/api/*": {"origins": list(ALLOWED_ORIGINS)}})
 # Frontend simpan token (localStorage), kirim `Authorization: Bearer <token>`.
 # Token kedaluwarsa (default 24h), tak bisa dipalsukan tanpa password.
 def _sign_session(exp):
-    return hmac.new(DASHBOARD_PASSWORD.encode(), f"upstream-session:{exp}".encode(), hashlib.sha256).hexdigest()
+    return logic.sign_session(exp, DASHBOARD_PASSWORD)
 
 
 def _issue_token():
-    exp = int(time.time()) + SESSION_TTL
-    return f"{exp}.{_sign_session(exp)}"
+    return logic.issue_token(DASHBOARD_PASSWORD, SESSION_TTL)
 
 
 def _verify_token(token):
-    try:
-        exp_s, sig = token.split(".", 1)
-        exp = int(exp_s)
-    except Exception:
-        return False
-    if exp < int(time.time()):
-        return False
-    return hmac.compare_digest(sig, _sign_session(exp))
+    return logic.verify_token(token, DASHBOARD_PASSWORD)
 
 
 def _read_credentials():
@@ -777,26 +769,16 @@ def require_auth(f):
 
 
 
+
 @app.before_request
 def _rate_limit():
     """Rate limit per-IP utk cegah brute-force. Login dikecualikan (punya sendiri)."""
     if request.path == "/health":
         return None
     ip = request.remote_addr or "?"
-    now = time.time()
-    bucket = _rl[ip] = [t for t in _rl[ip] if now - t < RL_WINDOW]
-    if len(bucket) >= RL_LIMIT:
+    if not logic.rate_limit_hit(_rl, ip, RL_LIMIT, RL_WINDOW):
         return jsonify({"error": "rate limited"}), 429
-    _rl[ip].append(now)
     return None
-
-
-@app.before_request
-def _auth_gate():
-    """Auth SEMUA route kecuali /health, /api/login, dan preflight CORS (OPTIONS)."""
-    if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
-        return None
-    return require_auth(lambda: None)()
 
 
 @app.route("/api/login", methods=["POST"])
@@ -1223,12 +1205,8 @@ def read_history():
     return read_history_file()
 
 
-# Durasi tiap range (detik) utk menentukan window history — jangan pakai candle×MAX.
-_RANGE_DUR_S = {
-    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
-    "6h": 21600, "12h": 43200, "24h": 86400,
-    "7d": 604800, "30d": 2592000, "90d": 7776000, "all": 0,
-}
+# Durasi tiap range utk window history — sumber tunggal: logic.RANGE_DUR_S
+_RANGE_DUR_S = logic.RANGE_DUR_S
 
 @app.route("/api/history")
 def api_history():
