@@ -424,41 +424,16 @@ def run_cycle(dry_run=False):
             offset = official * 0.001  # 0.1% dari official price
             trigger_px = round(official * t_pct, 6)
 
-            # ===== SELF-CORRECTION (floor enforcement) =====
-            # kalau harga kita SAAT INI SUDAH di bawah floor (trigger_px) — dari set-50% lama
-            # atau undercut masa lalu — NAIKKAN kembali ke floor. Ini BUKAN "rebound" yg kamu
-            # hapus (itu rebound saat kompetitor murah); ini koreksi: jangan pernah biarkan
-            # harga kita terdampar di bawah trigger (≤ x% official = jual lebihan murah dr seharusnya).
-            if our < trigger_px - 1e-9:
-                target = round(trigger_px, 6)
-                if max_in > 0:
-                    target = min(target, max_in)
-                target = round(target, 6)
-                if abs(target - our) <= 0.5e-4:
-                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
-                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"our ${our:.4f} < floor ${trigger_px:.4f} - hold (sudah di floor) | posisi komp {pos_komp}"})
-                    continue
-                action = "undercut_floor"
-                if effective_dry:
-                    log(f"  [{slug}] {mid}: our=${our:.4f} < floor ${trigger_px:.4f} -> SELF-CORRECT ${target:.4f} [DRY]")
-                    decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                      "reason": f"self-correct naik ke floor ${target:.4f} (our di bawah trigger)"})
-                    continue
-                st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
-                status = "OK" if st in (200, 204) else f"HTTP{st}"
-                log(f"  [{slug}] {mid}: our=${our:.4f} < floor ${trigger_px:.4f} -> SELF-CORRECT ${target:.4f} [{status}]")
-                if st in (200, 204):
-                    hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
-                    decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                      "reason": f"self-correct ke floor ${target:.4f}", "http": st})
-                elif st in (429, 0):
-                    log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip")
-                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
-                else:
-                    log(f"  !! [{slug}] {mid}: {status} — skip")
-                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
-                continue
+            # ===== LOGIKA FAIZ v3 AKHIR (REBOUND DIHAPUS, trigger = batas ABAIKAN) =====
+            # trigger_px = official x trigger%  (batas "harga tidak wajar" / range trigger)
+            #   kompetitor ≤ trigger  → kita ABAIKAN mereka (cuekin, jangan balas ke range trigger)
+            #   kompetitor > trigger  → kompetitor wajar, kita undercut 0.1% di bawah mereka
+            # UNDERCUT = 0.1% DI BAWAH kompetitor NON-TRIGGER (bukan dari official!).
+            #   - scan orderbook: level terendah yang MASIH di atas trigger (non-trigger / harga wajar)
+            #   - kita pasang 0.1% lebih murah dari level non-trigger terendah itu
+            #   - harga kita tidak pernah masuk ke range trigger (jual di range non-trigger)
+            offset = official * 0.001  # 0.1% dari official price (undercut gap)
+            trigger_px = round(official * t_pct, 6)
 
             # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
             if comp is None or our <= comp + 1e-6:
@@ -467,56 +442,45 @@ def run_cycle(dry_run=False):
                                   "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
 
-            # komp di range trigger → IGNORE trigger, undercut non-trigger terendah
-            if comp <= trigger_px:
-                # level orderbook terendah yang MASIH di atas trigger (non-trigger / harga wajar)
-                nontrig = [p for p, _q in levels if p > trigger_px]
-                if nontrig:
-                    target = round(nontrig[0] - offset, 6)
-                else:
-                    # tidak ada level non-trigger → jangan turun ke range trigger, diam
-                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
-                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f}; tdk ada level non-trigger, hold | posisi komp {pos_komp}"})
-                    continue
-                if max_in > 0:
-                    target = min(target, max_in)
-                target = max(0.0, round(target, 6))
-                # FLOOR: jangan pernah jual lebih murah dari trigger (5% official = 95% off)
-                target = max(target, trigger_px)
-                if abs(target - our) <= 0.5e-4:
-                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
-                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"already at non-trigger low ${our:.4f} (komp ${comp:.4f} di trigger) - hold | posisi komp {pos_komp}"})
-                    continue
-                action = "undercut"
-            else:
-                # komp > trigger → UNDERCUT normal ikut komp (bebas bawah floor)
-                target = round(comp - offset, 6)
-                if max_in > 0:
-                    target = min(target, max_in)
-                target = max(0.0, round(target, 6))
-                # FLOOR: jangan pernah jual lebih murah dari trigger (5% official = 95% off)
-                target = max(target, trigger_px)
-                if abs(target - our) <= 0.5e-4:
-                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
-                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"already at ${our:.4f} (comp ${comp:.4f}) - hold | posisi komp {pos_komp}"})
-                    continue
-                action = "undercut"
+            # cari level orderbook NON-TRIGGER terendah (harga wajar paling murah)
+            # kompetitor di range trigger diabaikan — fokus di range non-trigger.
+            # PENTING: exclude harga kita sendiri (our) — jangan undercut diri sendiri.
+            nontrig_prices = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
+            if not nontrig_prices:
+                # tidak ada level non-trigger selain kita → jangan turun, diam di harga kita
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                  "reason": f"komp ${comp:.4f} di trigger ${trigger_px:.4f}; tdk ada level non-trigger kompetitor utk diundercut, hold di ${our:.4f} | posisi komp {pos_komp}"})
+                continue
+
+            # undias acuan = level NON-TRIGGER terendah; kita undias 0.1% di bawahnya
+            ref_price = nontrig_prices[0]
+            target = round(ref_price - offset, 6)
+            # jangan pernah masuk ke range trigger
+            target = max(target, trigger_px)
+            # jangan melebihi max slot harga (max_in)
+            if max_in > 0:
+                target = min(target, max_in)
+            target = max(0.0, round(target, 6))
+            if abs(target - our) <= 0.5e-4:
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                  "reason": f"already at ${our:.4f} (non-trigger low ${ref_price:.4f} - 0.1%) - hold | posisi komp {pos_komp}"})
+                continue
+            action = "undercut"
 
             if effective_dry:
-                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} -> {action}=${target:.4f} [{'DRY' if not ARMED else 'ARMED'}]")
+                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> undercut non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"{action} ke ${target:.4f} (comp ${comp or 0:.4f}, trigger ${trigger_px:.4f}) | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
+                                  "reason": f"undercut 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
             st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
             status = "OK" if st in (200, 204) else f"HTTP{st}"
-            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action}=${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
+            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> undercut non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"{action} ke ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
+                                  "reason": f"undercut 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
             elif st in (429, 0):
                 log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip, no retry this cycle")
                 decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
