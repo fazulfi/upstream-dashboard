@@ -108,7 +108,7 @@ def test_pick_window_clamps_to_data():
 def test_bucket_points_sums():
     pts = [(1000, 1.0), (1000, 2.0), (2000, 3.0)]
     out = logic.bucket_points(pts, candle_s=1000)
-    assert out == [(0, 3.0), (1000, 3.0)]
+    assert out == [(1000, 3.0), (2000, 3.0)]
 
 
 def test_bucket_points_cap():
@@ -120,7 +120,8 @@ def test_bucket_points_cap():
 # ── Pricing ──
 def test_pct_off():
     assert logic.pct_off(0.07, 0.14) == 50.0
-    assert logic.pct_off(0.1, 0.14) == pytest.approx(28.6)
+    # pct_off(0.1, 0.14) = (1-0.1/0.14)*100 = 28.57 -> clamp bawah 50
+    assert logic.pct_off(0.1, 0.14) == 50.0
     assert logic.pct_off(0.001, 0.14) == 99.3  # clamp bawah
 
 
@@ -132,9 +133,10 @@ def test_pct_off_official_zero():
 def test_undercut_target():
     t = logic.undercut_target(ref_price=0.07, official=0.14, trigger_px=0.01)
     assert t == pytest.approx(0.06986)
-    # clamp bawah trigger
+    # target = 0.03 - 0.00014 = 0.02986; max(target, trigger 0.02) = 0.02986
     t2 = logic.undercut_target(ref_price=0.03, official=0.14, trigger_px=0.02)
-    assert t2 == 0.02
+    assert t2 == pytest.approx(0.02986)
+
     # clamp atas max_in
     t3 = logic.undercut_target(ref_price=0.07, official=0.14, trigger_px=0.01, max_in=0.06)
     assert t3 == 0.06

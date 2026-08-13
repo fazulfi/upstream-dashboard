@@ -766,6 +766,14 @@ def require_auth(f):
     return wrapper
 
 
+@app.before_request
+def _auth_gate():
+    """Auth SEMUA route kecuali /health, /api/login, dan preflight CORS (OPTIONS)."""
+    if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
+        return None
+    return require_auth(lambda: None)()
+
+
 
 
 

@@ -47,13 +47,14 @@ def constant_time_eq(a, b):
 def rate_limit_hit(store, ip, limit, window, now=None):
     """Periksa & catat request per-IP. return True bila diizinkan, False bila 429.
     store: dict ip -> list[ts] (module app menyimpan defaultdict(list))."""
+
     now = float(now if now is not None else time.time())
-    bucket = store[ip] = [t for t in store[ip] if now - t < window]
+    prev = store.get(ip, [])
+    bucket = store[ip] = [t for t in prev if now - t < window]
     if len(bucket) >= limit:
         return False
     store[ip].append(now)
     return True
-
 
 # ── Bucketing history (C8) ──
 RANGE_DUR_S = {
@@ -97,7 +98,7 @@ def bucket_points(pts, candle_s, max_candles=MAX_CANDLES):
     ordered = sorted(buckets)
     if len(ordered) > max_candles:
         ordered = ordered[-max_candles:]
-    return [(slot * candle_s, buckets[s]) for s in ordered]
+    return [(s * candle_s, buckets[s]) for s in ordered]
 
 
 # ── PctOff & pricing (auto-pricing contract) ──
