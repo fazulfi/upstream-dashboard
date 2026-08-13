@@ -407,11 +407,14 @@ def run_cycle(dry_run=False):
                     comp = None
 
             # ── POSISI KOMPETITOR (Faiz v2) ──
-            pos = positions.get((slug, mid), {})
-            tot_prov = pos.get("total_provider", 0)
-            ok_kita = pos.get("provider_ok_kita", 0)
-            pos_komp = pos.get("posisi_kompetitor", 0)
-            levels = pos.get("levels", [])          # [(price, qty) asc]
+            # key bisa bare (cbcn) atau prefixed (cline-pass) — coba dua-duanya
+            pos = positions.get((slug, mid))
+            if pos is None:
+                pos = positions.get((slug, mid.split("/")[-1]))
+            tot_prov = pos.get("total_provider", 0) if pos else 0
+            ok_kita = pos.get("provider_ok_kita", 0) if pos else 0
+            pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
+            levels = pos.get("levels", []) if pos else []          # [(price, qty) asc]
 
             # ── LOGIKA FAIZ v2 (REBOUND DIHAPUS) ──
             # trigger = official × trigger% (range "harga tidak wajar")
