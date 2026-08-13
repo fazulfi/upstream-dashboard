@@ -1,0 +1,10 @@
+[Unit]
+Description=Regen keuangan.xlsx harian dari DB (gen_finance.py)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

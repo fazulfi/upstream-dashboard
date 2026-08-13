@@ -108,6 +108,7 @@ def sync_providers():
     n = 0
     with db() as c, c.cursor() as cur:
         cur.execute("DELETE FROM provider_asks")  # rebuild asks tiap sync
+        cur.execute("DELETE FROM providers")      # C11: bersihkan provider stale (mati/hapus) — DB = mirror live
         now = datetime.now(timezone.utc)
         for p in prov:
             cur.execute("""
@@ -231,7 +232,9 @@ def sync_catalog():
             now = datetime.now(timezone.utc)
             for u in (cat or []):
                 for m in (u.get("models") or []):
-                    slug = m.get("slug")
+                    # C12: object model live pakai 'upstreamModelId' (bukan 'slug').
+                    # Fallback ke id/upstreamCatalogModelId utk keamanan.
+                    slug = m.get("upstreamModelId") or m.get("id") or m.get("upstreamCatalogModelId") or m.get("slug")
                     if not slug:
                         continue
                     cur.execute("""

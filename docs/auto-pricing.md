@@ -1,74 +1,156 @@
-# Auto-Pricing Daemon
+# Auto-Pricing Daemon — Dokumentasi Final & Panduan Maintenance
 
-**Upstream:** CodeBuddy + ClinePass + CodeBuddy.CN — undercut kompetitor di InferHub market.
+**Upstream:** CodeBuddy (cb) + CodeBuddy.CN (cbcn) + ClinePass (cp) — undercut kompetitor di InferHub market.
 
-## Logika Final (2026-08-13, Faiz spec — REBOUND DIHAPUS)
+> **Status: PRODUCTION, ARMED.** Logika final 2026-08-13 (setelah 5 iterasi fix selama
+> pemantauan live). Dokumen ini adalah satu-satunya sumber kebenaran — jangan pakai
+> versi lama (audit-full.md, README lama).
 
-Anchor kompetitor = `/market minAskIn` (kompetitor **sejati** dari platform, BUKAN
-catalog/provider milik kita sendiri). Orderbook `/catalog` dipakai utk **posisi**.
+---
+
+## 1. Logika Keputusan (FINAL — jangan diubah tanpa persetujuan)
 
 ```
-per model per cycle (position tracking WAJIB):
-  total_provider   = len(asksIn) di /catalog utk model itu (SEMUA provider)
-  provider_ok_kita = jumlah provider enabled kita utk upstream tsb (ok + invalid)
-  posisi_kompetitor = total_provider - provider_ok_kita
+per model per cycle:
 
-  anchor komp  = /market minAskIn (kompetitor sejati)
-  trigger      = official x trigger_pct  (batas "harga tidak wajar" / range trigger)
+  ANCHOR KOMPETITOR  comp = /market minAskIn (kompetitor sejati, BUKAN catalog kita)
+  TRIGGER            trigger_px = official x trigger_pct   (batas "harga tidak wajar")
+  OFFSET             offset = official x 0.1%              (gap undercut/resume)
 
-  our <= komp                 -> HOLD/leader  (kita sudah termurah di area non-trigger, DIAM)
-  komp <= trigger             -> IGNORE range trigger:
-                                   UNDERCUT kompetitor NON-TRIGGER terendah
-                                   (level orderbook yg MASIH di atas trigger_px), minus offset
-  komp > trigger              -> UNDERCUT normal ikut komp - 0.1% x official
-  our sudah ~= target         -> HOLD (jangan gerak)
+  ALUR:
+  1. our <= comp              -> HOLD leader   (kita sudah termurah, DIAM)
+  2. cek orderbook kompetitor MURNI (ask kita SUDAH dikurangi di level harga kita):
+       nontrig_prices = [p di orderbook jika p > trigger_px DAN p != harga kita]
+  3. tidak ada nontrig      -> HOLD (tidak ada kompetitor wajar utk dikejar)
+  4. ref = nontrig terendah
+     target = ref - offset, clamp [trigger_px, max_in]
+  5. target ~= our           -> HOLD (sudah di target)
+  6. target < our            -> UNDERCUT (turun 0.1%xofficial di bawah kompetitor)
+  7. target > our            -> RESUME   (naik jemput kompetitor — harga balik mahal)
 ```
 
-**UNDERCUT** = 0.1% × official di bawah level non-trigger terendah. **TIDAK ada REBOUND**,
-**tidak ada floor terpisah** — trigger_px = satu-satunya batas (kompetitor di dalam
-range trigger diabaikan).
+**Prinsip kunci (dari Faiz):**
+- **Undercut = 0.1% × official** (BUKAN 0.1% dari harga kompetitor).
+- **Trigger = batas ABAIKAN**: kompetitor ≤ trigger_px → diabaikan (tidak diundercut,
+  tidak dibalas). Hanya kompetitor > trigger_px yang jadi target.
+- **Kalau hanya kita di level harga itu** → naik (resume) ke level kompetitor wajar
+  terendah di atas — **tidak perlu reset manual rutin**.
+- **Kalau kompetitor melawan** (turunkan harga di bawah kita) → kita ikut undercut
+  terus agar tetap termurah di range non-trigger. Ini perilaku benar, bukan bug.
+- **REBOUND DIHAPUS** (v2). Tidak ada self-correct-up, tidak ada floor terpisah.
 
-## Sumber Config (DB = source of truth)
+---
 
-- Tabel `auto_pricing_config` (PostgreSQL) = **satu-satunya sumber kebenaran**.
-- Daemon baca DB tiap cycle (`_load_config_db`); fallback file JSON
-  `~/.hermes-suisui/logs/auto-pricing-config.json` (turunan sinkron dari DB saat startup
-  backend / PUT-DELETE config), lalu default band kode.
-- Prioritas: **DB > file JSON > default**.
+## 2. Sumber Config — DB adalah SATU-SATUNYA sumber (C6)
 
-Band default per upstream (fallback bila tidak ada config):
+| Sumber | Peran |
+|---|---|
+| **DB `auto_pricing_config`** | **Source of truth** — dibaca daemon tiap cycle (`_load_config_db`) |
+| File `~/.hermes-suisui/logs/auto-pricing-config.json` | Turunan legacy; hanya fallback kalau DB gagal |
+| Default kode (`band_for`) | Fallback terakhir — **seragam 10% semua upstream** (bukan per-upstream) |
 
-| Upstream | trigger | rebound (legacy, tak dipakai) |
-|----------|---------|-------------------------------|
-| codebuddy | 2% | 10% |
-| codebuddy-cn | 5% | 15% |
-| cline-pass | deepseek-v4-flash 10%, lainnya 20% | 15% / 25% |
+Prioritas: **DB > file JSON > default kode (10%)**.
 
-> Rebound **tidak dipakai lagi** (REBOUND DIHAPUS v2). Kolom rebound_pct hanya legacy.
+Tabel config:
 
-## Stabilitas / anti-loop
+| Upstream | trigger_pct | Catatan |
+|---|---|---|
+| codebuddy | 10 | semua 14 model |
+| codebuddy-cn | 10 | semua 8 model |
+| cline-pass | 10 (flash) / 20 (lain) | 10 model |
 
-- **Anchor `/market`, bukan catalog** → tidak undercut ke harga diri sendiri.
-- **Anti-self-undercut**: orderbook histogram dikurangi ask kita sendiri (SEMUA provider
-  enabled kita, termasuk yang invalid — mereka tetap publikasi ask).
-- **Cooldown** per model (cb/cbcn 10s, cp 15s) — `ts` hanya di-update saat PUT sukses.
-- **Backoff** pasca 429/timeout: skip model 180s (`skip_until`).
-- **HTTP 429 / timeout** → skip, jangan retry cycle sama.
-- **Atomic write** untuk semua state file (`.tmp` + `os.replace`).
+> `rebound_pct` kolom legacy — TIDAK dipakai (REBOUND dihapus). Dipertahankan utk kompatibilitas.
 
-## Arm / Disarm
+---
+
+## 3. ➕ PANDUAN TAMBAH PROVIDER / MODEL BARU (paling sering dibutuhkan)
+
+### 3a. Provider baru (akun upstream baru)
+1. Tambah provider di InferHub dashboard (atau API `/publisher/providers`).
+2. **Tidak perlu ubah apa pun di auto-pricing** — daemon otomatis menghitung
+   `provider_ok_kita` dari `/publisher/providers` tiap cycle (semua enabled dihitung,
+   termasuk invalid — keduanya menerbitkan ask).
+3. Verifikasi: `curl .../api/fleet-health` → provider baru muncul, `enabled=true`.
+
+### 3b. Model baru di upstream yang sudah ada (PENTING)
+Model baru **TIDAK punya config di DB** → daemon pakai **default 10%**.
+Kalau mau band beda (mis. cline-pass flash 10% / lainnya 20%):
+
+```bash
+# contoh: model baru 'gpt-6.0' di codebuddy (trigger 10%)
+PGPASSWORD=upstream_local psql -h 127.0.0.1 -U gamesim -d upstream -c \
+"INSERT INTO auto_pricing_config (upstream, model_id, trigger_pct, rebound_pct, updated_at)
+ VALUES ('codebuddy','codebuddy/gpt-6.0',10,10,now())
+ ON CONFLICT (upstream, model_id) DO UPDATE SET trigger_pct=10, rebound_pct=10, updated_at=now();"
+```
+
+Daemon baca DB tiap cycle — **tidak perlu restart** untuk config baru.
+
+### 3c. Upstream baru (mis. 'groq')
+1. Tambah slug ke `scope` di `run_cycle` (scripts/auto_pricing.py):
+   ```python
+   scope = set(["codebuddy", "cline-pass", "codebuddy-cn"])  # tambah "groq"
+   ```
+2. Cek mapping prefix market di `get_market_min` (tambah prefix kalau beda):
+   ```python
+   slug = {"cb": "codebuddy", "cp": "cline-pass", "cbcn": "codebuddy-cn"}.get(pc)
+   ```
+3. Tambah config band di DB utk model-modelnya (lihat 3b).
+4. Restart daemon: `systemctl --user restart wwma-auto-pricing.service` (as gamesim).
+
+---
+
+## 4. ARM / DISARM & Operasi
 
 ```bash
 echo 1 > ~/.hermes-suisui/logs/auto-pricing-arm   # ARMED (PUT nyata)
-echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run saja)
+echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run, tanpa PUT)
 ```
 
-> **⚠️ Pastikan config DB benar & provider valid sebelum ARM.** Saat DISARM daemon
-> berjalan dry-run (log `[DRY]`, tanpa PUT).
+- Saat DISARM: daemon jalan, log cycle, tapi **tidak PUT** (baris log `[DRY]`).
+- Cek status: `cat ~/.hermes-suisui/logs/auto-pricing-arm`
+- Cek proses: `systemctl --user status wwma-auto-pricing.service` (as gamesim)
 
-## Deploy (systemd user service)
+### Log & state
 
-Unit: `deploy/wwma-auto-pricing.service`
+| File | Isi |
+|---|---|
+| `~/.hermes-suisui/logs/auto-pricing.log` | Cycle log (aksi per model) |
+| `~/.hermes-suisui/logs/auto-pricing-state.json` | State cycle terakhir (utk dashboard) |
+| `~/.hermes-suisui/logs/auto-pricing-hold.json` | Cooldown/backoff per model |
+| `~/.hermes-suisui/logs/auto-pricing-arm` | Flag arm (1/0) |
+
+---
+
+## 5. Anti-Loop & Safety (sudah diimplementasikan)
+
+| Mekanisme | Detail |
+|---|---|
+| Anchor `/market` (bukan catalog) | Kompetitor sejati, bukan harga kita |
+| **Anti-mengejar-diri** | `get_positions` kurangi ask kita di **level harga kita** (`our_price`), bukan level terendah |
+| Anti-self-undercut | Hanya aktif saat `abs(comp - our) <= 1e-4` (comp = ask kita) |
+| Cooldown | `ts` hanya di-update saat PUT sukses; cb/cbcn 10s, cp 15s |
+| Backoff | 429/timeout → skip 180s (`skip_until`) |
+| Clamp | `target = max(target, trigger_px)` & `min(target, max_in)` — tidak pernah di range trigger / di atas slot |
+| Atomic write | State file: `.tmp` + `os.replace` |
+| 429 handling | Skip cycle, tanpa retry |
+
+---
+
+## 6. Troubleshooting Cepat
+
+| Gejala | Cek | Fix |
+|---|---|---|
+| "no API key" | `INFERHUB_API_KEY` di `~/.hermes-suisui/.env` | Set env / daemon jalan as gamesim |
+| UnboundLocalError / NameError | Kode lama | `git pull` di `/home/gamesim/dashboard`, `cp` ke `/home/gamesim/scripts/`, restart |
+| Tidak undercut padahal kompetitor di bawah | Trigger terlalu tinggi vs harga kompetitor | Turunkan trigger_pct di DB |
+| Harga turun terus | Kompetitor memang melawan (perilaku benar) | Pantau; jangan reset manual |
+| PUT gagal 422 | `pctOff` — official=0 | Set official / cek model |
+| Daemon mati | `systemctl --user status` | Restart; cek log |
+
+---
+
+## 7. Deployment (systemd user)
 
 ```bash
 cp deploy/wwma-auto-pricing.service ~/.config/systemd/user/
@@ -76,34 +158,16 @@ systemctl --user daemon-reload
 systemctl --user enable --now wwma-auto-pricing.service
 ```
 
-## File
-
-- `scripts/auto_pricing.py` — daemon & package importable (argumen: `--once`, `--dry-run`, `--interval`).
-- Log: `~/.hermes-suisui/logs/auto-pricing.log`
-- State cycle: `~/.hermes-suisui/logs/auto-pricing-state.json`
-- Hold/cooldown: `~/.hermes-suisui/logs/auto-pricing-hold.json`
-- Arm flag: `~/.hermes-suisui/logs/auto-pricing-arm`
+Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --interval 30`.
 
 ---
 
-## Fin Ops — Single Source Input
+## Riwayat Fix (2026-08-13 — jangan regresi)
 
-DB PostgreSQL = satu-satunya sumber kebenaran keuangan. Dashboard baca DB.
-`scripts/fin_ops.py` = satu pintu input transaksi → otomatis update DB → regen workbook → dashboard live.
-
-```bash
-python3 scripts/fin_ops.py buy --upstream "X" --qty 2 --cost 6750 --curr IDR [--label ".."]
-python3 scripts/fin_ops.py retire --id A-0xx [--label ".."]
-python3 scripts/fin_ops.py refund --upstream "X" --qty 60 --amount_idr 403910 [--label ".."]
-python3 scripts/fin_ops.py regen        # regen keuangan.xlsx dari DB
-python3 scripts/fin_ops.py list
-```
-
-`gen_finance.py` baca DB (bukan ledger.json). **Net income workbook = net income dashboard**
-(logika disamakan: amort = aset retired full cost, refund dikurang, seed impairment zero-kan, opex 0.10).
-Kurs live dari env `FOREX_KEY` (fallback `~/.hermes-suisui/.env`).
-
-## Backup DB
-
-`scripts/backup_db.sh` — pg_dump gzip harian ke `shared-memory/inferhub-business/backups/`,
-retensi 14 hari. Jadwalkan via cron/timer.
+1. `remaining = ok` init (UnboundLocalError crash)
+2. `comp_levels = []` init (NameError crash)
+3. Anti-self-undercut hanya saat `comp ~= our` (comp jauh di bawah = kompetitor sejati)
+4. Jangan hold saat comp di trigger — tetap scan level non-trigger utk undercut (cbcn fix)
+5. `band_for` seragam — default 10% semua upstream, DB satu-satunya sumber
+6. Penamaan aksi: `undercut` (turun) / `resume` (naik jemput)
+7. `get_positions` kurangi ask kita di level harga kita (anti mengejar diri sendiri)

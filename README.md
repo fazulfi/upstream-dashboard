@@ -118,14 +118,33 @@ echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm    # DISARM (dry-run)
 > **⚠️ ARM dengan hati-hati**: pastikan config DB `auto_pricing_config` benar & status
 > provider valid. Saat DISARM, daemon hanya dry-run (tidak PUT).
 
----
-
 ## 📖 Dokumentasi
 
+- `docs/OPS-RUNBOOK.md` — **operasional harian**: layanan, backup/restore, troubleshooting, checklist deploy & tambah provider
+- `docs/auto-pricing.md` — logika auto-pricing FINAL + panduan tambah provider/model
 - `docs/audit-full.md` — audit keamanan & data (2026-08-12)
 - `docs/AUDIT-2026-08-13.md` — audit menyeluruh (6 subagent) + rekomendasi fix
-- `docs/auto-pricing.md` — logika auto-pricing & fin ops
 - `docs/inferhub-openapi-spec.json` — OpenAPI spec API InferHub (55 endpoint)
+
+## ➕ Tambah Provider / Model Baru (runbook singkat)
+
+Lengkap: `docs/auto-pricing.md` §3. Ringkasnya:
+
+1. **Provider baru** (akun upstream) — cukup tambah di InferHub. Daemon otomatis
+   menghitung `provider_ok_kita` tiap cycle. **Tidak perlu ubah kode/config.**
+2. **Model baru di upstream lama** — default band 10% otomatis. Mau band beda,
+   insert config DB:
+   ```bash
+   PGPASSWORD=upstream_local psql -h 127.0.0.1 -U gamesim -d upstream -c \
+   "INSERT INTO auto_pricing_config (upstream, model_id, trigger_pct, rebound_pct, updated_at)
+    VALUES ('codebuddy','codebuddy/gpt-6.0',10,10,now())
+    ON CONFLICT (upstream, model_id) DO UPDATE SET trigger_pct=10, rebound_pct=10, updated_at=now();"
+   ```
+   Daemon baca DB tiap cycle — **tanpa restart**.
+3. **Upstream baru** (mis. groq) — tambah slug ke `scope` + prefix mapping di
+   `get_market_min` (`scripts/auto_pricing.py`), config DB utk modelnya, restart daemon.
+
+> Config DB `auto_pricing_config` = satu-satunya sumber band. Kode fallback seragam 10%.
 
 ---
 
