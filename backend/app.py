@@ -1020,6 +1020,24 @@ def _incremental_db_sync():
                 """, (r.get("id"), ts, r.get("model"), r.get("upstream_label"), r.get("status"),
                       int(r.get("prompt_tokens") or 0), int(r.get("completion_tokens") or 0),
                       float(r.get("cost_consumer_usdc") or 0), float(r.get("cost_consumer_usdc") or 0) * 0.80, now))
+        # payouts: sinkron dari live withdrawals API -> tabel payouts (upsert, no manual)
+        try:
+            wd = inferhub_get("/publisher/withdrawals") or []
+            with db_connect() as conn, conn.cursor() as cur:
+                for w in wd:
+                    wid = w.get("id") or str(uuid.uuid4())
+                    amt = float(w.get("amountUsdc") or 0)
+                    wdate = (w.get("requestedAt") or w.get("completedAt") or "")[:10]
+                    status = w.get("status") or "confirmed"
+                    cur.execute("""
+                        INSERT INTO payouts (id, date, amount_usdc, status, destination, network, requested_at, completed_at, synced_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now())
+                        ON CONFLICT (id) DO UPDATE SET date=EXCLUDED.date, amount_usdc=EXCLUDED.amount_usdc,
+                          status=EXCLUDED.status, destination=EXCLUDED.destination, completed_at=EXCLUDED.completed_at
+                    """, (wid, wdate, amt, status, w.get("destination") or "", w.get("network") or "",
+                          w.get("requestedAt") or "", w.get("completedAt") or ""))
+        except Exception:
+            pass
     except Exception as e:
         raise e
 
