@@ -564,6 +564,13 @@ def run_cycle(dry_run=False):
 
             # undias acuan = level NON-TRIGGER terendah; kita undias 0.1% di bawahnya
             ref_price = nontrig_prices[0]
+            # kalau level non-trigger terendah SUDAH di atas harga kita → kita termurah
+            # di area wajar → HOLD (jangan 'undercut naik'). Under cut = turun, bukan naik.
+            if ref_price >= our - 1e-6:
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
+                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                  "reason": f"kita termurah di area wajar (our ${our:.4f} ≤ non-trigger low ${ref_price:.4f}) - hold | posisi komp {pos_komp}"})
+                continue
             target = round(ref_price - offset, 6)
             # jangan pernah masuk ke range trigger
             target = max(target, trigger_px)
