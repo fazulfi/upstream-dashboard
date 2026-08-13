@@ -312,7 +312,7 @@ def get_market_min():
         return {}
 
 
-def get_positions(catalog):
+def get_positions(catalog, our_price=None):
     """POSISI KOMPETITOR per model (Faiz v2 — wajib tiap cycle).
 
     Dari /catalog (sudah di-fetch):
@@ -324,10 +324,15 @@ def get_positions(catalog):
         baik apiKeyCheckStatus 'ok' maupun 'invalid' — keduanya menerbitkan
         ask di orderbook, jadi keduanya harus dikurangi dari histogram.
         C7: jangan filter apiKeyCheckStatus di sini).
+      - our_price: {(slug, model_id): harga ask kita aktual} — mengurangi ask
+        kita di LEVEL HARGA KITA (bukan level terendah), supaya ask kita sendiri
+        tidak dianggap kompetitor. Ini anti "mengejar diri sendiri": kita berhenti
+        turun saat kita benar2 termurah (level ask kita dikurangi dari orderbook).
+        Kompetitor NYATA di bawah kita tetap di orderbook → tetap diundercut.
 
     Return {(slug, model_id): {"total_provider", "provider_ok_kita",
                                 "posisi_kompetitor", "levels"}}
-    levels = sorted list of (price, qty) — semua harga, semua provider.
+    levels = sorted list of (price, qty) — kompetitor MURNI.
     """
     try:
         st, provs = api("/publisher/providers")
@@ -364,20 +369,24 @@ def get_positions(catalog):
             ok = ok_kita.get(slug, 0)
             mid = mk.split("/")[-1].strip().lower()
 
-            # ── FIX (permintaan Faiz): scan orderbook, KURANGI ask kita sendiri,
-            # baru pakai level kompetitor murni utk undercut.
-            # /catalog asksIn[] = harga semua provider (kita + kompetitor) tanpa
-            # identitas owner. Kita tahu jumlah ask aktif kita = ok (dari
-            # /publisher/providers enabled utk upstream ini — semua enabled
-            # menerbitkan ask, baik apiKeyCheckStatus ok maupun invalid).
-            # Kurangi ok dari histogram level demi level (mulai level terendah —
-            # ask kita ada di level yg kita pasang), sehingga sisa count per
-            # level = kompetitor. Level yg tersisa = orderbook kompetitor murni.
+            # ── FIX (permintaan Faiz): scan orderbook, KURANGI ask kita sendiri
+            # di LEVEL HARGA KITA (our_price) — bukan dari level terendah.
+            # Kalau ask kita di 0.61 dan ada kompetitor 0.605, kita kurangi qty
+            # di 0.61 (ask kita) sehingga 0.605 tetap jadi kompetitor murni.
+            # Tanpa ini, ask kita sendiri dianggap kompetitor → "mengejar diri
+            # sendiri" → turun terus walau sudah termurah.
+            our_level = None
+            if our_price:
+                op = our_price.get((slug, mid))
+                if op is None:
+                    op = our_price.get((slug, f"{slug}/{mid}"))
+                if op:
+                    our_level = round(float(op), 6)
             remaining = ok
             comp_levels = []
             for p, q in sorted(cnt.items()):
-
-                if remaining > 0:
+                # kurangi ask kita di level harga kita dulu (sisa di level itu)
+                if our_level is not None and abs(p - our_level) <= 1e-6 and remaining > 0:
                     take = min(q, remaining)
                     q_after = q - take
                     remaining -= take
@@ -385,6 +394,17 @@ def get_positions(catalog):
                     q_after = q
                 if q_after > 0:
                     comp_levels.append((p, q_after))
+            # kalau masih ada sisa ask kita (harga kita beda dari orderbook),
+            # kurangi dari level terendah sisanya (fallback)
+            if remaining > 0:
+                comp_levels = []
+                rem2 = ok
+                for p, q in sorted(cnt.items()):
+                    take = min(q, rem2)
+                    q_after = q - take
+                    rem2 -= take
+                    if q_after > 0:
+                        comp_levels.append((p, q_after))
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
@@ -422,8 +442,15 @@ def run_cycle(dry_run=False):
     now = time.time()
     # anchor kompetitor DARI /market (minAskIn per slug/model) — exclude stress kita sendiri, lintas-upstream.
     market = get_market_min()
+    # kumpulkan harga ask kita per model (dari sample provider tiap upstream)
+    # utk mengurangi ask kita di level harga kita (anti "mengejar diri sendiri")
+    our_price = {}
+    for s in sorted(scope):
+        asks_s = get_asks_enabled(s)
+        for cid_s, a_s in asks_s.items():
+            our_price[(s, a_s["model_id"])] = a_s["ask_in"]
     # POSISI KOMPETITOR per model (Faiz v2) — total provider vs provider OK kita.
-    positions = get_positions(catalog)
+    positions = get_positions(catalog, our_price=our_price)
 
     for slug in sorted(scope):
         cooldown = COOLDOWN_CP if slug == "cline-pass" else COOLDOWN_CB
