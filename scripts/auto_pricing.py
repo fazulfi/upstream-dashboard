@@ -555,14 +555,10 @@ def run_cycle(dry_run=False):
                                   "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
 
-            # ── FIX (permintaan Faiz): kompetitor di DALAM batas (≤ trigger) → ABAIKAN.
-            # Jangan undias mereka, jangan balas — mereka "harga tidak wajar".
-            # Kita undias hanya kompetitor yang DI LUAR batas (> trigger).
-            if comp <= trigger_px + 1e-9:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f} (kompetitor di dalam batas) → abaikan, hold di ${our:.4f} | posisi komp {pos_komp}"})
-                continue
+            # ── Kompetitor di DALAM batas (≤ trigger) TIDAK jadi target undercut.
+            # TAPI jangan langsung hold: tetap cek level orderbook NON-TRIGGER di bawah.
+            # Kalau ada kompetitor wajar (> trigger) yang lebih murah dari kita,
+            # kita undias level itu. (Anchor minAskIn di trigger ≠ tidak ada target wajar.)
 
             # cari level orderbook NON-TRIGGER terendah (harga wajar paling murah)
             # kompetitor di range trigger diabaikan — fokus di range non-trigger.
