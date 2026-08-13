@@ -2309,10 +2309,13 @@ def api_auto_pricing_arm():
 
 @app.route("/api/auto-pricing/config")
 def api_auto_pricing_config():
-    """Semua config auto-pricing per upstream×model (trigger_pct & rebound_pct)."""
+    """Semua config auto-pricing per upstream×model (trigger_pct only).
+    Catatan: kolom rebound_pct masih ada di DB (legacy), tapi tidak dipakai lagi sejak v2
+    (REBOUND dihapus). API tidak expose supaya UI tidak bisa set nilai sia-sia.
+    """
     try:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, upstream, model_id, trigger_pct, rebound_pct FROM auto_pricing_config")
+            cur.execute("SELECT id, upstream, model_id, trigger_pct FROM auto_pricing_config")
             rows = cur.fetchall()
         return jsonify({"configs": rows})
     except Exception:
@@ -2321,30 +2324,32 @@ def api_auto_pricing_config():
 
 @app.route("/api/auto-pricing/config", methods=["PUT"])
 def api_auto_pricing_config_put():
-    """Upsert config utk satu upstream×model. Body: {upstream, model_id, trigger_pct, rebound_pct}."""
+    """Upsert config utk satu upstream×model. Body: {upstream, model_id, trigger_pct}.
+    rebound_pct diabaikan (legacy field, dihapus dari permukaan API v2).
+    """
     body = request.get_json(silent=True) or {}
     upstream = (body.get("upstream") or "").strip()
     model_id = (body.get("model_id") or "").strip()
     try:
         trigger_pct = float(body.get("trigger_pct"))
-        rebound_pct = float(body.get("rebound_pct"))
     except (TypeError, ValueError):
-        return jsonify({"error": "trigger_pct & rebound_pct numeric required"}), 400
+        return jsonify({"error": "trigger_pct numeric required"}), 400
     if not upstream or not model_id:
         return jsonify({"error": "upstream & model_id required"}), 400
-    if trigger_pct <= 0 or rebound_pct <= trigger_pct:
-        return jsonify({"error": "trigger 0 < x < rebound"}), 400
+    if trigger_pct <= 0:
+        return jsonify({"error": "trigger_pct harus > 0"}), 400
     try:
         with db_connect() as conn, conn.cursor() as cur:
+            # keep rebound_pct existing (legacy) — hanya update trigger_pct
             cur.execute("""
                 INSERT INTO auto_pricing_config (upstream, model_id, trigger_pct, rebound_pct, updated_at)
                 VALUES (%s, %s, %s, %s, now())
                 ON CONFLICT (upstream, model_id)
-                DO UPDATE SET trigger_pct=EXCLUDED.trigger_pct, rebound_pct=EXCLUDED.rebound_pct, updated_at=now()
-            """, (upstream, model_id, trigger_pct, rebound_pct))
+                DO UPDATE SET trigger_pct=EXCLUDED.trigger_pct, updated_at=now()
+            """, (upstream, model_id, trigger_pct, trigger_pct))
             conn.commit()
         _sync_ap_config_file()
-        return jsonify({"ok": True, "upstream": upstream, "model_id": model_id, "trigger_pct": trigger_pct, "rebound_pct": rebound_pct})
+        return jsonify({"ok": True, "upstream": upstream, "model_id": model_id, "trigger_pct": trigger_pct})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

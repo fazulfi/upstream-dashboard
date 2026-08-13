@@ -6,7 +6,7 @@ const API = import.meta.env.VITE_API_URL || '';
 
 // Default fallback kalau model belum punya config — uniform utk SEMUA provider
 function defaultBand(upstream, mid) {
-  return { trigger: 2, rebound: 10 };  // seragam: all providers trigger 2% -> rebound 10%
+  return { trigger: 2 };  // seragam: all providers trigger 2%
 }
 
 export default function AutoPricing() {
@@ -16,7 +16,7 @@ export default function AutoPricing() {
   const [note, setNote] = useState('');
   const [prov, setProv] = useState('');           // upstream terpilih (tab)
   const [saving, setSaving] = useState(null);      // {upstream, model_id} yg sedang save
-  const [form, setForm] = useState({});            // key `${upstream}|${model_id}` -> {trigger, rebound}
+  const [form, setForm] = useState({});            // key `${upstream}|${model_id}` -> {trigger}
 
   const cycles = useMemo(() => {
     const c = data?.cycles || [];
@@ -67,11 +67,9 @@ export default function AutoPricing() {
 
   const saveConfig = async (upstream, model_id) => {
     const key = `${upstream}|${model_id}`;
-    const f = form[key] || {};
     const trigger = parseFloat(f.trigger);
-    const rebound = parseFloat(f.rebound);
-    if (!(trigger > 0) || !(rebound > trigger)) {
-      setNote(`Error: trigger (${trigger}) harus 0 < x < rebound (${rebound})`);
+    if (!(trigger > 0)) {
+      setNote(`Error: trigger (${trigger}) harus > 0`);
       return;
     }
     setSaving(key); setNote('');
@@ -79,11 +77,12 @@ export default function AutoPricing() {
       const r = await apiFetch('/api/auto-pricing/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ upstream, model_id, trigger_pct: trigger, rebound_pct: rebound }),
+
+        body: JSON.stringify({ upstream, model_id, trigger_pct: trigger }),
       });
       const d = await r.json();
       if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
-      else { setNote(`✓ ${upstream}/${model_id} → trigger ${trigger}% · rebound ${rebound}%`); setTimeout(reloadCfg, 300); }
+      else { setNote(`✓ ${upstream}/${model_id} → trigger ${trigger}%`); setTimeout(reloadCfg, 300); }
     } catch (e) { setNote('Error: ' + e.message); } finally { setSaving(null); }
   };
 
@@ -114,7 +113,7 @@ export default function AutoPricing() {
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="panel-head">
           <div><h2>Auto-pricing · per provider</h2>
-            <div className="sub">undercut kompetitor tic-by-tic · band (trigger/rebound) di-set per model per provider · default: deepseek flash 10/15, lainnya 20/25</div>
+            <div className="sub">undercut kompetitor tic-by-tic · trigger% di-set per model per provider · default 2%</div>
           </div>
           <button className={data?.armed ? 'btn btn-ghost' : 'btn btn-primary'} onClick={toggle} disabled={arming}>
             {arming ? '…' : (data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)')}
@@ -134,13 +133,13 @@ export default function AutoPricing() {
 
       <section className="panel">
         <div className="panel-head"><div><h2>Target harga per model · {prov || '—'}</h2>
-          <div className="sub">klik set utk simpan trigger% & rebound% model ini (daemon baca tiap cycle)</div>
+          <div className="sub">klik set utk simpan trigger% model ini (daemon baca tiap cycle)</div>
         </div></div>
         <SkeletonBlock loading={loading} rows={6}>
           <table className="tbl">
             <thead><tr>
               <th>Model</th><th className="right">Ask skrg</th><th className="right">Kompetitor</th>
-              <th className="right">Trigger %</th><th className="right">Rebound %</th>
+              <th className="right">Trigger %</th>
               <th className="right">Target</th><th>Status</th><th>Aksi</th>
             </tr></thead>
             <tbody>
@@ -149,20 +148,15 @@ export default function AutoPricing() {
                 const cfg = cfgMap[key];
                 const dflt = defaultBand(c.slug, c.model_id);
                 const trigger = cfg ? cfg.trigger_pct : dflt.trigger;
-                const rebound = cfg ? cfg.rebound_pct : dflt.rebound;
                 const f = form[key] || {};
                 const flood = c.official * (trigger / 100);
-                const reboot = c.official * (rebound / 100);
-                const isRebound = (c.reason || '').includes('rebound');
                 const action = (c.action || '');
-                const synced = Math.abs(Number(c.ask_in) - Number(c.target)) < 0.00002;
+
                 const status = action === 'leader' ? 'LEADER'
-                  : action === 'rebound' ? 'REBOUND'
                   : action === 'undercut' ? 'UNDERCUT'
                   : action === 'stable' ? 'STABLE'
                   : (action === 'hold' ? 'HOLD' : (action || '—'));
                 const statusCls = action === 'leader' ? 'tag tag-ok'
-                  : action === 'rebound' ? 'tag tag-amort'
                   : action === 'undercut' ? 'tag tag-imp'
                   : 'tag';
                 return (
@@ -176,11 +170,7 @@ export default function AutoPricing() {
                       <input className="ap-in" type="text" inputMode="decimal" placeholder="%" value={f.trigger ?? trigger}
                         onChange={e => setForm({ ...form, [key]: { ...f, trigger: e.target.value } })} />
                     </td>
-                    <td className="right">
-                      <input className="ap-in" type="text" inputMode="decimal" placeholder="%" value={f.rebound ?? rebound}
-                        onChange={e => setForm({ ...form, [key]: { ...f, rebound: e.target.value } })} />
-                    </td>
-                    <td className="right tnum">{isRebound ? <span className="warn">${Number(c.target).toFixed(4)}</span> : <span className="pos">${Number(c.target).toFixed(4)}</span>}</td>
+                    <td className="right tnum"><span className="pos">${Number(c.target).toFixed(4)}</span></td>
                     <td>
                       <span className={statusCls}>{status}</span>
                       {!synced && c.target ? <span className="prov-sub" title="harga skrg belum sesuai target — menunggu cycle berikutnya"> ⏳</span> : null}
@@ -194,7 +184,7 @@ export default function AutoPricing() {
                   </tr>
                 );
               })}
-              {!rows.length && !loading && <tr><td colSpan={8} className="dt-empty">Belum ada data — jalankan cycle dulu.</td></tr>}
+              {!rows.length && !loading && <tr><td colSpan={7} className="dt-empty">Belum ada data — jalankan cycle dulu.</td></tr>}
             </tbody>
           </table>
         </SkeletonBlock>
