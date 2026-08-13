@@ -497,13 +497,15 @@ def run_cycle(dry_run=False):
             pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
             levels = pos.get("levels", []) if pos else []          # [(price, qty) asc] — KOMPETITOR MURNI (ask kita sudah dikurangi)
 
+
             # ── FIX (permintaan Faiz): anchor kompetitor TIDAK BOLEH = ask kita sendiri.
             # /market minAskIn bisa jadi harga ask KITA (kita yang termurah) → kalau dipakai
             # sebagai "comp", kita malah undercut diri sendiri. Solusi: kalau comp <= our
-            # (kompetitor "lebih murah" dari kita = mungkin ask kita sendiri), pakai level
+            # DAN comp ~= our (dalam deadband — berarti itu ask kita), pakai level
             # kompetitor MURNI terendah dari orderbook yang sudah dikurangi ask kita.
-            # Kalau tidak ada level kompetitor murni → hold (kita leader).
-            if comp is not None and our > 0 and comp <= our + 1e-9:
+            # Kalau comp JAUH di bawah our (> deadband), itu kompetitor sejati yang murah —
+            # JANGAN null-kan (nanti diproses: ≤ trigger → abaikan / > trigger → undercut).
+            if comp is not None and our > 0 and abs(comp - our) <= 1e-4:
                 comp_levels_real = [p for p, _q in levels if p > 0]
                 if comp_levels_real:
                     # level kompetitor murni TERENDAH yang > our (di atas kita)
