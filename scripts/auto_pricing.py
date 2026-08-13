@@ -104,22 +104,13 @@ def load_config():
 
 
 def band_for(slug, mid, conf):
-    """trigger_pct per slug (REBOUND DIHAPUS — nilai rebound_pct dipertahankan
-    hanya utk kompatibilitas config lama, tapi TIDAK dipakai lagi).
-
-    - codebuddy / codebuddy-cn: trigger 2% (default stabil, bisa di-override config).
-    - cline-pass: dari config per-model; default deepseek-v4-flash 10%,
-      model lain 20%.
-    """
+    """trigger_pct per model — SATU-SATUNYA sumber: config DB (auto_pricing_config).
+    REBOUND DIHAPUS (nilai rebound_pct hanya kompatibilitas config lama, tak dipakai).
+    Fallback default 10% utk SEMUA upstream — seragam, tidak ada beda per-upstream
+    di kode (perbedaan band murni dari DB config, bukan dari percabangan kode)."""
     if conf:
         return conf["trigger_pct"] / 100.0, conf["rebound_pct"] / 100.0
-    if slug == "cline-pass":
-        if mid == "cline-pass/deepseek-v4-flash":
-            return 0.10, 0.15
-        return 0.20, 0.25
-    return 0.02, 0.10  # cb / cbcn
-
-
+    return 0.10, 0.10  # default seragam semua upstream (DB menang kalau ada config)
 def _atomic_write(path, obj):
     """Write JSON secara atomic: tulis ke path.tmp lalu os.replace."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
