@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const API = import.meta.env.VITE_API_URL || ''; // Vercel rewrites /api -> backend
+// NOTE SECURITY: password dashboard TIDAK seharusnya di-bundle ke client (VITE_* di-inject ke build).
+// Ini patch sementara — keamanan ditangani terpisah oleh koordinator.
 const AUTH = import.meta.env.VITE_DASHBOARD_PASSWORD || ''; // password dashboard (X-Auth)
 
 /**
@@ -26,8 +28,8 @@ export function useApi(path, pollMs = 0) {
   const ac = useRef(null);
 
   const load = useCallback(async () => {
+    if (ac.current) ac.current.abort();
     const controller = new AbortController();
-    ac.current = controller;
     try {
       const headers = {};
       if (AUTH) headers['X-Auth'] = AUTH;

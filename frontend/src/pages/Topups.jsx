@@ -19,7 +19,7 @@ export default function Topups() {
     try {
       const r = await apiFetch('/api/topups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amt, payment_method: 'qris' }) });
       const j = await r.json();
-      if (r.ok && j.topup_key) { setModal({ qr: j }); setAmount(''); refetch(); }
+      if (r.ok && j.topupKey) { setModal({ qr: j }); setAmount(''); refetch(); }
       else setMsg(j.error || 'gagal buat topup');
     } catch (e) { setMsg(String(e)); }
     setBusy(false);
@@ -87,7 +87,7 @@ export default function Topups() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-head"><h3>Scan QRIS</h3><button className="btn btn-sm" onClick={() => setModal(null)}>×</button></div>
             <div className="modal-body center">
-              {modal.qr.qr_svg ? <div dangerouslySetInnerHTML={{ __html: modal.qr.qr_svg }} style={{ width: 220, height: 220 }} /> : <div className="form-msg">QR tidak tersedia</div>}
+              {modal.qr.qrSvg ? <div dangerouslySetInnerHTML={{ __html: sanitizeSvg(modal.qr.qrSvg) }} style={{ width: 220, height: 220 }} /> : <div className="form-msg">QR tidak tersedia</div>}
               <div className="form-msg">Bayar dengan aplikasi apa pun. Lalu klik Refresh di tabel untuk cek status.</div>
             </div>
             <div className="modal-foot"><button className="btn" onClick={() => setModal(null)}>Tutup</button></div>
@@ -99,3 +99,8 @@ export default function Topups() {
 }
 
 const fmt = s => (s ? String(s).slice(0, 16) : '—');
+const sanitizeSvg = s => String(s || '')
+  .replace(/<script[\s\S]*?<\/script>/gi, '')
+  .replace(/<!--[\s\S]*?-->/g, '')
+  .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  .replace(/javascript\s*:/gi, '');

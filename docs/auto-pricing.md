@@ -2,67 +2,79 @@
 
 **Upstream:** CodeBuddy + ClinePass + CodeBuddy.CN — undercut kompetitor di InferHub market.
 
-## Logika Final (2026-08-12, Faiz spec)
+## Logika Final (2026-08-13, Faiz spec — REBOUND DIHAPUS)
 
 Anchor kompetitor = `/market minAskIn` (kompetitor **sejati** dari platform, BUKAN
-catalog/provider milik kita sendiri). Ini krusial — catalog `asksIn` hanya berisi harga
-provider kita, jadi kalau dipakai sebagai anchor daemon bakal "undercut ke harga diri
-sendiri" → loop tak berujung.
+catalog/provider milik kita sendiri). Orderbook `/catalog` dipakai utk **posisi**.
 
 ```
-comp          = /market minAskIn    (kompetitor sejati)
-floor         = official x rebound_pct    (jual wajar minimum utk REBOUND)
-trigger       = official x trigger_pct    (batas "harga tidak wajar")
+per model per cycle (position tracking WAJIB):
+  total_provider   = len(asksIn) di /catalog utk model itu (SEMUA provider)
+  provider_ok_kita = jumlah provider enabled kita utk upstream tsb (ok + invalid)
+  posisi_kompetitor = total_provider - provider_ok_kita
 
-per model per cycle:
-  our <= komp        -> HOLD/leader   (kita sudah termurah, DIAM)
-  komp <= trigger    -> REBOUND ke floor (kompetitor gila murah, balik jual wajar)
-  komp > trigger     -> UNDERCUT ke (komp - 0.1% x official)   (BEBAS di bawah floor)
-  our ~= target      -> HOLD
+  anchor komp  = /market minAskIn (kompetitor sejati)
+  trigger      = official x trigger_pct  (batas "harga tidak wajar" / range trigger)
+
+  our <= komp                 -> HOLD/leader  (kita sudah termurah di area non-trigger, DIAM)
+  komp <= trigger             -> IGNORE range trigger:
+                                   UNDERCUT kompetitor NON-TRIGGER terendah
+                                   (level orderbook yg MASIH di atas trigger_px), minus offset
+  komp > trigger              -> UNDERCUT normal ikut komp - 0.1% x official
+  our sudah ~= target         -> HOLD (jangan gerak)
 ```
 
-**UNDERCUT tidak dibatasi floor** — kalau kompetitor murah (mis. 96% off), kita ikut turun
-sampai jadi termurah. **REBOUND hanya saat kompetitor ≤ trigger** (harga tidak wajar) →
-balik ke floor.
+**UNDERCUT** = 0.1% × official di bawah level non-trigger terendah. **TIDAK ada REBOUND**,
+**tidak ada floor terpisah** — trigger_px = satu-satunya batas (kompetitor di dalam
+range trigger diabaikan).
 
-### Band default per upstream (bisa di-override config per model)
+## Sumber Config (DB = source of truth)
 
-| Upstream      | trigger | rebound |
-|---------------|---------|---------|
-| codebuddy     | 2%      | 10%     |
-| codebuddy-cn  | 2%      | 10%     |
-| cline-pass    | deepseek-flash 10%, lain 20% | deepseek-flash 15%, lain 25% |
+- Tabel `auto_pricing_config` (PostgreSQL) = **satu-satunya sumber kebenaran**.
+- Daemon baca DB tiap cycle (`_load_config_db`); fallback file JSON
+  `~/.hermes-suisui/logs/auto-pricing-config.json` (turunan sinkron dari DB saat startup
+  backend / PUT-DELETE config), lalu default band kode.
+- Prioritas: **DB > file JSON > default**.
 
-Config per model dari DB (`auto_pricing_config`) → file
-`~/.hermes-suisui/logs/auto-pricing-config.json` menang atas default.
+Band default per upstream (fallback bila tidak ada config):
+
+| Upstream | trigger | rebound (legacy, tak dipakai) |
+|----------|---------|-------------------------------|
+| codebuddy | 2% | 10% |
+| codebuddy-cn | 5% | 15% |
+| cline-pass | deepseek-v4-flash 10%, lainnya 20% | 15% / 25% |
+
+> Rebound **tidak dipakai lagi** (REBOUND DIHAPUS v2). Kolom rebound_pct hanya legacy.
 
 ## Stabilitas / anti-loop
 
 - **Anchor `/market`, bukan catalog** → tidak undercut ke harga diri sendiri.
-- **Cooldown** per model (cb/cbcn 10s, cp 15s) → tidak gerak ganda dalam 1 cycle.
-- **HTTP 429 / timeout** → skip model, jangan retry cycle sama.
+- **Anti-self-undercut**: orderbook histogram dikurangi ask kita sendiri (SEMUA provider
+  enabled kita, termasuk yang invalid — mereka tetap publikasi ask).
+- **Cooldown** per model (cb/cbcn 10s, cp 15s) — `ts` hanya di-update saat PUT sukses.
+- **Backoff** pasca 429/timeout: skip model 180s (`skip_until`).
+- **HTTP 429 / timeout** → skip, jangan retry cycle sama.
 - **Atomic write** untuk semua state file (`.tmp` + `os.replace`).
+
+## Arm / Disarm
+
+```bash
+echo 1 > ~/.hermes-suisui/logs/auto-pricing-arm   # ARMED (PUT nyata)
+echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run saja)
+```
+
+> **⚠️ Pastikan config DB benar & provider valid sebelum ARM.** Saat DISARM daemon
+> berjalan dry-run (log `[DRY]`, tanpa PUT).
 
 ## Deploy (systemd user service)
 
 Unit: `deploy/wwma-auto-pricing.service`
 
 ```bash
-# install ke systemd user
 cp deploy/wwma-auto-pricing.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now wwma-auto-pricing.service
-
-# cek status / log
-systemctl --user status wwma-auto-pricing.service
-systemctl --user stop  wwma-auto-pricing.service
-
-# arm/disarm eksekusi PUT nyata (tanpa mengubah interval)
-echo 1 > ~/.hermes-suisui/logs/auto-pricing-arm   # ARMED (PUT nyata)
-echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run saja)
 ```
-
-Service `ExecStart` pakai interpreter `.venv-dash/bin/python3` dan interval `--interval 30`.
 
 ## File
 
@@ -87,4 +99,11 @@ python3 scripts/fin_ops.py regen        # regen keuangan.xlsx dari DB
 python3 scripts/fin_ops.py list
 ```
 
-`gen_finance.py` baca DB (bukan ledger.json). Markdown diupdate manual per transaksi.
+`gen_finance.py` baca DB (bukan ledger.json). **Net income workbook = net income dashboard**
+(logika disamakan: amort = aset retired full cost, refund dikurang, seed impairment zero-kan, opex 0.10).
+Kurs live dari env `FOREX_KEY` (fallback `~/.hermes-suisui/.env`).
+
+## Backup DB
+
+`scripts/backup_db.sh` — pg_dump gzip harian ke `shared-memory/inferhub-business/backups/`,
+retensi 14 hari. Jadwalkan via cron/timer.

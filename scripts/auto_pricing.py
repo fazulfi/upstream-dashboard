@@ -33,6 +33,11 @@ Anti-loop / stabilitas:
 """
 import json, os, time, datetime, argparse
 import urllib.request
+try:
+    import psycopg
+except Exception:
+    psycopg = None
+
 
 BASE = "https://inferhub.dev/api"
 DEFAULT_CONFIG_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-config.json")
@@ -42,19 +47,55 @@ STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-state.json")
 HOLD_STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-hold.json")
 PREFIX = {"codebuddy": "cb", "cline-pass": "cp", "codebuddy-cn": "cbcn"}
 
+BACKOFF = 180  # detik — kalau PUT kena 429/timeout, skip model itu selama ini (AP-6)
+
 DEADBAND = 0.0003          # $ — kompetitor harus bergeser > ini sebelum kita reaksi
 COOLDOWN_CB = 10           # detik — cb/cbcn: reaktif, nggak kebekuan lama
 COOLDOWN_CP = 15           # detik — cline-pass: reaktif
 UNDERCUT_PCT = 0.1         # % — undercut: kita pasang 0.1% off lbh besar dr kompetitor (pctOff + 0.1)
 
 
+DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+
+
+def _load_config_db():
+    """Baca config dari tabel PostgreSQL auto_pricing_config
+    (id, upstream, model_id, trigger_pct, rebound_pct, updated_at).
+    return {(upstream, model_id): {trigger_pct, rebound_pct}};
+    None kalau DB error / tak tersedia, {} kalau tabel kosong."""
+    if not psycopg:
+        return None
+    try:
+        with psycopg.connect(DB_DSN, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct FROM auto_pricing_config")
+                rows = cur.fetchall()
+        if not rows:
+            return {}
+        out = {}
+        for upstream, model_id, trigger_pct, rebound_pct in rows:
+            out[(upstream, model_id)] = {
+                "trigger_pct": float(trigger_pct or 0),
+                "rebound_pct": float(rebound_pct or 0),
+            }
+        return out
+    except Exception:
+        return None
+
+
 def load_config():
-    """Baca config per upstream×model. return {(upstream, model_id): {trigger_pct, rebound_pct}}"""
+    """Baca config per upstream×model. return {(upstream, model_id): {trigger_pct, rebound_pct}}.
+    C6 — source of truth = DB PostgreSQL (auto_pricing_config), fallback ke file JSON lama
+    (DEFAULT_CONFIG_FILE), lalu default band (band_for). Prioritas: DB > file > default."""
+    d = _load_config_db()
+    if d:
+        return d  # DB punya data → source of truth
+    # DB error / kosong → fallback file JSON (tetap kompatibel)
     try:
         with open(DEFAULT_CONFIG_FILE) as f:
-            d = json.load(f)
+            dj = json.load(f)
         out = {}
-        for c in (d.get("configs") or []):
+        for c in (dj.get("configs") or []):
             k = (c.get("upstream"), c.get("model_id"))
             out[k] = {"trigger_pct": float(c.get("trigger_pct")), "rebound_pct": float(c.get("rebound_pct"))}
         return out
@@ -63,12 +104,12 @@ def load_config():
 
 
 def band_for(slug, mid, conf):
-    """trigger_pct & rebound_pct per slug.
+    """trigger_pct per slug (REBOUND DIHAPUS — nilai rebound_pct dipertahankan
+    hanya utk kompatibilitas config lama, tapi TIDAK dipakai lagi).
 
-    - codebuddy / codebuddy-cn: trigger 2% / rebound 10% (default stabil, bisa di-override config).
-    - cline-pass: dari config per-model; default deepseek-v4-flash 10/15,
-      model lain 20/25. trigger_pct utk trigger (kapan undercut), rebound_pct utk
-      floor harga saat kompetitor ≤ trigger.
+    - codebuddy / codebuddy-cn: trigger 2% (default stabil, bisa di-override config).
+    - cline-pass: dari config per-model; default deepseek-v4-flash 10%,
+      model lain 20%.
     """
     if conf:
         return conf["trigger_pct"] / 100.0, conf["rebound_pct"] / 100.0
@@ -233,18 +274,23 @@ def get_asks_enabled(upstream):
 def set_ask(slug, cid, ask_in, ask_out, official=0):
     """PUT ask (tabular for upstream). Kirim pctOff (persen diskon dari official) — WAJIB.
     pctOff dihitung dari target: (1 - ask_in/official)*100, dibulatkan ke 1 desimal
-    (API simpan presisi 0.1%, di bawah itu ke-bulat)."""
+    (API simpan presisi 0.1%, di bawah itu ke-bulat). API InferHub mensyaratkan pctOff;
+    kalau official tak diketahui (0), kita tak bisa hitung pctOff → return 422 langsung
+    tanpa PUT ke API, biar tidak ada 422 membingungkan (AP-3)."""
     if ask_in is None:
         return (0, None)
     payload = {"askInputPerMtok": str(round(ask_in, 6)), "askOutputPerMtok": str(round(ask_out, 6))}
-    # kalau official tersedia, kirim pctOff (API InferHub butuh field ini utk 204)
     if official and official > 0:
         pct_off = round((1 - ask_in / official) * 100, 1)   # 1 desimal — presisi 0.1%
         # clamp ke rentang valid. Harga MAX ask 50% (pctOff >= 50). API tolak luar batas.
         pct_off = max(50, min(pct_off, 99.9))
         payload["pctOff"] = pct_off
+    else:
+        # official tak diketahui → pctOff tak bisa dihitung; return 422 langsung
+        # tanpa PUT ke API (AP-3). Ini menghindari 422 membingungkan dari API.
+        log(f"WARN set_ask({cid}): official=0, pctOff tak dihitung — skip PUT (422)")
+        return (422, {"error": "official=0, pctOff undefined"})
     return api(f"/publisher/upstreams/{slug}/asks/{cid}", method="PUT", payload=payload)
-
 
 def get_market_min():
     """Anchor kompetitor dari /market — minAskIn per (table-prefix/model). Kembalikan dict {(slug, model_id): minAskIn}.
@@ -282,8 +328,11 @@ def get_positions(catalog):
       - asksIn[] per model = harga SEMUA provider di platform utk model itu.
         total_provider = len(asksIn)  (total di semua harga)
         histogram orderbook = {price: count}
-      - provider_ok_kita = jumlah provider OK kita utk upstream tsb
-        (diambil dari /publisher/providers sekali per cycle).
+      - provider_ok_kita = jumlah provider KITA utk upstream tsb
+        (SEMUA provider dgn upstreamSlug==upstream DAN enabled==True,
+        baik apiKeyCheckStatus 'ok' maupun 'invalid' — keduanya menerbitkan
+        ask di orderbook, jadi keduanya harus dikurangi dari histogram.
+        C7: jangan filter apiKeyCheckStatus di sini).
 
     Return {(slug, model_id): {"total_provider", "provider_ok_kita",
                                 "posisi_kompetitor", "levels"}}
@@ -294,7 +343,7 @@ def get_positions(catalog):
         ok_kita = {}
         if st == 200 and isinstance(provs, list):
             for p in provs:
-                if p.get("enabled") and p.get("apiKeyCheckStatus") == "ok":
+                if p.get("enabled") and p.get("upstreamSlug"):
                     s = p.get("upstreamSlug")
                     ok_kita[s] = ok_kita.get(s, 0) + 1
     except Exception:
@@ -328,12 +377,11 @@ def get_positions(catalog):
             # baru pakai level kompetitor murni utk undercut.
             # /catalog asksIn[] = harga semua provider (kita + kompetitor) tanpa
             # identitas owner. Kita tahu jumlah ask aktif kita = ok (dari
-            # /publisher/providers enabled+ok utk upstream ini). Kurangi ok dari
-            # histogram level demi level (mulai level terendah — ask kita ada di
-            # level yg kita pasang), sehingga sisa count per level = kompetitor.
-            # Level yg tersisa setelah pengurangan = orderbook kompetitor murni.
-            remaining = ok
-            comp_levels = []
+            # /publisher/providers enabled utk upstream ini — semua enabled
+            # menerbitkan ask, baik apiKeyCheckStatus ok maupun invalid).
+            # Kurangi ok dari histogram level demi level (mulai level terendah —
+            # ask kita ada di level yg kita pasang), sehingga sisa count per
+            # level = kompetitor. Level yg tersisa = orderbook kompetitor murni.
             for p, q in sorted(cnt.items()):
                 if remaining > 0:
                     take = min(q, remaining)
@@ -416,6 +464,15 @@ def run_cycle(dry_run=False):
                                   "reason": f"cooldown ({now-prev_ts:.0f}/{cooldown}s) - hold"})
                 continue
 
+            # ── BACKOFF (AP-6): kalau PUT kena 429/timeout di cycle lalu, skip
+            #    model ini sampai skip_until lewat — tanpa PUT. Reset otomatis. ──
+            skip_until = prev.get("skip_until", 0)
+            if now < skip_until:
+                remain = int(skip_until - now)
+                decisions.append({**a, "action": "backoff", "target": our, "comp": comp,
+                                  "reason": f"backoff ({remain}s tersisa, 429/timeout sblmnya) - skip PUT"})
+                continue
+
             # ── anchor kompetitor BERSIH & DETERMINISTIK ──
             # kompetitor = /market minAskIn (harga termurah yg tersedia utk upstream-model ini,
             #   dari platform market). catalog/asksIn = SEMUA provider (termasuk kita) → utk posisi.
@@ -488,7 +545,7 @@ def run_cycle(dry_run=False):
 
             # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
             if comp is None or our <= comp + 1e-6:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
@@ -497,7 +554,7 @@ def run_cycle(dry_run=False):
             # Jangan undias mereka, jangan balas — mereka "harga tidak wajar".
             # Kita undias hanya kompetitor yang DI LUAR batas (> trigger).
             if comp <= trigger_px + 1e-9:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f} (kompetitor di dalam batas) → abaikan, hold di ${our:.4f} | posisi komp {pos_komp}"})
                 continue
@@ -508,7 +565,7 @@ def run_cycle(dry_run=False):
             nontrig_prices = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
             if not nontrig_prices:
                 # tidak ada level non-trigger selain kita → jangan turun, diam di harga kita
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"komp ${comp:.4f} di trigger ${trigger_px:.4f}; tdk ada level non-trigger kompetitor utk diundercut, hold di ${our:.4f} | posisi komp {pos_komp}"})
                 continue
@@ -523,7 +580,7 @@ def run_cycle(dry_run=False):
                 target = min(target, max_in)
             target = max(0.0, round(target, 6))
             if abs(target - our) <= 0.5e-4:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"already at ${our:.4f} (non-trigger low ${ref_price:.4f} - 0.1%) - hold | posisi komp {pos_komp}"})
                 continue
@@ -539,11 +596,16 @@ def run_cycle(dry_run=False):
             log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> undercut non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
+                # AP-6: sukses → reset backoff (buang skip_until)
+                hold[hk].pop("skip_until", None)
                 decisions.append({**a, "action": action, "target": target, "comp": comp,
                                   "reason": f"undercut 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
             elif st in (429, 0):
-                log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip, no retry this cycle")
-                decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                # AP-6: 429/timeout → backoff: skip model ini selama BACKOFF detik
+                hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts,
+                            "skip_until": now + BACKOFF}
+                log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip + backoff {BACKOFF}s")
+                decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip + backoff", "http": st})
             else:
                 log(f"  !! [{slug}] {mid}: {status} — skip, no retry this cycle")
                 decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})

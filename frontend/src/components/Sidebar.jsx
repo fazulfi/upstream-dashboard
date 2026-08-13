@@ -12,6 +12,8 @@ const SECTIONS = [
     { to: '/auto-pricing', label: 'Auto-Pricing', Icon: Workflow },
     { to: '/fleet-health', label: 'Fleet Health', Icon: Activity },
     { to: '/catalog', label: 'Catalog & Capacity', Icon: Boxes },
+    { to: '/budgets', label: 'Budgets', Icon: Wallet },
+    { to: '/combos', label: 'Combos', Icon: Boxes },
     { to: '/analytics', label: 'Analytics', Icon: BarChart3 },
     { to: '/pnl', label: 'Profit & Loss', Icon: Receipt },
     { to: '/settlements', label: 'Settlements', Icon: Wallet },

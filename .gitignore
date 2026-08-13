@@ -36,3 +36,9 @@ Thumbs.db
 *.bak
 .dashboard-password
 AUDIT-FULL.md
+
+# --- Test & env lokal ---
+.venv-test/
+*.egg-info/
+.coverage
+htmlcov/

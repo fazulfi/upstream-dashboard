@@ -34,7 +34,7 @@ export default function Asks() {
     if (isNaN(ainN) || ainN <= 0) return setMsg('masukkan harga input valid');
     if (target.max_ask != null && ainN > target.max_ask) return setMsg(`melebihi cap max $${target.max_ask}`);
     const u = target.upstreams?.find(x => x.slug === upSel);
-    const upstream_catalog_model_id = u?.upstream_catalog_model_id;
+    const upstream_catalog_model_id = u?.upstream_catalog_model_id || u?.cid;
     if (!upstream_catalog_model_id) return setMsg('upstream ini tidak punya upstream_catalog_model_id');
     setSaving(true);
     try {
@@ -43,8 +43,9 @@ export default function Asks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           upstream_catalog_model_id,
-          askInputPerMtok: ainN,
-          askOutputPerMtok: (isNaN(aoutN) || aoutN <= 0) ? null : aoutN,
+          upstream_slug: upSel,
+          ask_input_per_mtok: ainN,
+          ask_output_per_mtok: (isNaN(aoutN) || aoutN <= 0) ? ainN : aoutN,
         }),
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);

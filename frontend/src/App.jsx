@@ -17,7 +17,8 @@ import Usage from './pages/Usage';
 import Asks from './pages/Asks';
 import FleetHealth from './pages/FleetHealth';
 import AutoPricing from './pages/AutoPricing';
-import './App.css';
+import Budgets from './pages/Budgets';
+import Combos from './pages/Combos';
 
 export default function App() {
   return (
@@ -38,6 +39,8 @@ export default function App() {
               <Route path="/catalog" element={<Catalog />} />
               <Route path="/usage" element={<Usage />} />
               <Route path="/asks" element={<Asks />} />
+              <Route path="/budgets" element={<Budgets />} />
+              <Route path="/combos" element={<Combos />} />
               <Route path="/fleet-health" element={<FleetHealth />} />
               <Route path="/auto-pricing" element={<AutoPricing />} />
               <Route path="/settings" element={<Settings />} />

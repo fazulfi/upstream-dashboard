@@ -15,6 +15,8 @@ const TITLES = {
   '/asks': { crumb: 'Ask Price / Manual', title: 'Ask Price' },
   '/fleet-health': { crumb: 'Fleet / Health', title: 'Fleet Health' },
   '/auto-pricing': { crumb: 'Auto / Pricing', title: 'Auto-Pricing' },
+  '/budgets': { crumb: 'Publisher / Budgets', title: 'Budgets' },
+  '/combos': { crumb: 'Publisher / Combos', title: 'Combos' },
   '/keys': { crumb: 'Account & Billing / API Keys', title: 'API keys' },
   '/topups': { crumb: 'Account & Billing / Top-ups', title: 'Top-ups' },
   '/settings': { crumb: 'System / Settings', title: 'Settings' },

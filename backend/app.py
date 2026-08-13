@@ -22,14 +22,36 @@ import math
 import threading
 import time
 import uuid
+import hmac
+import hashlib
+from collections import defaultdict
+from functools import wraps
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import logic  # pure functions (auth, bucketing, sanitize) — unit-testable
+
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
+# CORS: hanya origin dashboard yang diizinkan (bukan `*`). Sesi/Bearer token
+# dipakai agar password tidak perlu di-bundle ke frontend.
+ALLOWED_ORIGINS = set(
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()
+) or {
+    "https://frontend-fazulfis-projects.vercel.app",
+    "https://upstream-dashboard.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
+SESSION_TTL = int(os.environ.get("SESSION_TTL", "86400"))  # 24h
+RL_LIMIT = int(os.environ.get("RL_LIMIT", "60"))
+RL_WINDOW = int(os.environ.get("RL_WINDOW", "60"))
+_rl = defaultdict(list)
 
 import psycopg
 from psycopg.rows import dict_row
+
+
 
 BASE = "/home/gamesim/shared-memory/inferhub-business"
 LEDGER = os.path.join(BASE, "finance", "ledger.json")
@@ -51,11 +73,8 @@ RANGES = {
     "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
     "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
 }
-CANDLE_LEN = {
-    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "3h": 10800,
-    "6h": 21600, "12h": 43200, "24h": 86400, "1w": 604800, "1mo": 2592000,
-}
-MAX_CANDLES = 120
+CANDLE_LEN = logic.CANDLE_LEN
+MAX_CANDLES = logic.MAX_CANDLES
 
 
 def db_connect():
@@ -601,7 +620,8 @@ def inferhub_get(path, params=None, timeout=25):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
-    except Exception:
+    except Exception as e:
+        _cache["last_error"] = f"inferhub_get {path}: {e}"
         return None
 
 
@@ -625,7 +645,8 @@ def inferhub_inf_get(path, params=None, timeout=25):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
-    except Exception:
+    except Exception as e:
+        _cache["last_error"] = f"inferhub_inf_get {path}: {e}"
         return None
 
 
@@ -644,7 +665,8 @@ def inferhub_post(path, payload=None, timeout=25):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             body = r.read().decode()
             return json.loads(body) if body else {"ok": True}
-    except Exception:
+    except Exception as e:
+        _cache["last_error"] = f"inferhub_post {path}: {e}"
         return None
 
 
@@ -661,9 +683,9 @@ def inferhub_put(path, payload=None, timeout=25):
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            body = r.read().decode()
             return json.loads(body) if body else {"ok": True}
-    except Exception:
+    except Exception as e:
+        _cache["last_error"] = f"inferhub_put {path}: {e}"
         return None
 
 
@@ -678,9 +700,9 @@ def inferhub_delete(path, timeout=25):
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            r.read()
             return True
-    except Exception:
+    except Exception as e:
+        _cache["last_error"] = f"inferhub_delete {path}: {e}"
         return False
 
 
@@ -697,33 +719,84 @@ def _is_drained(p):
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {"origins": list(ALLOWED_ORIGINS)}})
 
 
-# ── Auth ──
+# ── Sesi stateless (HMAC token) ──
+# Frontend TIDAK boleh memegang DASHBOARD_PASSWORD (bocor ke bundle publik).
+# Login (`POST /api/login`, password lewat body) menerbitkan token sesi:
+#   <expiry_epoch>.<hmac_sha256(password, "upstream-session:<expiry>")>
+# Frontend simpan token (localStorage), kirim `Authorization: Bearer <token>`.
+# Token kedaluwarsa (default 24h), tak bisa dipalsukan tanpa password.
+def _sign_session(exp):
+    return logic.sign_session(exp, DASHBOARD_PASSWORD)
+
+
+def _issue_token():
+    return logic.issue_token(DASHBOARD_PASSWORD, SESSION_TTL)
+
+
+def _verify_token(token):
+    return logic.verify_token(token, DASHBOARD_PASSWORD)
+
+
+def _read_credentials():
+    """Balikan (kind, credential): token sesi (Bearer) atau password (X-Auth).
+    HAPUS dukungan `?auth=` — password lewat query bocor ke access log."""
+    auth = (request.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        return ("token", auth[7:].strip())
+    xauth = (request.headers.get("X-Auth") or "").strip()
+    if xauth:
+        return ("password", xauth)
+    return (None, None)
+
+
 def require_auth(f):
-    """Decorator: cek X-Auth header atau ?auth= query terhadap DASHBOARD_PASSWORD."""
-    from functools import wraps
-
+    """Terapkan auth: token sesi (Bearer) ATAU password (X-Auth)."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        token = request.headers.get("X-Auth") or request.args.get("auth")
-        if token != DASHBOARD_PASSWORD:
+        kind, cred = _read_credentials()
+        if not cred:
+            return jsonify({"error": "unauthorized"}), 401
+        ok = _verify_token(cred) if kind == "token" else hmac.compare_digest(cred, DASHBOARD_PASSWORD)
+        if not ok:
             return jsonify({"error": "unauthorized"}), 401
         return f(*args, **kwargs)
-
     return wrapper
 
 
 @app.before_request
 def _auth_gate():
-    """Terapkan auth ke SEMUA route kecuali /health dan preflight CORS (OPTIONS)."""
-    if request.path == "/health":
-        return None
-    # CORS preflight (OPTIONS) TIDAK boleh kena auth — browser kirim tanpa header
-    if request.method == "OPTIONS":
+    """Auth SEMUA route kecuali /health, /api/login, dan preflight CORS (OPTIONS)."""
+    if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
         return None
     return require_auth(lambda: None)()
+
+
+
+
+
+
+@app.before_request
+def _rate_limit():
+    """Rate limit per-IP utk cegah brute-force. Login dikecualikan (punya sendiri)."""
+    if request.path == "/health":
+        return None
+    ip = request.remote_addr or "?"
+    if not logic.rate_limit_hit(_rl, ip, RL_LIMIT, RL_WINDOW):
+        return jsonify({"error": "rate limited"}), 429
+    return None
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """Login: exchange password (body {password}) -> token sesi."""
+    body = request.get_json(silent=True) or {}
+    pw = body.get("password")
+    if not pw or not hmac.compare_digest(pw, DASHBOARD_PASSWORD):
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"token": _issue_token(), "expires_in": SESSION_TTL})
 
 
 def load_json(path, default=None):
@@ -1094,30 +1167,34 @@ def _poller():
         time.sleep(POLL_SECONDS)
 
 
-# start poller thread
-t = threading.Thread(target=_poller, daemon=True)
-t.start()
-# init postgres table
-db_init()
-# import ledger.json -> DB (upsert; DB jadi primary store)
-try:
-    db_import_ledger(load_json(LEDGER, {}))
-except Exception:
-    pass
-# seed history SEBELUM warmup poller: backfill kurva ke total real (balance+withdrawals dari API)
-try:
-    bal = inferhub_get("/publisher/earnings") or {}
-    wd = inferhub_get("/publisher/withdrawals") or []
-    b = float(bal.get("publisherEarningsUsdc") or 0)
-    w = sum(float(x.get("amountUsdc") or 0) for x in (wd or []))
-    db_seed(round(b + w, 4))
-except Exception:
-    pass
-# warm up immediately (don't wait first sleep)
-try:
-    _poll_once(time.time())
-except Exception:
-    pass
+def start_backend():
+    """Runtime init (dipanggil dari __main__): poller thread + DB init + seed + warmup.
+    Dipisah dari module-scope supaya import utk unit test tidak menyentuh
+    Postgres/thread/net — aman & cepat."""
+    # start poller thread
+    t = threading.Thread(target=_poller, daemon=True)
+    t.start()
+    # init postgres table
+    db_init()
+    # import ledger.json -> DB (upsert; DB jadi primary store)
+    try:
+        db_import_ledger(load_json(LEDGER, {}))
+    except Exception:
+        pass
+    # seed history SEBELUM warmup poller: backfill kurva ke total real
+    try:
+        bal = inferhub_get("/publisher/earnings") or {}
+        wd = inferhub_get("/publisher/withdrawals") or []
+        b = float(bal.get("publisherEarningsUsdc") or 0)
+        w = sum(float(x.get("amountUsdc") or 0) for x in (wd or []))
+        db_seed(round(b + w, 4))
+    except Exception:
+        pass
+    # warm up immediately (don't wait first sleep)
+    try:
+        _poll_once(time.time())
+    except Exception:
+        pass
 
 
 def get_cache():
@@ -1135,6 +1212,9 @@ def read_history():
         return c["history"]
     return read_history_file()
 
+
+# Durasi tiap range utk window history — sumber tunggal: logic.RANGE_DUR_S
+_RANGE_DUR_S = logic.RANGE_DUR_S
 
 @app.route("/api/history")
 def api_history():
@@ -1155,7 +1235,14 @@ def api_history():
         cutoff = data_start
     else:
         candle_s = CANDLE_LEN.get(range_id, 60)
-        window = candle_s * MAX_CANDLES
+        dur = _RANGE_DUR_S.get(range_id)
+        if dur:
+            window = min(dur, data_span)
+        else:
+            window = candle_s * MAX_CANDLES
+        # clamp candle utk jangan melebihi MAX_CANDLES bucket
+        if window and candle_s > 0 and window // candle_s > MAX_CANDLES:
+            candle_s = max(60, int(window // MAX_CANDLES))
         cutoff = now - window
 
     pts = [p for p in pts if p["epoch"] >= cutoff]
@@ -1435,12 +1522,15 @@ def api_earnings_alltime():
     return jsonify(c["earnings_alltime"])
 
 
-def _fetch_all_usage(range_id):
-    """Paginate /usage/logs sampai habis, kembalikan semua rows + totalCost konsumen."""
+def _fetch_all_usage(range_id, max_rows=3000):
+    """Paginate /usage/logs sampai habis (dibatasi max_rows & waktu) utk cegah 504.
+    totalCostUsdc sudah aggregate dari halaman pertama — akurat tanpa paginate penuh.
+    max_rows ~3000 -> maks ~30 page -> <~10s, cukup utk bucket trend (MAX_CANDLES)."""
     rows = []
     page = 1
     page_size = 100
     total_cost = 0.0
+    start = time.time()
     while True:
         d = inferhub_get("/usage/logs", {"range": range_id, "page": page, "pageSize": page_size})
         if not d:
@@ -1448,12 +1538,16 @@ def _fetch_all_usage(range_id):
         page_rows = d.get("rows", [])
         if not page_rows:
             break
+        # totalCost aggregate dari halaman pertama (paling akurat & murah)
+        if page == 1 and d.get("totalCostUsdc") is not None:
+            total_cost = float(d.get("totalCostUsdc"))
         rows.extend(page_rows)
-        total_cost = float(d.get("totalCostUsdc") or 0)
-        if len(rows) >= int(d.get("total") or 0):
+        if len(rows) >= int(d.get("total") or 0) or len(rows) >= max_rows:
+            break
+        if time.time() - start > 12:  # hard cap: jangan >12s per request
             break
         page += 1
-        if page > 300:  # safety: max 30k rows
+        if page > 100:  # safety
             break
     return rows, total_cost
 
@@ -1551,8 +1645,9 @@ def api_earnings_summary():
 
 @app.route("/api/publisher-analytics")
 def api_publisher_analytics():
-    """Analytics dari sisi PUBLISHER. Earnings per upstream dari earningsLifetimeUsdc (all-time)
-    + estimasi per range (proporsi dari total fleet earning dalam window, pakai history)."""
+    """Analytics publisher. Earnings per upstream dari earningsLifetimeUsdc (all-time)
+    + estimasi per range. Utk range waktu, gunakan sumber REAL (/usage/logs aggregate)
+    — BUKAN kurva seed sintetis di DB (yang mengkontaminasi MIN/MAX lifetime)."""
     range_id = request.args.get("range", "all")
     dbp = db_read_providers()
     prov = dbp if dbp is not None else ((get_cache().get("fleet") or {}).get("raw") or [])
@@ -1579,8 +1674,19 @@ def api_publisher_analytics():
 
     total_earn_lifetime = round(sum(d["earn"] for d in by_up_list), 2)
 
-    # ── earning dalam range dari DB (full seeded history, bukan cache) ──
-    window_earning = db_read_earning_range(range_id)
+    # ── earning dalam range: sumber REAL (/usage/logs aggregate) ──
+    # db_read_earning_range memakai MIN/MAX kurva seed sintetis 05-Jul..08-Agu
+    # -> angka palsu. Pakai aggregate akurat totalCost×share utk range; DB utk 'all'.
+    window_earning = 0.0
+    if range_id == "all":
+        window_earning = db_read_earning_range("all")
+    else:
+        agg = inferhub_get("/usage/logs", {"range": range_id, "page": 1, "pageSize": 1})
+        if agg:
+            try:
+                window_earning = float(agg.get("totalCostUsdc") or 0) * PUBLISHER_SHARE
+            except (TypeError, ValueError):
+                window_earning = 0.0
 
     # distribusi window earning proporsional ke tiap upstream (share lifetime)
     if total_earn_lifetime > 0:
@@ -1703,13 +1809,14 @@ def api_keys_post():
     if not d:
         return jsonify({"error": "create failed"}), 502
     try:
+        now = datetime.now(timezone.utc)
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO api_keys (id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by, secret, synced_at)
                 VALUES (%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
-                ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret
-            """, (d.get("id"), name, d.get("prefix"), "chat,completions,embeddings", d.get("secret"), datetime.now(timezone.utc)))
-        conn.commit()
+                ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret, synced_at=EXCLUDED.synced_at
+            """, (d.get("id"), name, d.get("prefix"), "chat,completions,embeddings", now, d.get("secret"), now))
+            conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
@@ -1721,10 +1828,14 @@ def api_keys_rotate(kid):
     if not d:
         return jsonify({"error": "rotate failed"}), 502
     try:
+        now = datetime.now(timezone.utc)
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("INSERT INTO api_keys (id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by, secret, synced_at) VALUES (%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret",
-                        (d.get("id"), d.get("name"), d.get("prefix"), "chat,completions,embeddings", d.get("secret"), datetime.now(timezone.utc)))
-        conn.commit()
+            cur.execute("""
+                INSERT INTO api_keys (id, name, key_prefix, scopes, created_at, last_used_at, expires_at, replaced_by, secret, synced_at)
+                VALUES (%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET key_prefix=EXCLUDED.key_prefix, secret=EXCLUDED.secret, synced_at=EXCLUDED.synced_at
+            """, (d.get("id"), d.get("name"), d.get("prefix"), "chat,completions,embeddings", now, d.get("secret"), now))
+            conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
@@ -1768,7 +1879,9 @@ def api_budget_put(mid):
         "enabled": body.get("enabled", True),
     }
     d = inferhub_put(f"/budgets/{mid}", payload)
-    return jsonify({"ok": d is not None})
+    if d is None:
+        return jsonify({"error": "budget update failed"}), 502
+    return jsonify({"ok": True})
 
 
 @app.route("/api/topups", methods=["POST"])
@@ -1776,20 +1889,32 @@ def api_topups_post():
     body = request.get_json(silent=True) or {}
     amount = body.get("amount")
     pm = body.get("payment_method") or "qris"
-    if not amount:
+    if amount is None or amount == "":
         return jsonify({"error": "amount required"}), 400
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return jsonify({"error": "amount must be a number"}), 400
+    if amount <= 0:
+        return jsonify({"error": "amount must be positive"}), 400
     d = inferhub_post("/topups", {"amount": amount, "paymentMethod": pm})
     if not d:
         return jsonify({"error": "create topup failed"}), 502
+    # amount_usdc dari respons API bila tersedia; fallback 0 (kurang informasi)
+    try:
+        usdc = float(d.get("amountUsdc") or 0)
+    except (TypeError, ValueError):
+        usdc = 0
     # simpan ke DB
     try:
+        now = datetime.now(timezone.utc)
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO topups (id, amount_usdc, amount_idr, payment_method, status, payment_url, topup_key, tako_transaction_id, qr_data, qr_svg, created_at, synced_at)
-                VALUES (%s,0,%s,%s,%s,NULL,%s,NULL,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,NULL,%s,NULL,%s,%s,%s,%s)
                 ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, qr_data=EXCLUDED.qr_data, qr_svg=EXCLUDED.qr_svg
-            """, (d.get("topupKey"), int(amount), pm, "pending", d.get("topupKey"),
-                  d.get("qrData"), d.get("qrSvg"), datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc)))
+            """, (d.get("topupKey"), usdc, int(amount), pm, "pending", d.get("topupKey"),
+                  d.get("qrData"), d.get("qrSvg"), now.isoformat(), now))
         conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1958,7 +2083,8 @@ def api_orderbook():
             if our_a and mo["our_ask"] is None:
                 try: mo["our_ask"] = round(float(our_a.get("askInputPerMtok") or 0), 6)
                 except (TypeError, ValueError): pass
-            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels, "active": u.get("activeProviders")})
+            # expose upstreamCatalogModelId (cid) utk set-harga-manual dari frontend
+            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels, "active": u.get("activeProviders"), "cid": cid})
     # compute min/max/spread + sort models
     out = []
     for key, mo in models.items():
@@ -2255,13 +2381,22 @@ def health():
     return jsonify({"ok": True, "polled_at": get_cache()["refreshed"]})
 
 
-# sync auto-pricing config DB -> JSON (daemon baca file ini); dipanggil setelah semua definisi
-try:
-    _sync_ap_config_file()
-except Exception:
-    pass
+# sync auto-pricing config DB -> JSON (daemon baca file ini).
+# Dipanggil dalam main() — bukan module-scope — supaya import utk unit test
+# tidak menyentuh Postgres (aman & cepat).
+
+
+def main():
+    try:
+        _sync_ap_config_file()
+    except Exception:
+        pass
+    start_backend()
+    from waitress import serve
+    serve(app, host="127.0.0.1", port=PORT)
 
 
 if __name__ == "__main__":
-    from waitress import serve
-    serve(app, host="127.0.0.1", port=PORT)
+    main()
+
+
