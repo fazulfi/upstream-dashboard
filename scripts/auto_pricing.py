@@ -323,11 +323,32 @@ def get_positions(catalog):
             total = sum(cnt.values())
             ok = ok_kita.get(slug, 0)
             mid = mk.split("/")[-1].strip().lower()
+
+            # ── FIX (permintaan Faiz): scan orderbook, KURANGI ask kita sendiri,
+            # baru pakai level kompetitor murni utk undercut.
+            # /catalog asksIn[] = harga semua provider (kita + kompetitor) tanpa
+            # identitas owner. Kita tahu jumlah ask aktif kita = ok (dari
+            # /publisher/providers enabled+ok utk upstream ini). Kurangi ok dari
+            # histogram level demi level (mulai level terendah — ask kita ada di
+            # level yg kita pasang), sehingga sisa count per level = kompetitor.
+            # Level yg tersisa setelah pengurangan = orderbook kompetitor murni.
+            remaining = ok
+            comp_levels = []
+            for p, q in sorted(cnt.items()):
+                if remaining > 0:
+                    take = min(q, remaining)
+                    q_after = q - take
+                    remaining -= take
+                else:
+                    q_after = q
+                if q_after > 0:
+                    comp_levels.append((p, q_after))
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
                 "posisi_kompetitor": max(total - ok, 0),
-                "levels": sorted(cnt.items()),   # [(price, qty), ...] asc
+                # levels = orderbook KOMPETITOR murni (ask kita sudah dikurangi)
+                "levels": comp_levels,
             }
     return out
 
@@ -414,7 +435,27 @@ def run_cycle(dry_run=False):
             tot_prov = pos.get("total_provider", 0) if pos else 0
             ok_kita = pos.get("provider_ok_kita", 0) if pos else 0
             pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
-            levels = pos.get("levels", []) if pos else []          # [(price, qty) asc]
+            levels = pos.get("levels", []) if pos else []          # [(price, qty) asc] — KOMPETITOR MURNI (ask kita sudah dikurangi)
+
+            # ── FIX (permintaan Faiz): anchor kompetitor TIDAK BOLEH = ask kita sendiri.
+            # /market minAskIn bisa jadi harga ask KITA (kita yang termurah) → kalau dipakai
+            # sebagai "comp", kita malah undercut diri sendiri. Solusi: kalau comp <= our
+            # (kompetitor "lebih murah" dari kita = mungkin ask kita sendiri), pakai level
+            # kompetitor MURNI terendah dari orderbook yang sudah dikurangi ask kita.
+            # Kalau tidak ada level kompetitor murni → hold (kita leader).
+            if comp is not None and our > 0 and comp <= our + 1e-9:
+                comp_levels_real = [p for p, _q in levels if p > 0]
+                if comp_levels_real:
+                    # level kompetitor murni TERENDAH yang > our (di atas kita)
+                    above = [p for p in comp_levels_real if p > our + 1e-6]
+                    if above:
+                        comp = round(min(above), 6)
+                    else:
+                        # semua kompetitor murni ≤ our → kita leader
+                        comp = None
+                else:
+                    # tidak ada kompetitor murni → kita sendiri di market → leader
+                    comp = None
 
             # ── LOGIKA FAIZ v2 (REBOUND DIHAPUS) ──
             # trigger = official × trigger% (range "harga tidak wajar")
@@ -438,44 +479,27 @@ def run_cycle(dry_run=False):
             offset = official * 0.001  # 0.1% dari official price (undercut gap)
             trigger_px = round(official * t_pct, 6)
 
-            # ── SELF-CORRECT NAIK (jangan biarkan harga kita di range trigger / tembus) ──
-            # kalau our < trigger_px (harga kita terdampar di range trigger dari logika lama),
-            # NAIKKAN ke level non-trigger terendah kompetitor (− 0.1%). Ini koreksi atas trigger
-            # 5%: harga kita TIDAK boleh di range trigger.
-            if our < trigger_px - 1e-9:
-                nontrig_up = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
-                if nontrig_up:
-                    up_target = max(round(nontrig_up[0] - offset, 6), trigger_px)
-                    if max_in > 0:
-                        up_target = min(up_target, max_in)
-                    up_target = max(0.0, round(up_target, 6))
-                    if abs(up_target - our) > 0.5e-4:
-                        # PUT naik ke range non-trigger
-                        if effective_dry:
-                            log(f"  [{slug}] {mid}: SELF-CORRECT-UP our=${our:.4f}<floor ${trigger_px:.4f} -> ${up_target:.4f} [DRY]")
-                            decisions.append({**a, "action": "self_up", "target": up_target, "comp": comp,
-                                              "reason": f"self-correct naik dr ${our:.4f} (dalam trigger) ke ${up_target:.4f} (non-trigger) | posisi komp {pos_komp}"})
-                            continue
-                        st, res = set_ask(slug, cid, up_target, a["ask_out"], official=official)
-                        status = "OK" if st in (200, 204) else f"HTTP{st}"
-                        log(f"  [{slug}] {mid}: SELF-CORRECT-UP our=${our:.4f}<floor ${trigger_px:.4f} -> ${up_target:.4f} [{status}]")
-                        if st in (200, 204):
-                            hold[hk] = {"mode": "self_up", "our": up_target, "comp": comp, "ts": now}
-                            decisions.append({**a, "action": "self_up", "target": up_target, "comp": comp,
-                                              "reason": f"self-correct naik ke ${up_target:.4f} (non-trigger)", "http": st})
-                        elif st in (429, 0):
-                            decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
-                        else:
-                            decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
-                        continue
-                    # sudah di floor? lanjut ke logika bawah
-                # tidak ada level non-trigger utk naik → diam (biarkan)
+            # ── LOGIKA FAIZ v4 (MURNI — sesuai permintaan): trigger = harga BATAS.
+            #   kompetitor yang MELEWATI batas (≤ trigger) → ABAIKAN, jangan diladenin.
+            #   kompetitor di LUAR batas (> trigger) → kita undias 0.1% di bawahnya.
+            #   TIDAK ADA self-correct. TIDAK ada naikin harga ke batas.
+            #   Kalau kita lebih murah dari semua kompetitor wajar → DIAM (leader).
+            #   Kalau tidak ada kompetitor wajar sama sekali → DIAM di harga kita.
 
             # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
             if comp is None or our <= comp + 1e-6:
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
+                continue
+
+            # ── FIX (permintaan Faiz): kompetitor di DALAM batas (≤ trigger) → ABAIKAN.
+            # Jangan undias mereka, jangan balas — mereka "harga tidak wajar".
+            # Kita undias hanya kompetitor yang DI LUAR batas (> trigger).
+            if comp <= trigger_px + 1e-9:
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                  "reason": f"komp ${comp:.4f} ≤ trigger ${trigger_px:.4f} (kompetitor di dalam batas) → abaikan, hold di ${our:.4f} | posisi komp {pos_komp}"})
                 continue
 
             # cari level orderbook NON-TRIGGER terendah (harga wajar paling murah)
