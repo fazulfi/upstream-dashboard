@@ -1849,7 +1849,7 @@ def api_keys_delete(kid):
     try:
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM api_keys WHERE id=%s", (kid,))
-        conn.commit()
+            conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
@@ -1915,7 +1915,7 @@ def api_topups_post():
                 ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, qr_data=EXCLUDED.qr_data, qr_svg=EXCLUDED.qr_svg
             """, (d.get("topupKey"), usdc, int(amount), pm, "pending", d.get("topupKey"),
                   d.get("qrData"), d.get("qrSvg"), now.isoformat(), now))
-        conn.commit()
+            conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(d), 201
@@ -1962,7 +1962,7 @@ def api_combos_delete(cid):
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM combos WHERE id=%s", (cid,))
             cur.execute("DELETE FROM combo_models WHERE combo_id=%s", (cid,))
-        conn.commit()
+            conn.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
