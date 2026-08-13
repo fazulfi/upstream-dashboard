@@ -379,7 +379,10 @@ def run_cycle(dry_run=False):
             max_in = a["max_ask_in"]
             mid = a["model_id"]
 
+            # config key bisa bare ("deepseek-v4-flash") atau prefixed ("codebuddy-cn/deepseek-v4-flash")
             conf = config.get((slug, mid))
+            if conf is None:
+                conf = config.get((slug, f"{slug}/{mid}"))
             t_pct, _r_pct = band_for(slug, mid, conf)   # trigger% (rebound dihapus v2)
             hk = f"{slug}|{mid}"
             prev = hold.get(hk, {})
@@ -421,6 +424,42 @@ def run_cycle(dry_run=False):
             offset = official * 0.001  # 0.1% dari official price
             trigger_px = round(official * t_pct, 6)
 
+            # ===== SELF-CORRECTION (floor enforcement) =====
+            # kalau harga kita SAAT INI SUDAH di bawah floor (trigger_px) — dari set-50% lama
+            # atau undercut masa lalu — NAIKKAN kembali ke floor. Ini BUKAN "rebound" yg kamu
+            # hapus (itu rebound saat kompetitor murah); ini koreksi: jangan pernah biarkan
+            # harga kita terdampar di bawah trigger (≤ x% official = jual lebihan murah dr seharusnya).
+            if our < trigger_px - 1e-9:
+                target = round(trigger_px, 6)
+                if max_in > 0:
+                    target = min(target, max_in)
+                target = round(target, 6)
+                if abs(target - our) <= 0.5e-4:
+                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
+                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                      "reason": f"our ${our:.4f} < floor ${trigger_px:.4f} - hold (sudah di floor) | posisi komp {pos_komp}"})
+                    continue
+                action = "undercut_floor"
+                if effective_dry:
+                    log(f"  [{slug}] {mid}: our=${our:.4f} < floor ${trigger_px:.4f} -> SELF-CORRECT ${target:.4f} [DRY]")
+                    decisions.append({**a, "action": action, "target": target, "comp": comp,
+                                      "reason": f"self-correct naik ke floor ${target:.4f} (our di bawah trigger)"})
+                    continue
+                st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
+                status = "OK" if st in (200, 204) else f"HTTP{st}"
+                log(f"  [{slug}] {mid}: our=${our:.4f} < floor ${trigger_px:.4f} -> SELF-CORRECT ${target:.4f} [{status}]")
+                if st in (200, 204):
+                    hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
+                    decisions.append({**a, "action": action, "target": target, "comp": comp,
+                                      "reason": f"self-correct ke floor ${target:.4f}", "http": st})
+                elif st in (429, 0):
+                    log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip")
+                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                else:
+                    log(f"  !! [{slug}] {mid}: {status} — skip")
+                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                continue
+
             # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
             if comp is None or our <= comp + 1e-6:
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
@@ -443,6 +482,8 @@ def run_cycle(dry_run=False):
                 if max_in > 0:
                     target = min(target, max_in)
                 target = max(0.0, round(target, 6))
+                # FLOOR: jangan pernah jual lebih murah dari trigger (5% official = 95% off)
+                target = max(target, trigger_px)
                 if abs(target - our) <= 0.5e-4:
                     hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                     decisions.append({**a, "action": "hold", "target": our, "comp": comp,
@@ -455,6 +496,8 @@ def run_cycle(dry_run=False):
                 if max_in > 0:
                     target = min(target, max_in)
                 target = max(0.0, round(target, 6))
+                # FLOOR: jangan pernah jual lebih murah dari trigger (5% official = 95% off)
+                target = max(target, trigger_px)
                 if abs(target - our) <= 0.5e-4:
                     hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
                     decisions.append({**a, "action": "hold", "target": our, "comp": comp,
@@ -484,8 +527,8 @@ def run_cycle(dry_run=False):
 
     save_hold_state(hold)
     n_lead = sum(1 for d in decisions if d["action"] == "leader")
-    n_und = sum(1 for d in decisions if d["action"] == "undercut")
-    n_hold = sum(1 for d in decisions if d["action"] == "hold")
+    n_und = sum(1 for d in decisions if d["action"] in ("undercut", "undercut_floor"))
+    n_hold = sum(1 for d in decisions if d["action"] in ("hold", "stable"))
     n_cd = sum(1 for d in decisions if d["action"] == "cooldown")
     n_stable = sum(1 for d in decisions if d["action"] == "stable")
     n_err = sum(1 for d in decisions if d["action"] == "error")
