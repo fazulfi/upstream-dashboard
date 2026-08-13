@@ -383,7 +383,9 @@ def get_positions(catalog):
             # ask kita ada di level yg kita pasang), sehingga sisa count per
             # level = kompetitor. Level yg tersisa = orderbook kompetitor murni.
             remaining = ok
+            comp_levels = []
             for p, q in sorted(cnt.items()):
+
                 if remaining > 0:
                     take = min(q, remaining)
                     q_after = q - take
