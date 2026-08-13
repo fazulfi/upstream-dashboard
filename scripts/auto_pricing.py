@@ -382,6 +382,7 @@ def get_positions(catalog):
             # Kurangi ok dari histogram level demi level (mulai level terendah —
             # ask kita ada di level yg kita pasang), sehingga sisa count per
             # level = kompetitor. Level yg tersisa = orderbook kompetitor murni.
+            remaining = ok
             for p, q in sorted(cnt.items()):
                 if remaining > 0:
                     take = min(q, remaining)
