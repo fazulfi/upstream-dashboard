@@ -435,6 +435,39 @@ def run_cycle(dry_run=False):
             offset = official * 0.001  # 0.1% dari official price (undercut gap)
             trigger_px = round(official * t_pct, 6)
 
+            # ── SELF-CORRECT NAIK (jangan biarkan harga kita di range trigger / tembus) ──
+            # kalau our < trigger_px (harga kita terdampar di range trigger dari logika lama),
+            # NAIKKAN ke level non-trigger terendah kompetitor (− 0.1%). Ini koreksi atas trigger
+            # 5%: harga kita TIDAK boleh di range trigger.
+            if our < trigger_px - 1e-9:
+                nontrig_up = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
+                if nontrig_up:
+                    up_target = max(round(nontrig_up[0] - offset, 6), trigger_px)
+                    if max_in > 0:
+                        up_target = min(up_target, max_in)
+                    up_target = max(0.0, round(up_target, 6))
+                    if abs(up_target - our) > 0.5e-4:
+                        # PUT naik ke range non-trigger
+                        if effective_dry:
+                            log(f"  [{slug}] {mid}: SELF-CORRECT-UP our=${our:.4f}<floor ${trigger_px:.4f} -> ${up_target:.4f} [DRY]")
+                            decisions.append({**a, "action": "self_up", "target": up_target, "comp": comp,
+                                              "reason": f"self-correct naik dr ${our:.4f} (dalam trigger) ke ${up_target:.4f} (non-trigger) | posisi komp {pos_komp}"})
+                            continue
+                        st, res = set_ask(slug, cid, up_target, a["ask_out"], official=official)
+                        status = "OK" if st in (200, 204) else f"HTTP{st}"
+                        log(f"  [{slug}] {mid}: SELF-CORRECT-UP our=${our:.4f}<floor ${trigger_px:.4f} -> ${up_target:.4f} [{status}]")
+                        if st in (200, 204):
+                            hold[hk] = {"mode": "self_up", "our": up_target, "comp": comp, "ts": now}
+                            decisions.append({**a, "action": "self_up", "target": up_target, "comp": comp,
+                                              "reason": f"self-correct naik ke ${up_target:.4f} (non-trigger)", "http": st})
+                        elif st in (429, 0):
+                            decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                        else:
+                            decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                        continue
+                    # sudah di floor? lanjut ke logika bawah
+                # tidak ada level non-trigger utk naik → diam (biarkan)
+
             # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
             if comp is None or our <= comp + 1e-6:
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": now}
