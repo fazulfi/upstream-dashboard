@@ -402,16 +402,43 @@ def get_positions(catalog, our_price=None):
                 if q_after > 0:
                     comp_levels.append((p, q_after))
             # kalau masih ada sisa ask kita (harga kita beda dari orderbook),
-            # kurangi dari level terendah sisanya (fallback)
+            # kurangi dari level TERDEKAT dengan our_level (bukan level terendah
+            # global!) — REV5 fix: jangan reset comp_levels; ini bikin level
+            # kompetitor nyata di ATAS kita ikut terpotong -> resume mati.
             if remaining > 0:
-                comp_levels = []
                 rem2 = ok
-                for p, q in sorted(cnt.items()):
-                    take = min(q, rem2)
-                    q_after = q - take
-                    rem2 -= take
-                    if q_after > 0:
-                        comp_levels.append((p, q_after))
+                # rebuild tapi kurangi dari level terdekat ke our_level (naik dulu)
+                comp_levels2 = []
+                if our_level is not None:
+                    # cari level terendah yang >= our_level (di atas kita) utk kurangi sisa
+                    for p, q in sorted(cnt.items()):
+                        take = 0
+                        if p >= our_level - 1e-6 and rem2 > 0:
+                            take = min(q, rem2)
+                            rem2 -= take
+                        q_after = q - take
+                        if q_after > 0:
+                            comp_levels2.append((p, q_after))
+                    # sisa masih ada (ask kita di bawah semua level) -> kurangi dari terendah
+                    if rem2 > 0:
+                        comp_levels2 = []
+                        rem3 = ok
+                        for p, q in sorted(cnt.items()):
+                            take = min(q, rem3)
+                            q_after = q - take
+                            rem3 -= take
+                            if q_after > 0:
+                                comp_levels2.append((p, q_after))
+                    comp_levels = comp_levels2
+                else:
+                    comp_levels = []
+                    rem2 = ok
+                    for p, q in sorted(cnt.items()):
+                        take = min(q, rem2)
+                        q_after = q - take
+                        rem2 -= take
+                        if q_after > 0:
+                            comp_levels.append((p, q_after))
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
@@ -589,7 +616,54 @@ def run_cycle(dry_run=False):
             # cari level orderbook NON-TRIGGER terendah (harga wajar paling murah)
             # kompetitor di range trigger diabaikan — fokus di range non-trigger.
             # PENTING: exclude harga kita sendiri (our) — jangan undercut diri sendiri.
+            # cari level orderbook NON-TRIGGER (kompetitor wajar, > trigger_px, bukan kita)
             nontrig_prices = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
+            # REV5: RESUME — kalau kompetitor wajar CUMAN di ATAS kita (kita yang
+            # termurah di range wajar) DAN di level harga kita TIDAK ada kompetitor
+            # lain (qty di level our sudah 0 setelah ask kita dikurangi), naik jemput
+            # level wajar terendah di atas. Kalau masih ada kompetitor di level kita
+            # -> jangan resume (kita masih bersaing di level itu). Persis permintaan user.
+            nontrig_above = [p for p in nontrig_prices if p > our + 1e-6]
+            nontrig_below = [p for p in nontrig_prices if p < our - 1e-6]
+            # apakah masih ada kompetitor murni DI level harga kita (qty > 0 di our)?
+            our_level_qty = 0
+            for p, q in levels:
+                if abs(p - our) <= 1e-6:
+                    our_level_qty = q
+                    break
+            if not nontrig_below and nontrig_above and our_level_qty <= 0:
+                # tidak ada kompetitor wajar di bawah & level kita kosong -> RESUME ke atas
+                ref_price = min(nontrig_above)
+                target = round(ref_price - offset, 6)
+                if max_in > 0:
+                    target = min(target, max_in)
+                target = max(0.0, round(target, 6))
+                if abs(target - our) <= 0.5e-4:
+                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
+                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
+                                      "reason": f"already at ${our:.4f} (resume target ${target:.4f} ≈ our) - hold"})
+                    continue
+                if effective_dry:
+                    log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> resume non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
+                    decisions.append({**a, "action": "resume", "target": target, "comp": comp,
+                                      "reason": f"resume 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} (kompetitor wajar di atas kita, level kita kosong) | posisi komp {pos_komp}"})
+                    continue
+                st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
+                status = "OK" if st in (200, 204) else f"HTTP{st}"
+                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> resume non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
+                if st in (200, 204):
+                    hold[hk] = {"mode": "resume", "our": target, "comp": comp, "ts": now}
+                    hold[hk].pop("skip_until", None)
+                    decisions.append({**a, "action": "resume", "target": target, "comp": comp,
+                                      "reason": f"resume 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} (kompetitor wajar di atas kita) | posisi komp {pos_komp}", "http": st})
+                elif st in (429, 0):
+                    hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts,
+                                "skip_until": now + BACKOFF}
+                    log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip + backoff {BACKOFF}s")
+                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip + backoff", "http": st})
+                else:
+                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                continue
             if not nontrig_prices:
                 # tidak ada level non-trigger selain kita → jangan turun, diam di harga kita
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
