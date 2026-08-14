@@ -29,6 +29,9 @@ import urllib.request
 DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
 
 
+def db():
+    """Koneksi psycopg baru (auto-commit off — transaksi dikontrol pemanggil)."""
+    return psycopg.connect(DB_DSN)
 def load_forex_key():
     """FOREX_KEY dari env; fallback baca ~/.hermes-suisui/.env. Bukan hardcode."""
     if os.environ.get("FOREX_KEY"):
