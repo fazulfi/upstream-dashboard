@@ -389,10 +389,14 @@ def get_positions(catalog, our_price=None):
                     op = our_price.get((slug, f"{slug}/{mid}"))
                 if op:
                     our_level = round(float(op), 6)
-            remaining = ok
+            # REV5 FIX: kita publish 1 ask per model (sample provider dari
+            # get_asks_enabled) — BUKAN ok (jumlah provider upstream, bisa 40+).
+            # remaining=ok salah: kurangi 40 dari orderbook yg cuma 6 ask →
+            # semua level habis → levels kosong → resume mati ("nggak balik").
+            remaining = 1
             comp_levels = []
             for p, q in sorted(cnt.items()):
-                # kurangi ask kita di level harga kita dulu (sisa di level itu)
+                # kurangi ask kita (1) di level harga kita dulu
                 if our_level is not None and abs(p - our_level) <= 1e-6 and remaining > 0:
                     take = min(q, remaining)
                     q_after = q - take
@@ -401,44 +405,9 @@ def get_positions(catalog, our_price=None):
                     q_after = q
                 if q_after > 0:
                     comp_levels.append((p, q_after))
-            # kalau masih ada sisa ask kita (harga kita beda dari orderbook),
-            # kurangi dari level TERDEKAT dengan our_level (bukan level terendah
-            # global!) — REV5 fix: jangan reset comp_levels; ini bikin level
-            # kompetitor nyata di ATAS kita ikut terpotong -> resume mati.
-            if remaining > 0:
-                rem2 = ok
-                # rebuild tapi kurangi dari level terdekat ke our_level (naik dulu)
-                comp_levels2 = []
-                if our_level is not None:
-                    # cari level terendah yang >= our_level (di atas kita) utk kurangi sisa
-                    for p, q in sorted(cnt.items()):
-                        take = 0
-                        if p >= our_level - 1e-6 and rem2 > 0:
-                            take = min(q, rem2)
-                            rem2 -= take
-                        q_after = q - take
-                        if q_after > 0:
-                            comp_levels2.append((p, q_after))
-                    # sisa masih ada (ask kita di bawah semua level) -> kurangi dari terendah
-                    if rem2 > 0:
-                        comp_levels2 = []
-                        rem3 = ok
-                        for p, q in sorted(cnt.items()):
-                            take = min(q, rem3)
-                            q_after = q - take
-                            rem3 -= take
-                            if q_after > 0:
-                                comp_levels2.append((p, q_after))
-                    comp_levels = comp_levels2
-                else:
-                    comp_levels = []
-                    rem2 = ok
-                    for p, q in sorted(cnt.items()):
-                        take = min(q, rem2)
-                        q_after = q - take
-                        rem2 -= take
-                        if q_after > 0:
-                            comp_levels.append((p, q_after))
+            # kalau ask kita tidak ada di orderbook (our_level tak match level mana pun),
+            # jangan kurangi level kompetitor lain — ask kita bukan di orderbook itu.
+            # levels = cnt penuh (kompetitor murni semua).
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
