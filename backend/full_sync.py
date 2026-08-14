@@ -75,7 +75,6 @@ def sync_providers():
     prov = inferhub_get("/publisher/providers")
     n = 0
     with db() as c, c.cursor() as cur:
-        cur.execute("DELETE FROM provider_asks")  # rebuild asks tiap sync
         cur.execute("DELETE FROM providers")      # C11: bersihkan provider stale (mati/hapus) — DB = mirror live
         now = datetime.now(timezone.utc)
         for p in prov:
@@ -99,10 +98,11 @@ def sync_providers():
 
 def sync_asks(prov):
     print("[2/5] Sync provider asks (per-model)...")
-    asks_total = 0
-    t0 = time.time()
     with db() as c, c.cursor() as cur:
         now = datetime.now(timezone.utc)
+        # R14: DELETE + INSERT SATU transaksi — tidak ada window provider_asks kosong
+        # antara commit sync_providers dan re-insert di sini.
+        cur.execute("DELETE FROM provider_asks")  # rebuild asks tiap sync
         for i, p in enumerate(prov):
             pid = p.get("id")
             if not pid:
