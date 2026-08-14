@@ -22,14 +22,61 @@ import sys
 from datetime import date
 
 import psycopg
+import json
+import urllib.request
 
 # DSN sama dgn backend/app.py & full_sync.py (peer/password auth via env).
 DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
 
 
-def db():
-    """Koneksi psycopg baru (auto-commit off — transaksi dikontrol pemanggil)."""
-    return psycopg.connect(DB_DSN)
+def load_forex_key():
+    """FOREX_KEY dari env; fallback baca ~/.hermes-suisui/.env. Bukan hardcode."""
+    if os.environ.get("FOREX_KEY"):
+        return os.environ["FOREX_KEY"].strip().strip('"').strip("'")
+    try:
+        with open(os.path.expanduser("~/.hermes-suisui/.env")) as f:
+            for line in f:
+                if line.startswith("FOREX_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+
+def fetch_live_kurs():
+    """Tarik kurs IDR realtime (forexrateapi). Gagal = None (pakai meta lama)."""
+    key = load_forex_key()
+    if not key:
+        print("  ⚠️ FOREX_KEY tidak ada — kurs pakai nilai meta DB")
+        return None
+    try:
+        url = ("https://api.forexrateapi.com/v1/latest?api_key=%s&base=USD&currencies=IDR" % key)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+        kurs = float(data["rates"]["IDR"])
+        print("  Kurs live: $1 = Rp %.2f" % kurs)
+        return kurs
+    except Exception as e:
+        print("  ⚠️ Gagal fetch kurs live (%s) — pakai nilai meta DB" % e)
+        return None
+
+
+def update_meta_kurs(conn, cur, kurs):
+    """Simpan kurs terbaru ke ledger_meta (agar report lain ikut realtime)."""
+    try:
+        cur.execute(
+            "INSERT INTO ledger_meta (k, v) VALUES ('kurs_idr_usd', %s) "
+            "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
+            (str(round(kurs, 4)),),
+        )
+        cur.execute(
+            "INSERT INTO ledger_meta (k, v) VALUES ('kurs_updated', %s) "
+            "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
+            (date.today().isoformat(),),
+        )
+    except Exception:
+        pass
 
 
 def parse_asset_id_number(aid):
@@ -88,19 +135,25 @@ def cmd_buy(a):
         print(f"✗ --buy bukan tanggal ISO ({buy})")
         sys.exit(1)
     lifespan = a.lifespan or 30
+    if not (1 <= lifespan <= 365):
+        print("✗ --lifespan harus 1..365 hari")
+        sys.exit(1)
     label = a.label or f"{up} {qty} akun x {cost:,.0f} {curr} ({buy})"
+
+    # Kurs realtime saat INPUT (wajib utk pencatatan perusahaan — kurs per-transaksi)
+    kurs = fetch_live_kurs()
 
     with db() as conn:
         with conn.cursor() as cur:
             aid = next_asset_id(conn, cur)  # id di-generate di transaksi yg sama
+            if curr == "IDR" and kurs:
+                update_meta_kurs(conn, cur, kurs)
             cur.execute(
-                "INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s)",
-                (aid, up, qty, cost, curr, buy, lifespan, label),
+                "INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s)",
+                (aid, up, qty, cost, curr, buy, lifespan, label, kurs if curr == "IDR" else None),
             )
         conn.commit()
-    print(f"✓ BUY  {aid}  {up}  {qty} x {cost:,.0f} {curr}  [{buy}] active")
-    print(f"   label: {label}")
 
 
 def cmd_retire(a):
@@ -136,20 +189,43 @@ def cmd_refund(a):
     except ValueError:
         print(f"✗ --date bukan tanggal ISO ({d})")
         sys.exit(1)
-    # Minimal satu nominal harus ada.
-    if (a.amount_idr or 0) <= 0 and (a.amount_usdc or 0) <= 0:
-        print("✗ butuh --amount_idr atau --amount_usdc > 0")
+    if (a.qty or 0) < 0:
+        print("✗ --qty tidak boleh negatif")
         sys.exit(1)
-    rid = f"REF-{uuid.uuid4().hex[:4].upper()}"
+    # Minimal satu nominal harus ada, TIDAK boleh dua-duanya (ambigu).
+    idr_ok = (a.amount_idr or 0) > 0
+    usd_ok = (a.amount_usdc or 0) > 0
+    if idr_ok == usd_ok:
+        print("✗ butuh TEPAT SATU nominal: --amount_idr ATAU --amount_usdc (> 0)")
+        sys.exit(1)
+    kurs = fetch_live_kurs()
+    # Anti-duplikat: cek (upstream, date, nominal) yang sama sudah ada.
     with db() as conn:
         with conn.cursor() as cur:
+            if idr_ok:
+                cur.execute(
+                    "SELECT id FROM refunds WHERE upstream=%s AND date=%s AND amount_idr=%s",
+                    (up, d, float(a.amount_idr)),
+                )
+            else:
+                cur.execute(
+                    "SELECT id FROM refunds WHERE upstream=%s AND date=%s AND amount_usdc=%s",
+                    (up, d, float(a.amount_usdc)),
+                )
+            if cur.fetchone():
+                print(f"✗ Refund duplikat terdeteksi: {up} {d} sudah tercatat. Abort.")
+                sys.exit(1)
+            rid = f"REF-{uuid.uuid4().hex[:8].upper()}"
+            if idr_ok and kurs:
+                update_meta_kurs(conn, cur, kurs)
             cur.execute(
-                "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (rid, up, a.qty or 0, a.amount_idr or 0, a.amount_usdc or 0, a.label or "", d),
+                "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (rid, up, a.qty or 0, a.amount_idr or 0, a.amount_usdc or 0, a.label or "", d,
+                 kurs if idr_ok else None),
             )
         conn.commit()
-    print(f"✓ REFUND  {rid}  {up}  qty {a.qty or 0}  IDR {a.amount_idr or 0:,.0f}  USDC {a.amount_usdc or 0}")
+    print(f"✓ REFUND  {rid}  {up}  qty {a.qty or 0}  IDR {a.amount_idr or 0:,.0f}  USDC {a.amount_usdc or 0}  kurs {kurs or 'meta'}")
 
 
 def cmd_list(a):

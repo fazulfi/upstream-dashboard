@@ -96,11 +96,10 @@ def update_asset_status(aid, status, label=None):
 
 
 def add_payout(date, usd, note):
-    with conn() as c:
-        with c.cursor() as cur:
-            cur.execute("INSERT INTO payouts (id, date, amount_usdc, status, synced_at) VALUES (gen_random_uuid()::text, %s, %s, 'confirmed', now())",
-                        (date, float(usd)))
-        c.commit()
+    """DEPRECATED — payouts di-sync otomatis dari API InferHub /publisher/withdrawals
+    (upsert by id, no double-count). Jangan pakai UUID random utk payout (F3 audit
+    keuangan 2026-08-14): id random tak bisa dedup -> double-count risk."""
+    raise SystemExit("add-payout dihapus: payout otomatis dari API live. Hapus manual = hapus row payouts di DB.")
 
 
 def sync_db_to_file():
@@ -137,12 +136,11 @@ def main():
     elif args.cmd == "retire-asset":
         update_asset_status(args.id, "retired", args.label)
         sync_db_to_file()
+    elif args.cmd == "add-payout":
+        add_payout(args.date, args.usd, args.note)  # raise SystemExit dgn pesan jelas
+        sync_db_to_file()
     elif args.cmd == "reactivate-asset":
         update_asset_status(args.id, "active")
-        sync_db_to_file()
-    elif args.cmd == "add-payout":
-        add_payout(args.date, args.usd, args.note)
-        print(f"  [OK] payout {args.date} ${args.usd} ditambahkan")
         sync_db_to_file()
     elif args.cmd == "sync-from-file":
         led = load_file()

@@ -103,8 +103,15 @@ def db_init():
                     CREATE TABLE IF NOT EXISTS assets (
                         id TEXT PRIMARY KEY,
                         upstream TEXT, qty INT, cost_per DOUBLE PRECISION,
-                        curr TEXT, buy TEXT, lifespan_d INT, status TEXT, label TEXT
+                        curr TEXT, buy TEXT, lifespan_d INT, status TEXT, label TEXT,
+                        kurs_idr_usd DOUBLE PRECISION
                     )
+                """)
+                cur.execute("""
+                    ALTER TABLE assets ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION
+                """)
+                cur.execute("""
+                    ALTER TABLE refunds ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION
                 """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS impairments (
@@ -253,7 +260,11 @@ def db_import_ledger(ledger):
                           float(im.get("loss") or 0), im.get("label"),
                           str(im.get("date") or "")[:10], datetime.now(timezone.utc)))
                 for p in ledger.get("payouts", []) or []:
-                    pid = p.get("id") or str(uuid.uuid4())
+                    pid = (p.get("id") or "").strip()
+                    # F3: skip payout tanpa id valid — jangan generate UUID acak (double-count risk).
+                    # Payout asli punya id dari API InferHub /publisher/withdrawals (auto-sync).
+                    if not pid or len(pid) < 8:
+                        continue
                     cur.execute(
                         "INSERT INTO payouts (id, date, amount_usdc, status, synced_at) VALUES (%s,%s,%s,'confirmed',now()) "
                         "ON CONFLICT (id) DO UPDATE SET date=EXCLUDED.date, amount_usdc=EXCLUDED.amount_usdc, status=EXCLUDED.status",
@@ -442,13 +453,13 @@ def db_read_finance():
                     kurs = float(r["v"])
                 except Exception:
                     pass
-            cur.execute("SELECT id, upstream, qty, label, buy, lifespan_d, cost_per, curr, status FROM assets")
+            cur.execute("SELECT id, upstream, qty, label, buy, lifespan_d, cost_per, curr, status, kurs_idr_usd FROM assets")
             assets = cur.fetchall()
             cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments")
             impairments = cur.fetchall()
             cur.execute("SELECT id, date, amount_usdc, status, destination FROM payouts WHERE status='confirmed'")
             payouts = cur.fetchall()
-            cur.execute("SELECT id, upstream, qty, amount_idr, amount_usdc, label FROM refunds")
+            cur.execute("SELECT id, upstream, qty, amount_idr, amount_usdc, label, kurs_idr_usd FROM refunds")
             refunds = cur.fetchall()
 
         asset_list = []
@@ -459,7 +470,9 @@ def db_read_finance():
                 cost_per = float(a["cost_per"] or 0)
                 qty = int(a["qty"] or 0)
                 curr = (a.get("curr") or "USD").strip().upper()
-                cost_usd = cost_per * qty / kurs if curr == "IDR" else cost_per * qty
+                # Kurs per-transaksi (jika terekam saat input) — fallback kurs meta
+                a_kurs = float(a.get("kurs_idr_usd") or 0) or kurs
+                cost_usd = cost_per * qty / a_kurs if curr == "IDR" else cost_per * qty
                 total_capital += cost_usd
                 total_asset_qty += qty
                 asset_list.append({
@@ -516,8 +529,8 @@ def db_read_finance():
         for rd in refunds:
             try:
                 aidr = float(rd.get("amount_idr") or 0)
-                ausd = float(rd.get("amount_usdc") or 0)
-                v = ausd if ausd > 0 else (aidr / kurs if aidr > 100 else aidr)
+                r_kurs = float(rd.get("kurs_idr_usd") or 0) or kurs
+                v = ausd if ausd > 0 else (aidr / r_kurs if aidr > 100 else aidr)
                 total_refund_usd += v
                 refund_list.append({
                     "id": rd["id"], "upstream": rd.get("upstream") or "",
