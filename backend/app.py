@@ -529,6 +529,7 @@ def db_read_finance():
         for rd in refunds:
             try:
                 aidr = float(rd.get("amount_idr") or 0)
+                ausd = float(rd.get("amount_usdc") or 0)
                 r_kurs = float(rd.get("kurs_idr_usd") or 0) or kurs
                 v = ausd if ausd > 0 else (aidr / r_kurs if aidr > 100 else aidr)
                 total_refund_usd += v
