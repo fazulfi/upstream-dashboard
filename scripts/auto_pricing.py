@@ -223,42 +223,49 @@ def _f(v):
 
 
 def get_asks_enabled(upstream):
-    """asks utk provider enabled & apiKeyCheckStatus='ok' (bukan invalid). map model_id -> ask obj."""
+    """asks utk SEMUA provider enabled & apiKeyCheckStatus='ok' (bukan invalid).
+    R16b: iterasi semua provider upstream (bukan cuma 1) — merge ke satu map
+    model_id -> ask obj; konflik harga: pilih ask_in TERENDAH (paling kompetitif)."""
     st, provs = api("/publisher/providers")
     if st != 200 or not isinstance(provs, list):
         return {}
-    prov = None
-    # prefer apiKeyCheckStatus='ok'; kalau tak ada, pakai enabled yg pertama (jangan hampa).
+    picks = []
     for p in provs:
         if p.get("enabled") and p.get("upstreamSlug") == upstream \
            and p.get("apiKeyCheckStatus") == "ok":
-            prov = p
-            break
-    if not prov:
+            picks.append(p)
+    if not picks:
+        # fallback: enabled yg pertama (jangan hampa)
         for p in provs:
             if p.get("enabled") and p.get("upstreamSlug") == upstream:
-                prov = p
+                picks.append(p)
                 break
-    if not prov:
-        return {}
-    st, asks = api(f"/publisher/providers/{prov['id']}/asks")
-    if st != 200 or not isinstance(asks, list):
+    if not picks:
         return {}
     out = {}
-    for a in asks:
-        out[a.get("upstreamCatalogModelId")] = {
-            "catalog_id": a.get("upstreamCatalogModelId"),
-            "model_id": a.get("upstreamModelId"),
-            "slug": upstream,
-            "ask_in": float(a.get("askInputPerMtok") or 0),
-            "ask_out": float(a.get("askOutputPerMtok") or 0),
-            "official": float(a.get("officialInputPerMtok") or 0),
-            "max_ask_in": float(a.get("maxAskIn") or 0),
-            "max_ask_out": float(a.get("maxAskOut") or 0),
-            "enabled": bool(a.get("enabled")),
-            "demand": int(a.get("avgPriceRequests") or 0),
-            "cheapest_active_pct": float(a.get("cheapestActivePct") or 0),
-        }
+    for prov in picks:
+        st, asks = api(f"/publisher/providers/{prov['id']}/asks")
+        if st != 200 or not isinstance(asks, list):
+            continue
+        for a in asks:
+            mid = a.get("upstreamCatalogModelId")
+            ask_in = float(a.get("askInputPerMtok") or 0)
+            cur = out.get(mid)
+            if cur is not None and ask_in >= cur.get("ask_in", 0):
+                continue  # pertahankan harga terendah
+            out[mid] = {
+                "catalog_id": mid,
+                "model_id": a.get("upstreamModelId"),
+                "slug": upstream,
+                "ask_in": ask_in,
+                "ask_out": float(a.get("askOutputPerMtok") or 0),
+                "official": float(a.get("officialInputPerMtok") or 0),
+                "max_ask_in": float(a.get("maxAskIn") or 0),
+                "max_ask_out": float(a.get("maxAskOut") or 0),
+                "enabled": bool(a.get("enabled")),
+                "demand": int(a.get("avgPriceRequests") or 0),
+                "cheapest_active_pct": float(a.get("cheapestActivePct") or 0),
+            }
     return out
 
 
@@ -490,7 +497,8 @@ def run_cycle(dry_run=False):
             skip_until = prev.get("skip_until", 0)
             if now < skip_until:
                 remain = int(skip_until - now)
-                decisions.append({**a, "action": "backoff", "target": our, "comp": comp,
+                # R16a: comp belum di-assign di branch ini (di-assign L500) — pakai prev
+                decisions.append({**a, "action": "backoff", "target": our, "comp": prev.get("comp", 0),
                                   "reason": f"backoff ({remain}s tersisa, 429/timeout sblmnya) - skip PUT"})
                 continue
 
