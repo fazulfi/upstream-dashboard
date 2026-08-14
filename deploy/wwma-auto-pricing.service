@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 # User-scoped unit → JANGAN set User=/Group= (status=216/GROUP pitfall)
 WorkingDirectory=/home/gamesim
-ExecStart=/home/gamesim/.venv-dash/bin/python3 /home/gamesim/scripts/auto_pricing.py --interval 30
+ExecStart=/home/gamesim/.venv-dash/bin/python3 /home/gamesim/scripts/auto_pricing.py --interval 60
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
