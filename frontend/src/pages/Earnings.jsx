@@ -43,7 +43,8 @@ export default function Earnings() {
     if (totalInterval == null || !liveTotal) return null;
     return totalInterval / liveTotal;
   }, [totalInterval, liveTotal]);
-  const lastTs = log?.rows?.length ? log.rows[0].ts : null;
+  const [updatedAt, setUpdatedAt] = useState(null);
+  useEffect(() => { if (log) setUpdatedAt(new Date()); }, [log]);
 
   return (
     <div className="page">
@@ -118,6 +119,7 @@ export default function Earnings() {
             <div className="live-wrap">
               {newCount > 0 && <span className="live-new-badge">+{newCount} new</span>}
               <span className="live-pill"><i></i>live · 5s</span>
+              {updatedAt && <span className="live-updated faint">updated {updatedAt.toLocaleTimeString('id-ID', { hour12: false })}</span>}
             </div>
           </div>
           <div className="ticker-scroll">
