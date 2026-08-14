@@ -64,3 +64,22 @@ Tujuan: pencatatan keuangan **seperti perusahaan** — akurat, traceable, realti
 - 5 aset retired tanpa impairment row (A-017/A-017a sudah via amort; A-023/A-025/A-039 perlu konfirmasi)
 - Invariant 2 live API (stats) dilewati — API key scope terbatas
 - Payout 08-05 & 08-06 (2×10/hari) — konfirmasi ke API (tidak terbukti dobel dari relasi lain)
+
+---
+
+## ✅ HASIL ITEM KEPUTUSAN (2026-08-14, Faiz: 1-3 autonomous, 4-5 skip, 6-9 sesuai rekomendasi)
+
+| Item | Keputusan | Status | Bukti |
+|---|---|---|---|
+| 1 | 3 aset retired: A-023 di-cover REF-1 + IMP-REF1 (sisa Rp23.840); A-025/039 tanpa impairment (full cost sudah amort — konvensi wajar) | ✅ | IMP-REF1 di DB; net_income $251.58 |
+| 2 | Payout 08-05/08-06 = **4 RIIL** (id DB == id API InferHub exact match) — bukan duplikat | ✅ | Tidak ada fix; audit item1-2 |
+| 3 | Jurnal **J-070..J-072** ($180 payout #13-15) di jurnal-umum.md; **$79.30 TIDAK di-jurnal** (ringkas stale — saldo benar $120, konversi tak terbukti) | ✅ | jurnal-umum.md updated |
+| 4,5 | Pajak & kurs topup — **SKIP** (keputusan Faiz) | ⏭️ | — |
+| 6 | Baseline earning 10-Agu 17:56:45Z: equation = invariant (PASS), non-monotonik = WARN (artefak sync withdrawn); seed pre-baseline dikecualikan | ✅ | recon PASS, pelanggar live 0 |
+| 7 | Backup offsite: **rclone → is3** (aws CLI v2.35 buggy MissingContentLength); 2 objek 1.26MB di S3 | ✅ | rclone ls verified |
+| 8 | `fin_ledger.py` → **scripts/archive/** (jangan hapus — Mama mungkin pakai) | ✅ | archive/fin_ledger.py |
+| 9 | **Actor log**: created_by/created_at/retired_by/retired_at di assets/refunds/impairments/payouts; fin_ops `--actor > FIN_OPS_ACTOR > getpass` | ✅ | test buy/retire: created_by=faiz, retired_by=faiz |
+
+**Net income final (lengkap): $251.58** = payout 300 + refund 22.62 − amort 45.51 − imp 25.43 − opex 0.10
+
+**Rekonsiliasi final: LULUS** — payout DB $300 == withdrawn API $300 (15) == delta history; equation baseline 0 pelanggar; kurs valid Rp 17.860
