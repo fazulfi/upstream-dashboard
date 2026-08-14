@@ -151,7 +151,7 @@ export default function AutoPricing() {
                 const f = form[key] || {};
                 const flood = c.official * (trigger / 100);
                 const synced = Math.abs(Number(c.ask_in) - Number(c.target)) < 0.00002;
-
+                const action = (c.action || '');
                 const status = action === 'leader' ? 'LEADER'
                   : action === 'undercut' ? 'UNDERCUT'
                   : action === 'stable' ? 'STABLE'
