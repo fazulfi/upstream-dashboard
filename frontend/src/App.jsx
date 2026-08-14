@@ -2,6 +2,7 @@ import { Component } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './theme';
 import Layout from './components/Layout';
+import LoginGate from './components/LoginGate';
 import Dashboard from './pages/Dashboard';
 import Earnings from './pages/Earnings';
 import Upstreams from './pages/Upstreams';
@@ -26,7 +27,7 @@ export default function App() {
       <ErrBoundary>
         <HashRouter>
           <Routes>
-            <Route element={<Layout />}>
+            <Route element={<LoginGate><Layout /></LoginGate>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/earnings" element={<Earnings />} />
               <Route path="/upstreams" element={<Upstreams />} />
