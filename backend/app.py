@@ -1191,9 +1191,20 @@ def start_backend():
     t.start()
     # init postgres table
     db_init()
-    # import ledger.json -> DB (upsert; DB jadi primary store)
+    # import ledger.json -> DB (hanya MIGRASI AWAL: kalau DB masih kosong).
+    # DB = satu-satunya sumber kebenaran; ledger.json legacy jangan overwrite
+    # data DB yang sudah dikoreksi (contoh: IMP-12 di-zero via audit).
     try:
-        db_import_ledger(load_json(LEDGER, {}))
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM payouts")
+            n_payout = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM assets")
+            n_asset = cur.fetchone()[0]
+        if n_payout == 0 and n_asset == 0:
+            db_import_ledger(load_json(LEDGER, {}))
+            print("  [migrasi] ledger.json -> DB (DB kosong)")
+        else:
+            print(f"  [skip] ledger.json import dilewati (DB sudah punya {n_asset} assets, {n_payout} payouts)")
     except Exception:
         pass
     # seed history SEBELUM warmup poller: backfill kurva ke total real
