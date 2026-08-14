@@ -60,6 +60,7 @@ export function useApi(path, pollMs = 0) {
   const load = useCallback(async () => {
     if (ac.current) ac.current.abort();
     const controller = new AbortController();
+    ac.current = controller;
     try {
       const headers = authHeaders();
       const r = await fetch(`${API}${path}`, { signal: controller.signal, headers });
