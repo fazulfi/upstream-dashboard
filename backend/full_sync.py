@@ -99,6 +99,8 @@ def sync_providers():
 
 def sync_asks(prov):
     print("[2/5] Sync provider asks (per-model)...")
+    asks_total = 0
+    t0 = time.time()
     with db() as c, c.cursor() as cur:
         now = datetime.now(timezone.utc)
         # R14: DELETE + INSERT SATU transaksi — tidak ada window provider_asks kosong
