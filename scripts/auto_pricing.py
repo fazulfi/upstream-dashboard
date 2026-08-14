@@ -31,7 +31,7 @@ Anti-loop / stabilitas:
   - HTTP 429/timeout -> skip, jangan retry di cycle yg sama
   - atomic write utk semua state (.tmp + os.replace)
 """
-import json, os, time, datetime, argparse
+import json, os, time, datetime, argparse, threading
 import urllib.request
 try:
     import psycopg
@@ -48,7 +48,7 @@ HOLD_STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-hold.js
 PREFIX = {"codebuddy": "cb", "cline-pass": "cp", "codebuddy-cn": "cbcn"}
 
 BACKOFF = 180  # detik — kalau PUT kena 429/timeout, skip model itu selama ini (AP-6)
-
+_refresh_lock = threading.Lock()
 DEADBAND = 0.0003          # $ — kompetitor harus bergeser > ini sebelum kita reaksi
 COOLDOWN_CB = 10           # detik — cb/cbcn: reaktif, nggak kebekuan lama
 COOLDOWN_CP = 15           # detik — cline-pass: reaktif
@@ -250,6 +250,76 @@ _ASKS_CACHE = {}
 _ASKS_CACHE_TTL = 300
 
 
+def _fetch_asks_full(upstream):
+    """Fetch asks untuk upstream (dari providers yg sudah di-cache)."""
+    provs = _get_providers_cached()
+    if not provs:
+        return {}
+    picks = []
+    for p in provs:
+        if p.get("enabled") and p.get("upstreamSlug") == upstream \
+           and p.get("apiKeyCheckStatus") == "ok":
+            picks.append(p)
+    if not picks:
+        for p in provs:
+            if p.get("enabled") and p.get("upstreamSlug") == upstream:
+                picks.append(p); break
+    if not picks:
+        return {}
+    if len(picks) > 3:
+        picks = picks[:3]
+    out = {}
+    for prov in picks:
+        st, asks = api(f"/publisher/providers/{prov['id']}/asks")
+        if st != 200 or not isinstance(asks, list):
+            continue
+        for a in asks:
+            mid = a.get("upstreamCatalogModelId")
+            ask_in = float(a.get("askInputPerMtok") or 0)
+            cur = out.get(mid)
+            if cur is not None and ask_in >= cur.get("ask_in", 0):
+                continue
+            out[mid] = {
+                "catalog_id": mid, "model_id": a.get("upstreamModelId"),
+                "slug": upstream, "ask_in": ask_in,
+                "ask_out": float(a.get("askOutputPerMtok") or 0),
+                "official": float(a.get("officialInputPerMtok") or 0),
+                "max_ask_in": float(a.get("maxAskIn") or 0),
+                "max_ask_out": float(a.get("maxAskOut") or 0),
+                "enabled": bool(a.get("enabled")),
+                "demand": int(a.get("avgPriceRequests") or 0),
+                "cheapest_active_pct": float(a.get("cheapestActivePct") or 0),
+            }
+    return out
+
+def _refresh_asks(upstream):
+    """Background refresh utk cache asks — dipanggil saat cache miss.
+    Lock biar 1 refresh/upstream pada satu waktu."""
+    with _refresh_lock:
+        # double-check: cache mungkin sudah segar setelah lock
+        cur = _ASKS_CACHE.get(upstream)
+        if cur and time.time() - cur["ts"] < _ASKS_CACHE_TTL:
+            return
+        try:
+            out = _fetch_asks_full(upstream)
+            if out:
+                _ASKS_CACHE[upstream] = {"ts": time.time(), "data": out}
+        except Exception as e:
+            log(f"WARN _refresh_asks({upstream}): {e}")
+
+def _get_providers_cached():
+    """Fetch /publisher/providers TIDAK lebih dari 1x per _PROVIDERS_TTL.
+    P1: 4x per cycle (3x get_asks_enabled + 1x get_positions) buang-buat 250KB."""
+    if time.time() - _PROVIDERS_CACHE["ts"] < _PROVIDERS_TTL and _PROVIDERS_CACHE["data"]:
+        return _PROVIDERS_CACHE["data"]
+    st, provs = api("/publisher/providers")
+    if st == 200 and isinstance(provs, list):
+        _PROVIDERS_CACHE["ts"] = time.time()
+        _PROVIDERS_CACHE["data"] = provs
+        return provs
+    return _PROVIDERS_CACHE["data"] or []  # fallback data lama
+
+
 def get_asks_enabled(upstream, use_cache=True):
     """asks utk SEMUA provider enabled & apiKeyCheckStatus='ok' (bukan invalid).
     R16b: iterasi semua provider upstream (bukan cuma 1) — merge ke satu map
@@ -258,8 +328,13 @@ def get_asks_enabled(upstream, use_cache=True):
         hit = _ASKS_CACHE.get(upstream)
         if hit and time.time() - hit["ts"] < _ASKS_CACHE_TTL:
             return hit["data"]
-    st, provs = api("/publisher/providers")
-    if st != 200 or not isinstance(provs, list):
+        old = _ASKS_CACHE.get(upstream, {}).get("data")
+        if old:
+            threading.Thread(target=_refresh_asks, args=(upstream,), daemon=True).start()
+            return old
+    # Cold start: fetch sync (cycle pertama lambat)
+    provs = _get_providers_cached()
+    if not provs:
         return {}
     picks = []
     for p in provs:
@@ -383,9 +458,9 @@ def get_positions(catalog, our_price=None):
     levels = sorted list of (price, qty) — kompetitor MURNI.
     """
     try:
-        st, provs = api("/publisher/providers")
+        provs = _get_providers_cached()
         ok_kita = {}
-        if st == 200 and isinstance(provs, list):
+        if provs:
             for p in provs:
                 if p.get("enabled") and p.get("upstreamSlug"):
                     s = p.get("upstreamSlug")
