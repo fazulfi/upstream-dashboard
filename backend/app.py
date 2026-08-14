@@ -340,6 +340,8 @@ def db_read_finance():
                 # Kurs per-transaksi (jika terekam saat input) — fallback kurs meta
                 a_kurs = float(a.get("kurs_idr_usd") or 0) or kurs
                 cost_usd = cost_per * qty / a_kurs if curr == "IDR" else cost_per * qty
+                if (a.get("status") or "active") != "active":
+                    continue  # REV9: aset retired/akun mati TIDAK dihitung ke total_capital
                 total_capital += cost_usd
                 total_asset_qty += qty
                 asset_list.append({
@@ -1266,9 +1268,9 @@ def _finance_from_ledger(ledger):
     total_imp_qty = sum(int(im.get("qty") or 1) for im in impairments)
 
     # total modal = total investasi aset (USD): sum cost_per*qty, konversi IDR->USD
-    total_capital_usd = 0.0
-    asset_lines = []
     for a in assets:
+        if (a.get("status") or "active") != "active":
+            continue  # REV9: aset retired TIDAK dihitung ke total modal aktif
         raw = float(a.get("cost_per") or 0) * float(a.get("qty") or 1)
         cost_usd = raw / kurs if a.get("curr", "USD") == "IDR" else raw
         total_capital_usd += cost_usd
