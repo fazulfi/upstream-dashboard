@@ -770,8 +770,16 @@ def require_auth(f):
 
 @app.before_request
 def _auth_gate():
-    """Auth SEMUA route kecuali /health, /api/login, dan preflight CORS (OPTIONS)."""
+    """Auth SEMUA route kecuali /health, /api/login, preflight CORS (OPTIONS),
+    dan endpoint PUBLIK read-only agregat yang dipakai Dashboard overview (#/ tanpa login):
+    /api/data, /api/history, /api/earnings-alltime.
+    Ketiganya hanya agregat (balances/fleet/finance/trend) — TANPA secret, API key,
+    atau data sensitif. Semua route mutasi & sensitif (asks, keys, config, dll) tetap wajib auth.
+    Password TIDAK dihapus — login tetap ada utk akses penuh."""
+    PUBLIC_READ = ("/api/data", "/api/history", "/api/earnings-alltime")
     if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
+        return None
+    if request.path.split("?")[0] in PUBLIC_READ:
         return None
     return require_auth(lambda: None)()
 
