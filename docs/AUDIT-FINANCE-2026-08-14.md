@@ -83,3 +83,21 @@ Tujuan: pencatatan keuangan **seperti perusahaan** — akurat, traceable, realti
 **Net income final (lengkap): $251.58** = payout 300 + refund 22.62 − amort 45.51 − imp 25.43 − opex 0.10
 
 **Rekonsiliasi final: LULUS** — payout DB $300 == withdrawn API $300 (15) == delta history; equation baseline 0 pelanggar; kurs valid Rp 17.860
+
+---
+
+## REV9 (2026-08-14) — Sinkron keuangan dengan aset aktif
+
+**Keluhan user:** akun yang sudah tidak aktif (retired) tidak boleh terhitung sebagai aset aktif.
+
+**Fix (commit `af2bca8`):** `total_capital` di `db_read_finance` (app.py:343) & `_finance_from_ledger` (app.py:1272) kini **skip aset status != 'active'** — hanya menjumlahkan aset aktif (53). Aset retired (5) tidak lagi masuk modal.
+
+**Bukti live:**
+```
+Sebelum:  total_capital = $317.14 (53 active + 5 retired)
+Sesudah:  total_capital = $271.63 (53 active only)   [manual DB: active $271.70 ✓]
+          aktif_aset = 53
+          net_income = $297.09
+```
+
+**Earning per account** sudah tampil di Upstreams (kolom Earnings per provider) & FleetHealth (kolom Earning (lt)) — tidak berubah.
