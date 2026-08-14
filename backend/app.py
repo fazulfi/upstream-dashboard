@@ -322,6 +322,9 @@ def db_read_finance():
                     pass
             cur.execute("SELECT id, upstream, qty, label, buy, lifespan_d, cost_per, curr, status, kurs_idr_usd FROM assets")
             assets = cur.fetchall()
+            # provider OK per slug — utk sinkron qty aset aktif (REV9: akun mati jgn dihitung)
+            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' AND NOT drained GROUP BY upstream_slug")
+            prov_ok = {r["upstream_slug"]: r["n"] for r in cur.fetchall()}
             cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments")
             impairments = cur.fetchall()
             cur.execute("SELECT id, date, amount_usdc, status, destination FROM payouts WHERE status='confirmed'")
@@ -329,15 +332,43 @@ def db_read_finance():
             cur.execute("SELECT id, upstream, qty, amount_idr, amount_usdc, label, kurs_idr_usd FROM refunds")
             refunds = cur.fetchall()
 
+        # REV9: normalisasi aset.upstream -> slug InferHub. aset yg akunnya mati
+        # (provider status != ok/drained) tidak dihitung penuh; qty efektif = qty x rasio.
+        def _slug_of(name):
+            n = (name or "").strip().lower()
+            if "clinepass" in n or n.startswith("cline-pass"):
+                return "cline-pass"
+            if "codebuddy" in n and ("cn" in n or n.endswith("cn")):
+                return "codebuddy-cn"
+            if "codebuddy" in n:
+                return "codebuddy"
+            if "command code" in n:
+                return "commandcode"
+            if "opencode" in n or "open code" in n:
+                return "opencode-go"
+            if "chatgpt" in n or "chatgpt+" in n or n.startswith("chatgpt"):
+                return "codex"  # OpenAI Codex = ChatGPT
+            return None
+        # total qty aset per slug (utk rasio)
+        asset_qty_by = {}
+        for a in assets:
+            sl = _slug_of(a.get("upstream") or "")
+            if sl:
+                asset_qty_by[sl] = asset_qty_by.get(sl, 0) + int(a.get("qty") or 0)
+        ratio_by = {sl: min(1.0, prov_ok.get(sl, 0) / q) for sl, q in asset_qty_by.items() if q > 0}
+
         asset_list = []
         total_capital = 0.0
         total_asset_qty = 0
         for a in assets:
             try:
                 cost_per = float(a["cost_per"] or 0)
-                qty = int(a["qty"] or 0)
+                qty_raw = int(a["qty"] or 0)
+                # qty efektif = raw x ratio provider ok (REV9: akun mati jgn dihitung)
+                sl = _slug_of(a.get("upstream") or "")
+                ratio = ratio_by.get(sl, 1.0)
+                qty = int(round(qty_raw * ratio))
                 curr = (a.get("curr") or "USD").strip().upper()
-                # Kurs per-transaksi (jika terekam saat input) — fallback kurs meta
                 a_kurs = float(a.get("kurs_idr_usd") or 0) or kurs
                 cost_usd = cost_per * qty / a_kurs if curr == "IDR" else cost_per * qty
                 if (a.get("status") or "active") != "active":
@@ -1268,20 +1299,43 @@ def _finance_from_ledger(ledger):
     total_imp_qty = sum(int(im.get("qty") or 1) for im in impairments)
 
     # total modal = total investasi aset (USD): sum cost_per*qty, konversi IDR->USD
+    # REV9: qty efektif x rasio provider ok (sama dgn db_read_finance)
+    try:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' AND NOT drained GROUP BY upstream_slug")
+            prov_ok = {r["upstream_slug"]: r["n"] for r in cur.fetchall()}
+    except Exception:
+        prov_ok = {}
+    def _slug_of_ledger(name):
+        n = (name or "").strip().lower()
+        if "clinepass" in n or n.startswith("cline-pass"):
+            return "cline-pass"
+        if "codebuddy" in n and ("cn" in n or n.endswith("cn")):
+            return "codebuddy-cn"
+        if "codebuddy" in n:
+            return "codebuddy"
+        if "command code" in n:
+            return "commandcode"
+        if "opencode" in n or "open code" in n:
+            return "opencode-go"
+        if "chatgpt" in n:
+            return "codex"
+        return None
+    asset_qty_by = {}
+    for a in assets:
+        sl = _slug_of_ledger(a.get("upstream") or "")
+        if sl:
+            asset_qty_by[sl] = asset_qty_by.get(sl, 0) + int(a.get("qty") or 0)
+    ratio_by = {sl: min(1.0, prov_ok.get(sl, 0) / q) for sl, q in asset_qty_by.items() if q > 0}
     for a in assets:
         if (a.get("status") or "active") != "active":
             continue  # REV9: aset retired TIDAK dihitung ke total modal aktif
-        raw = float(a.get("cost_per") or 0) * float(a.get("qty") or 1)
+        sl = _slug_of_ledger(a.get("upstream") or "")
+        ratio = ratio_by.get(sl, 1.0)
+        qty = int(round(float(a.get("qty") or 1) * ratio))
+        raw = float(a.get("cost_per") or 0) * qty
         cost_usd = raw / kurs if a.get("curr", "USD") == "IDR" else raw
         total_capital_usd += cost_usd
-        asset_lines.append({
-            "id": a.get("id"),
-            "upstream": a.get("upstream"),
-            "qty": a.get("qty"),
-            "buy": str(a.get("buy") or "")[:10],
-            "lifespan_d": a.get("lifespan_d"),
-            "cost_usd": round(cost_usd, 2),
-        })
 
     return {
         "total_payout": total_payout,
