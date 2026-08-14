@@ -152,7 +152,9 @@ def load_key():
     return None
 
 
-def api(path, method="GET", payload=None):
+def api(path, method="GET", payload=None, _retries=0):
+    """HTTP ke InferHub. 429 rate-limit -> sleep retryAfter + retry (max 2).
+    REV6: rate limit 30 req/min — tanpa retry, 429 bikin catalog kosong -> cycle 0."""
     key = load_key()
     if not key:
         raise RuntimeError("no API key")
@@ -173,6 +175,15 @@ def api(path, method="GET", payload=None):
             body = json.loads(e.read().decode())
         except Exception:
             body = {"raw": str(e)}
+        # 429 rate-limit: tunggu retryAfter lalu retry (sekali lagi)
+        if e.code == 429 and _retries < 2:
+            wait = 5
+            if isinstance(body, dict):
+                ra = (body.get("error") or {}).get("retryAfter") if isinstance(body.get("error"), dict) else None
+                if ra:
+                    wait = int(ra)
+            time.sleep(min(wait, 30))
+            return api(path, method, payload, _retries + 1)
         return (e.code, body)
     except Exception as ex:
         return (0, {"error": str(ex)})
@@ -189,11 +200,20 @@ def log(msg):
         pass
 
 
-def get_catalog():
+# REV6: cache catalog + market TTL 120s — anchor tidak perlu fetch tiap cycle
+# (rate limit 30 req/min). Cycle lain pakai cache → request/cycle turun drastis.
+_CATALOG_CACHE = {"ts": 0, "data": {}}
+_MARKET_CACHE = {"ts": 0, "data": {}}
+_ANCHOR_TTL = 120
+
+
+def get_catalog(use_cache=True):
     """Catalog per upstream. return {slug: {model_id: {"asksIn":[...], "officialIn": float}, ...}}"""
+    if use_cache and time.time() - _CATALOG_CACHE["ts"] < _ANCHOR_TTL:
+        return _CATALOG_CACHE["data"]
     st, d = api("/catalog")
     if st != 200 or not isinstance(d, list):
-        return {}
+        return _CATALOG_CACHE["data"] if _CATALOG_CACHE["data"] else {}
     out = {}
     for u in d:
         slug = u.get("slug")
@@ -212,6 +232,8 @@ def get_catalog():
                     pass
             models[mid] = {"asksIn": asks, "officialIn": _f(m.get("officialIn"))}
         out[slug] = models
+    _CATALOG_CACHE["ts"] = time.time()
+    _CATALOG_CACHE["data"] = out
     return out
 
 
@@ -295,9 +317,7 @@ def set_ask(slug, cid, ask_in, ask_out, official=0):
         return (0, None)
     payload = {"askInputPerMtok": str(round(ask_in, 6)), "askOutputPerMtok": str(round(ask_out, 6))}
     if official and official > 0:
-        pct_off = round((1 - ask_in / official) * 100, 1)   # 1 desimal — presisi 0.1%
-        # clamp ke rentang valid. Harga MAX ask 50% (pctOff >= 50). API tolak luar batas.
-        pct_off = max(50, min(pct_off, 99.9))
+        pct_off = round((1 - ask_in / official) * 100, 1)
         payload["pctOff"] = pct_off
     else:
         # official tak diketahui → pctOff tak bisa dihitung; return 422 langsung
@@ -306,13 +326,16 @@ def set_ask(slug, cid, ask_in, ask_out, official=0):
         return (422, {"error": "official=0, pctOff undefined"})
     return api(f"/publisher/upstreams/{slug}/asks/{cid}", method="PUT", payload=payload)
 
-def get_market_min():
+
+def get_market_min(use_cache=True):
     """Anchor kompetitor dari /market — minAskIn per (table-prefix/model). Kembalikan dict {(slug, model_id): minAskIn}.
-    Prefix diterjemahkan utk cocokkan dgn slug scope."""
+    Prefix diterjemahkan utk cocokkan dgn slug scope. Cache TTL 120s (rate limit)."""
+    if use_cache and time.time() - _MARKET_CACHE["ts"] < _ANCHOR_TTL:
+        return _MARKET_CACHE["data"]
     try:
         st, d = api("/market")
         if st != 200 or not isinstance(d, dict):
-            return {}
+            return _MARKET_CACHE["data"] if _MARKET_CACHE["data"] else {}
         out = {}
         for m in (d.get("models") or []):
             slug_full = m.get("slug") or ""
@@ -330,9 +353,11 @@ def get_market_min():
             if not slug:
                 continue
             out[(slug, model)] = min_in
+        _MARKET_CACHE["ts"] = time.time()
+        _MARKET_CACHE["data"] = out
         return out
     except Exception:
-        return {}
+        return _MARKET_CACHE["data"] if _MARKET_CACHE["data"] else {}
 
 
 def get_positions(catalog, our_price=None):
