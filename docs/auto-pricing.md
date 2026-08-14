@@ -171,3 +171,20 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 5. `band_for` seragam — default 10% semua upstream, DB satu-satunya sumber
 6. Penamaan aksi: `undercut` (turun) / `resume` (naik jemput)
 7. `get_positions` kurangi ask kita di level harga kita (anti mengejar diri sendiri)
+
+---
+
+## REV5 (2026-08-14) — FIX RESUME "harga nggak balik"
+
+**Keluhan user:** harga kita terdampar murah (mis. $0.0077) & tidak naik balik walau ada kompetitor wajar di atas ($0.0168, jarak 4%).
+
+**Root cause (2 bug):**
+1. `get_positions` pakai `remaining = ok` (jumlah SEMUA provider upstream, bisa 40) padahal kita publish **1 ask per model** → kurangi 40 ask dari orderbook yang cuma 6 ask → **semua level habis → `levels=[]`** → daemon anggap tidak ada kompetitor → HOLD mati di harga murah.
+2. Saat harga kita tak match orderbook, `comp_levels` di-reset & ask kita dikurangi dari level TERENDAH global → level kompetitor nyata di atas kita ikut terpotong → resume tak ada target.
+
+**Fix:**
+- `remaining = 1` (1 ask per model per upstream).
+- Jangan reset `comp_levels`; kurangi ask kita hanya di `our_level`.
+- **Blok RESUME baru**: kalau `nontrig_below` kosong & `nontrig_above` ada & **level harga kita kosong** (tidak ada kompetitor lain di harga kita — `our_level_qty <= 0`) → RESUME naik ke level wajar terendah di atas (0.1% di bawahnya). Kalau masih ada kompetitor di level kita → TIDAK resume (tetap bersaing).
+
+**Verifikasi live:** cbcn deepseek-v4-flash naik `$0.0077 → $0.01358`; log cline-pass tampil `resume non-trigger`. Commit `59caedc` + `b7723de`.
