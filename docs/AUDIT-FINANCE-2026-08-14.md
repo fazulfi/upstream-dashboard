@@ -101,3 +101,17 @@ Sesudah:  total_capital = $271.63 (53 active only)   [manual DB: active $271.70 
 ```
 
 **Earning per account** sudah tampil di Upstreams (kolom Earnings per provider) & FleetHealth (kolom Earning (lt)) — tidak berubah.
+
+## REV9b (2026-08-14) — Sinkron qty aset dgn provider OK InferHub
+
+**User:** aset yg akunnya sudah tidak aktif (drained/invalid) jangan dihitung aset aktif.
+
+**Fix (`068bc6e`)**: `total_capital` kini kalikan qty tiap aset dgn **rasio = provider_ok / total_qty_aset_upstream**. Provider ok = `status='ok' AND NOT drained`. Mapping aset.upstream→slug: cline-pass, codebuddy, codebuddy-cn, commandcode, opencode-go, **chatgpt→codex (OpenAI Codex)**. Aset non-provider (tidak ada) tetap penuh.
+
+**Hasil live:**
+```
+SEBELUM (REV9a): total_capital = $271.63 (53 aset, qty penuh)
+SESUDAH (REV9b):  total_capital = $72.11 (qty x rasio provider ok)  ✓ match manual
+Rasio: cline-pass 1.0 · codebuddy 0.593 (321/541) · codebuddy-cn 0.193 (36/178)
+       commandcode 0.833 · codex(chatgpt) 0.0 (9 drained + 20 invalid, 0 aktif)
+```
