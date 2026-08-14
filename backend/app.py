@@ -770,14 +770,8 @@ def require_auth(f):
 
 @app.before_request
 def _auth_gate():
-    """Auth SEMUA route kecuali /health, /api/login, preflight CORS (OPTIONS),
-    dan endpoint publik read-only yang dipakai Dashboard overview (#/ tanpa login):
-    /api/history, /api/earnings-alltime. Endpoint ini hanya agregat earning/fleet
-    (tanpa secret/API key) — Dashboard memang halaman publik."""
-    PUBLIC_READ = ("/api/history", "/api/earnings-alltime")
+    """Auth SEMUA route kecuali /health, /api/login, dan preflight CORS (OPTIONS)."""
     if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
-        return None
-    if request.path.split("?")[0] in PUBLIC_READ:
         return None
     return require_auth(lambda: None)()
 
