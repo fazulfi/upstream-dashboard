@@ -248,6 +248,8 @@ def _f(v):
 # pakai cache → cycle < 60s (interval daemon 60s benar-benar 1 menit).
 _ASKS_CACHE = {}
 _ASKS_CACHE_TTL = 300
+_PROVIDERS_CACHE = {"ts": 0, "data": []}
+_PROVIDERS_TTL = 60
 
 
 def _fetch_asks_full(upstream):
