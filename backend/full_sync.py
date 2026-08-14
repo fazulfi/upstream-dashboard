@@ -50,43 +50,10 @@ def db():
 
 
 def init_db():
+    """Buat schema lengkap (20 tabel) — R11: DDL terpusat di db_schema.ensure_schema."""
+    from db_schema import ensure_schema
     with db() as c, c.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS providers (
-                id TEXT PRIMARY KEY, display_name TEXT, upstream_slug TEXT, upstream_label TEXT,
-                enabled BOOL, status TEXT, drained BOOL, used_pct DOUBLE PRECISION,
-                reset_at TEXT, earnings_lifetime DOUBLE PRECISION, model_count INT, synced_at TIMESTAMPTZ
-            )
-        """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_prov_upstream ON providers(upstream_slug)")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS provider_asks (
-                id BIGSERIAL PRIMARY KEY, provider_id TEXT, model TEXT, model_status TEXT,
-                ask_in DOUBLE PRECISION, ask_out DOUBLE PRECISION, avg_price_in DOUBLE PRECISION,
-                avg_price_out DOUBLE PRECISION, avg_price_requests BIGINT, official_in DOUBLE PRECISION,
-                official_out DOUBLE PRECISION, enabled BOOL, synced_at TIMESTAMPTZ
-            )
-        """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_asks_model ON provider_asks(model)")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS usage_logs (
-                id TEXT PRIMARY KEY, ts TIMESTAMPTZ, model TEXT, upstream TEXT, status TEXT,
-                prompt_tokens BIGINT, completion_tokens BIGINT, cost_consumer DOUBLE PRECISION,
-                cost_publisher DOUBLE PRECISION, synced_at TIMESTAMPTZ
-            )
-        """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_ul_ts ON usage_logs(ts DESC)")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS market_snapshot (
-                slug TEXT PRIMARY KEY, family TEXT, min_ask_in DOUBLE PRECISION, max_ask_in DOUBLE PRECISION,
-                min_ask_out DOUBLE PRECISION, max_ask_out DOUBLE PRECISION, last_rate DOUBLE PRECISION, synced_at TIMESTAMPTZ
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS catalog_models (
-                slug TEXT PRIMARY KEY, family TEXT, label TEXT, status TEXT, synced_at TIMESTAMPTZ
-            )
-        """)
+        ensure_schema(cur)
         c.commit()
 
 
