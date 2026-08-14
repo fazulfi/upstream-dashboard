@@ -203,3 +203,22 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 3. **Sample max 3 provider/upstream** utk data ask kita (our_price + official + max_ask_in utk PUT) — anchor kompetitor (/market) & orderbook (/catalog) TETAP full-fetch (akurasi 100%).
 
 **Hasil:** ~458 → ~15 HTTP/cycle. Cycle live: **60-70s** (sebelumnya 10-16 menit = ~13× lebih cepat). Dry-run 58s. `0x429`, 0 error.
+
+---
+
+## REV8 (2026-08-14) — CYCLE STABIL <70s, no 174s spike
+
+**Audit ScoutCycleOptimizer:** 4× `/publisher/providers` fetch per cycle (3× get_asks_enabled + 1× get_positions) = 1MB transfer cycle miss. Cache asks TTL 300s expire → fetch penuh 20 HTTP → kena 429 → retry sleep 30s → cycle 121-174s.
+
+**Fix (commit `cb3e69a` + `7762608`):**
+1. **Cache providers 1×/cycle** (`_PROVIDERS_CACHE` TTL 60s) — `_get_providers_cached()` dipakai oleh `get_asks_enabled` & `get_positions` → -3 GET + ~750KB/cycle miss.
+2. **Background refresh saat cache ask expire** — `_refresh_asks()` di thread daemon: data lama dipakai langsung, refresh paralel. Cycle TIDAK BLOKIR.
+3. **Cold start** (no old data): fetch sync (cycle pertama lambat, ~490s). Setelah itu semua cycle pakai cache miss + background refresh = 61-117s.
+
+**Hasil live (16:00-16:08):**
+```
+16:00:37 daemon start
+16:01:03 cold start (26s) → 16:02:04 (61s) → 16:03:12 (68s) → 16:04:14 (62s)
+16:06:11 cache miss + bg refresh (117s) → 16:07:12 (61s) → 16:08:35 (83s)
+```
+4 undercut PUT [OK] tiap cycle. 0 NameError. ARM=1.
