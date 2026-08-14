@@ -6,6 +6,33 @@
 
 ---
 
+## REV4 (2026-08-14 07:06 UTC) — Bukti realtime final + render error fix
+
+| Fix | Sebelum | Sesudah |
+|---|---|---|
+| **Live-updated timestamp** (bukti poll aktif) | Tidak ada indikator waktu update terakhir — user tidak bisa yakin halaman live | `updated 14.07.08` (lokal user, format `HH.MM.SS`) — berubah tiap 5s persis. State `updatedAt` di-update di `useEffect` saat `log` berubah. |
+| **Render error: `lastTs is not defined`** | Halaman blank merah setelah deploy rev3 — KPI "Last request" crash karena ref hilang | Restore `lastTs = log?.rows?.length ? log.rows[0].ts : null` |
+| **Ticker stuck perception** | Tabel terlihat statis karena trafik InferHub interval 20-40 menit, user pikir tidak refresh | Sekarang terlihat: LIVE REQUESTS naik (13,051 → 13,062), updated timestamp bergerak tiap 5s, badge +N new, dan row pertama berubah ke request baru saat ada |
+
+### Bukti keras realtime (performance entries browser)
+| t | Δ |
+|---|---|
+| 5064 | — |
+| 8507 | 3443 ms |
+| 13511 | 5004 ms |
+| 18510 | 4999 ms |
+→ poll rata-rata **≈5s** (pollMs=5000 di Earnings.jsx:21).
+
+### Bukti updated timestamp berubah
+| t0 | t1 |
+|---|---|
+| `updated 14.07.03` | `updated 14.07.08` |
+→ Δ=5s persis (1 siklus poll).
+
+Commit `79d5df6` "fix(frontend): restore lastTs (render error) + live-updated". Deploy Vercel prod OK.
+
+---
+
 ## Masalah rev2 (dari screenshot user) & Fix
 
 | # | Masalah | Bukti sebelum | Fix | Bukti sesudah |
