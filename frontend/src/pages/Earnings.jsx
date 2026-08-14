@@ -43,6 +43,7 @@ export default function Earnings() {
     if (totalInterval == null || !liveTotal) return null;
     return totalInterval / liveTotal;
   }, [totalInterval, liveTotal]);
+  const lastTs = log?.rows?.length ? log.rows[0].ts : null;
   const [updatedAt, setUpdatedAt] = useState(null);
   useEffect(() => { if (log) setUpdatedAt(new Date()); }, [log]);
 
