@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApi, usd } from '../hooks/useApi';
 import EarningsChart from '../components/EarningsChart';
 import KpiCard from '../components/KpiCard';
@@ -18,7 +18,21 @@ const fmtInterval = s => s >= 3600 ? `${s / 3600}h` : s >= 60 ? `${s / 60}m` : `
 export default function Earnings() {
   const [range, setRange] = useState('24h');
   const { data, loading } = useApi(`/api/history?range=${range}`, 10000);
-  const { data: log, loading: logLoading } = useApi(`/api/earnings-log?size=25&range=${LOG_RANGE[range]}`, 15000);
+  const { data: log, loading: logLoading } = useApi(`/api/earnings-log?size=25&range=${LOG_RANGE[range]}`, 5000);
+
+  // Realtime: deteksi row baru (ts terbaru berubah) -> hitung "new since open"
+  const [newCount, setNewCount] = useState(0);
+  const [firstTs, setFirstTs] = useState(null);
+  const rows = log?.rows || [];
+  useEffect(() => {
+    if (!rows.length) return;
+    const topTs = rows[0].ts;
+    if (firstTs === null) { setFirstTs(topTs); return; }
+    if (topTs !== firstTs) {
+      setNewCount(c => c + 1);
+      setFirstTs(topTs);
+    }
+  }, [rows, firstTs]);
 
   const candles = data?.deltas || [];
   const totalInterval = data?.total_interval_earning ?? null;
@@ -44,7 +58,7 @@ export default function Earnings() {
         <KpiCard
           label={`Live requests · ${LOG_RANGE[range]}`}
           value={liveTotal == null ? '—' : liveTotal.toLocaleString()}
-          sub="per request · poll 15s"
+          sub="per request · poll 5s"
         />
         <KpiCard
           label="Avg / request"
@@ -101,7 +115,10 @@ export default function Earnings() {
               <h2>Live earnings per request</h2>
               <div className="sub">{log?.total != null ? `${log.total.toLocaleString()} requests · ${log.range}` : 'from InferHub usage logs'}</div>
             </div>
-            <span className="live-pill"><i></i>live</span>
+            <div className="live-wrap">
+              {newCount > 0 && <span className="live-new-badge">+{newCount} new</span>}
+              <span className="live-pill"><i></i>live · 5s</span>
+            </div>
           </div>
           <div className="ticker-scroll">
             <table className="tbl tbl-compact">
