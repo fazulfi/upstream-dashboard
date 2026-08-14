@@ -38,3 +38,29 @@ Tujuan: pencatatan keuangan **seperti perusahaan** — akurat, traceable, realti
 - Net income baru (fix Momo) = $252.90
 - Kurs per transaksi tersimpan & dipakai
 - Backup log ada, restore diuji
+
+---
+
+## ✅ HASIL IMPLEMENTASI & AUDIT ULANG (2026-08-14, selesai)
+
+| Fix | Status | Bukti live |
+|---|---|---|
+| F1 Momo double-count | ✅ | IMP-12 = 0 (persist setelah restart — import ledger.json diblok); net income +$5.38 |
+| F2 Kurs realtime per-transaksi | ✅ | fin_ops buy IDR → `kurs_idr_usd=17860` tersimpan per row; ledger_meta `kurs_idr_usd=17860.0`, `kurs_updated=2026-08-14`; FOREX_KEY ditambah ke .env; 34 aset IDR semua punya kurs |
+| F3 Payout dedup | ✅ | db_import_ledger skip payout tanpa id valid; add-payout legacy deprecated (auto-sync API) |
+| R3 Rekonsiliasi otomatis | ✅ | `scripts/recon_finance.py` — cron harian 04:30; **LULUS**: payout $300 == withdrawn $300 (15), kurs valid |
+| R2 Backup | ✅ | Backup manual `inferhub-20260814-021653.sql.gz` (1.26MB); cron 03:30 terpasang |
+| R5 Unit finance | ✅ | Unit VPS di-sync ke repo (.venv-dash, FOREX env, tanpa key hardcode) |
+| Bug ausd | ✅ | `ausd` undefined di loop refund → REF-1 $22.62 kini dihitung |
+| Bug def db() | ✅ | Kembali di fin_ops (NameError fixed) |
+
+**Net income final: $252.91** (sebelum audit: $247.52)
+- payout 300.0 + refund 22.62 − amort 45.51 − imp 24.10 − opex 0.10
+- Selisih: fix Momo (+$5.38) + kurs live realtime
+
+**Rekonsiliasi akhir:** payout DB == withdrawn API == delta history ($300) ✓ · balance+withdrawn == lifetime ($336.45) ✓ · kurs valid ✓
+
+**Tersisa (butuh keputusan operator):**
+- 5 aset retired tanpa impairment row (A-017/A-017a sudah via amort; A-023/A-025/A-039 perlu konfirmasi)
+- Invariant 2 live API (stats) dilewati — API key scope terbatas
+- Payout 08-05 & 08-06 (2×10/hari) — konfirmasi ke API (tidak terbukti dobel dari relasi lain)
