@@ -4,8 +4,11 @@ import { fmtTs } from '../lib/fmt';
 /**
  * EarningsChart — hero area chart (riset: 1 chart utama untuk trend, tidak boros).
  * P0-2 fix: sumbu X = WAKTU nyata (bukan indeks). Terima startEpoch (ms) & spanS utk label.
- * Rev2 fix: label HH:mm untuk rentang pendek (<=48h), dd/MM+HH:mm untuk rentang panjang.
+ * Rev3 fix: label X = "dd MMM HH:mm" kalau total rentang > 1 hari, else "HH:mm".
+ * Tooltip: fmtTs (zona lokal user).
  */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export default function EarningsChart({ data, startEpoch = null, spanS = 60 }) {
   const series = Array.isArray(data) ? data : [];
   if (series.length < 2) {
@@ -22,15 +25,15 @@ export default function EarningsChart({ data, startEpoch = null, spanS = 60 }) {
   }));
   const fmt = (v) => '$' + (v == null ? '0' : Number(v).toFixed(2));
   const totalSpanS = series.length * spanS;
-  // Label sumbu: rentang pendek (<=48 jam) -> HH:mm; panjang -> dd/MM HH:mm.
+  const useDate = totalSpanS > 24 * 3600; // > 1 hari total -> sertakan tanggal
   const tickFmt = (i) => {
     const d = chartData[i] && chartData[i].ts;
     if (!d) return '';
     const pad = n => String(n).padStart(2, '0');
     const hh = pad(d.getHours());
     const mm = pad(d.getMinutes());
-    if (totalSpanS <= 48 * 3600) return `${hh}:${mm}`;
-    return `${d.getDate()}/${d.getMonth() + 1} ${hh}:${mm}`;
+    if (useDate) return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${hh}:${mm}`;
+    return `${hh}:${mm}`;
   };
   const labelFmt = (i) => {
     const d = chartData[i] && chartData[i].ts;
