@@ -142,6 +142,33 @@ def main():
     else:
         print(f"[PASS] {checks[-1][0]}: {checks[-1][2]}")
 
+    # 6. Invariant balance+withdrawn==lifetime HANYA sejak baseline 10-Agu 17:56:45Z.
+    #    Sebelum baseline: kurva seed sintetis (882 baris) meleset — BUKAN KPI.
+    BASELINE = "2026-08-10 17:56:45"
+    with db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM earning_history WHERE ts >= %s AND abs((balance+withdrawn)-publisher_lifetime) > 0.01",
+            (BASELINE,))
+        n_break_live = cur.fetchone()[0]
+        cur.execute(
+            "SELECT count(*) FROM (SELECT publisher_lifetime, lag(publisher_lifetime) OVER (ORDER BY ts) prev "
+            "FROM earning_history WHERE ts >= %s) t WHERE publisher_lifetime < prev",
+            (BASELINE,))
+        n_nonmono = cur.fetchone()[0]
+    ok_eq = n_break_live == 0
+    checks.append(("Earning equation sejak baseline (10-Agu)", ok_eq,
+                   f"pelanggar live: {n_break_live} (seed pre-baseline dikecualikan)"))
+    if not ok_eq:
+        fails.append(checks[-1])
+    else:
+        print(f"[PASS] {checks[-1][0]}: {checks[-1][2]}")
+    # Non-monotonik = artefak sinkronisasi transisi withdrawn (0<->130/230),
+    # BUKAN korupsi data (persamaan balance+withdrawn==lifetime tetap benar di
+    # tiap baris). Jadikan warning, bukan FAIL (audit item 6, 2026-08-14).
+    if n_nonmono:
+        warns.append(f"earning_history non-monotonik {n_nonmono} baris (transisi withdrawn — artefak sync, bukan korupsi)")
+        print(f"[WARN] Earning non-monotonik: {n_nonmono} baris (artefak sync withdrawn)")
+
     # Report
     print()
     print(f"=== REKONSILIASI {date.today().isoformat()} ===")

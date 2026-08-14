@@ -26,3 +26,34 @@ find "${BACKUP_DIR}" -type f -name 'inferhub-*.sql.gz' -mtime +"${RETENTION_DAYS
 
 echo "✓ Backup selesai: ${OUTFILE}"
 echo "Backup tersimpan di: ${BACKUP_DIR}"
+
+# ── Offsite copy (S3 is3.cloudhost.id via rclone — aws CLI v2.35 buggy utk is3) ──
+# Kredensial di /run/wwma/env (sistem WWMA). Ukuran ~1.3MB → biaya nol.
+# Gagal upload ≠ gagal backup lokal.
+if [ -f /run/wwma/env ] && [ -z "${UPSTREAM_BACKUP_SKIP_S3:-}" ] && command -v rclone >/dev/null 2>&1; then
+  set +e
+  S3_PREFIX_UP="${S3_PREFIX_UP:-upstream-dashboard}"
+  # shellcheck disable=SC1091
+  . /run/wwma/env
+  export S3_ENDPOINT="${S3_ENDPOINT:-https://is3.cloudhost.id}"
+  # remote rclone 'is3' di-set via /root/.config/rclone/rclone.conf
+  if [ -n "${S3_BUCKET:-}" ]; then
+    rclone copy "${OUTFILE}" "is3:${S3_BUCKET}/${S3_PREFIX_UP%/}/db/" --log-level ERROR \
+      && echo "✓ Offsite: is3:${S3_BUCKET}/${S3_PREFIX_UP%/}/db/$(basename "${OUTFILE}")"
+    # Retensi remote 30 hari
+    rclone ls "is3:${S3_BUCKET}/${S3_PREFIX_UP%/}/db/" 2>/dev/null | while read -r _size name; do
+      stamp="${name#inferhub-}"; stamp="${stamp%.sql.gz}"
+      if [ -n "$stamp" ] && [ "${#stamp}" -ge 15 ]; then
+        ts="${stamp:0:8} ${stamp:9:2}:${stamp:11:2}:${stamp:13:2}"
+        if [ "$(date -d "${ts}" +%s 2>/dev/null)" -lt "$(date -d '-30 days' +%s)" ]; then
+          rclone delete "is3:${S3_BUCKET}/${S3_PREFIX_UP%/}/db/${name}" --log-level ERROR 2>/dev/null
+        fi
+      fi
+    done
+  else
+    echo "⚠️ Offsite dilewati: S3_BUCKET kosong"
+  fi
+  set -e
+else
+  echo "⚠️ Offsite dilewati: rclone / /run/wwma/env tidak ada"
+fi

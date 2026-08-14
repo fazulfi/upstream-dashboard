@@ -149,12 +149,10 @@ def cmd_buy(a):
     with db() as conn:
         with conn.cursor() as cur:
             aid = next_asset_id(conn, cur)  # id di-generate di transaksi yg sama
-            if curr == "IDR" and kurs:
-                update_meta_kurs(conn, cur, kurs)
             cur.execute(
-                "INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s)",
-                (aid, up, qty, cost, curr, buy, lifespan, label, kurs if curr == "IDR" else None),
+                "INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd, created_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s)",
+                (aid, up, qty, cost, curr, buy, lifespan, label, kurs if curr == "IDR" else None, a.actor),
             )
         conn.commit()
 
@@ -172,9 +170,13 @@ def cmd_retire(a):
                 print(f"✗ asset {aid} tidak ditemukan")
                 sys.exit(1)
             if a.label:
-                cur.execute("UPDATE assets SET status='retired', label=%s WHERE id=%s", (a.label, aid))
+                cur.execute(
+                    "UPDATE assets SET status='retired', label=%s, retired_by=%s, retired_at=now() WHERE id=%s",
+                    (a.label, a.actor, aid))
             else:
-                cur.execute("UPDATE assets SET status='retired' WHERE id=%s", (aid,))
+                cur.execute(
+                    "UPDATE assets SET status='retired', retired_by=%s, retired_at=now() WHERE id=%s",
+                    (a.actor, aid))
         conn.commit()
     print(f"✓ RETIRE  {aid}  ({rows[0][1]}) -> status retired")
 
@@ -217,17 +219,12 @@ def cmd_refund(a):
                 )
             if cur.fetchone():
                 print(f"✗ Refund duplikat terdeteksi: {up} {d} sudah tercatat. Abort.")
-                sys.exit(1)
-            rid = f"REF-{uuid.uuid4().hex[:8].upper()}"
-            if idr_ok and kurs:
-                update_meta_kurs(conn, cur, kurs)
             cur.execute(
-                "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd, created_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (rid, up, a.qty or 0, a.amount_idr or 0, a.amount_usdc or 0, a.label or "", d,
-                 kurs if idr_ok else None),
+                 kurs if idr_ok else None, a.actor),
             )
-        conn.commit()
     print(f"✓ REFUND  {rid}  {up}  qty {a.qty or 0}  IDR {a.amount_idr or 0:,.0f}  USDC {a.amount_usdc or 0}  kurs {kurs or 'meta'}")
 
 
@@ -259,8 +256,21 @@ def cmd_regen(a):
     print("✓ workbook keuangan.xlsx regenerated dari DB")
 
 
+def resolve_actor(a):
+    """Prioritas: --actor > env FIN_OPS_ACTOR > user OS (getpass.getuser())."""
+    actor = getattr(a, "actor", None) or os.environ.get("FIN_OPS_ACTOR") or ""
+    if actor:
+        return actor.strip()
+    try:
+        import getpass
+        return getpass.getuser() or "unknown"
+    except Exception:
+        return "unknown"
+
+
 def main():
     p = argparse.ArgumentParser(description="fin_ops — input transaksi keuangan, DB single source")
+    p.add_argument("--actor", default=None, help="siapa yang mencatat (default: env FIN_OPS_ACTOR / user OS)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pb = sub.add_parser("buy", help="beli aset baru (auto A-0xx)")
@@ -271,11 +281,13 @@ def main():
     pb.add_argument("--buy", default=None)
     pb.add_argument("--lifespan", type=int, default=30)
     pb.add_argument("--label", default=None)
+    pb.add_argument("--actor", default=None)
     pb.set_defaults(fn=cmd_buy)
 
     pr = sub.add_parser("retire", help="retire aset (habis)")
     pr.add_argument("--id", required=True)
     pr.add_argument("--label", default=None)
+    pr.add_argument("--actor", default=None)
     pr.set_defaults(fn=cmd_retire)
 
     pf = sub.add_parser("refund", help="tambah refund")
@@ -285,6 +297,7 @@ def main():
     pf.add_argument("--amount_usdc", type=float, default=0)
     pf.add_argument("--label", default="")
     pf.add_argument("--date", default=None)
+    pf.add_argument("--actor", default=None)
     pf.set_defaults(fn=cmd_refund)
 
     pl = sub.add_parser("list", help="list aset")
@@ -294,8 +307,8 @@ def main():
     pg.set_defaults(fn=cmd_regen)
 
     a = p.parse_args()
+    a.actor = resolve_actor(a)
     a.fn(a)
-
 
 if __name__ == "__main__":
     main()

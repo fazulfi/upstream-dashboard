@@ -113,6 +113,17 @@ def db_init():
                 cur.execute("""
                     ALTER TABLE refunds ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION
                 """)
+                # ── Actor log (audit trail siapa mencatat transaksi) — item 9 audit keuangan ──
+                cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by TEXT")
+                cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+                cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS retired_by TEXT")
+                cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS retired_at TIMESTAMPTZ")
+                cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_by TEXT")
+                cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+                cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_by TEXT")
+                cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+                cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_by TEXT")
+                cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS impairments (
                         id TEXT PRIMARY KEY, upstream TEXT, qty INT,
