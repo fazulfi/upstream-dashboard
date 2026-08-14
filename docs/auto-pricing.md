@@ -188,3 +188,18 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 - **Blok RESUME baru**: kalau `nontrig_below` kosong & `nontrig_above` ada & **level harga kita kosong** (tidak ada kompetitor lain di harga kita — `our_level_qty <= 0`) → RESUME naik ke level wajar terendah di atas (0.1% di bawahnya). Kalau masih ada kompetitor di level kita → TIDAK resume (tetap bersaing).
 
 **Verifikasi live:** cbcn deepseek-v4-flash naik `$0.0077 → $0.01358`; log cline-pass tampil `resume non-trigger`. Commit `59caedc` + `b7723de`.
+
+---
+
+## REV6 (2026-08-14) — CYCLE 1 MENIT (fix 12-14 menit)
+
+**Keluhan user:** kenapa cycle tiap 30 menit / 12-14 menit, bukan 1 menit?
+
+**Root cause (audit 2 subagent):** ~458 HTTP serial per cycle — 444× GET asks per-provider (cb 176 + cbcn 40 + cp 6, DI-FETCH 2× duplikat per upstream) = 97% waktu. Cycle 10-16 menit padahal `--interval 60`.
+
+**Fix (commit `338753e`):**
+1. **Cache asks TTL 90s** per upstream (`_ASKS_CACHE`) — cycle kedua+ pakai cache.
+2. **Reuse snapshot** per cycle (`_asks_snapshot`) — `get_asks_enabled` dipanggil 1× per upstream, bukan 2× (buang 222 fetch duplikat).
+3. **Sample max 3 provider/upstream** utk data ask kita (our_price + official + max_ask_in utk PUT) — anchor kompetitor (/market) & orderbook (/catalog) TETAP full-fetch (akurasi 100%).
+
+**Hasil:** ~458 → ~15 HTTP/cycle. Cycle live: **60-70s** (sebelumnya 10-16 menit = ~13× lebih cepat). Dry-run 58s. `0x429`, 0 error.
