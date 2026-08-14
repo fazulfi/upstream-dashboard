@@ -68,7 +68,9 @@ DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.
 
 # ── Konstanta global (dipindah ke atas supaya tidak NameError di module scope) ──
 # Publisher share: konsumen bayar cost_consumer_usdc; publisher dapat X% (pricing config).
-PUBLISHER_SHARE = 0.80
+# R15: baca dari DB pricing_config (integer persen 80 -> 0.80), fallback 0.80.
+import finance_share
+PUBLISHER_SHARE = finance_share.publisher_share_pct()
 USAGE_RANGES = {"24h": 86400, "7d": 604800, "30d": 2592000, "90d": 7776000, "all": 0}
 # ── Range bucketing ──
 RANGES = {
@@ -1119,7 +1121,7 @@ def _incremental_db_sync():
                     ON CONFLICT (id) DO NOTHING
                 """, (r.get("id"), ts, r.get("model"), r.get("upstream_label"), r.get("status"),
                       int(r.get("prompt_tokens") or 0), int(r.get("completion_tokens") or 0),
-                      float(r.get("cost_consumer_usdc") or 0), float(r.get("cost_consumer_usdc") or 0) * 0.80, now))
+                      float(r.get("cost_consumer_usdc") or 0), float(r.get("cost_consumer_usdc") or 0) * PUBLISHER_SHARE, now))
         # payouts: sinkron dari live withdrawals API -> tabel payouts (upsert, no manual)
         try:
             wd = inferhub_get("/publisher/withdrawals") or []
@@ -1180,6 +1182,7 @@ def _sync_account_light():
             cur.execute("DELETE FROM pricing_config")
             cur.execute("INSERT INTO pricing_config (id, max_ask_pct, platform_fee_pct, publisher_share_pct, synced_at) VALUES (1,%s,%s,%s,%s)",
                         (pc.get("maxAskPctOfOfficial"), pc.get("platformFeePct"), pc.get("publisherSharePct"), now))
+            finance_share.invalidate_publisher_share()  # R15: share berubah -> cache segar
     except Exception:
         pass
 

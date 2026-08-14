@@ -18,9 +18,10 @@ import psycopg
 from psycopg.rows import dict_row
 
 ENV_FILE = "/home/gamesim/.hermes-suisui/.env"
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
-
-
+# R15: publisher share dari DB (fallback 0.80) — jangan hardcode 0.80
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import finance_share  # noqa: E402
+PUBLISHER_SHARE = finance_share.publisher_share_pct()
 def load_key():
     if "INFERHUB_API_KEY" in os.environ:
         return os.environ["INFERHUB_API_KEY"]
@@ -155,9 +156,9 @@ def sync_asks(prov):
                       float(m.get("officialInputPerMtok") or 0), float(m.get("officialOutputPerMtok") or 0),
                       bool(m.get("enabled")), now))
                 asks_total += 1
-            if (i + 1) % 25 == 0:
-                c.commit()
-                print(f"   ...{i+1}/{len(prov)} providers, {asks_total} asks ({time.time()-t0:.0f}s)")
+                if (i + 1) % 25 == 0:
+                    c.commit()
+                    print(f"   ...{i+1}/{len(prov)} providers, {asks_total} asks ({time.time()-t0:.0f}s)")
         c.commit()
     print(f"   asks total: {asks_total} dalam {time.time()-t0:.0f}s")
 
@@ -198,10 +199,8 @@ def sync_usage_logs():
                 ON CONFLICT (id) DO NOTHING
             """, (r.get("id"), ts, r.get("model"), r.get("upstream_label"), r.get("status"),
                   int(r.get("prompt_tokens") or 0), int(r.get("completion_tokens") or 0),
-                  float(r.get("cost_consumer_usdc") or 0), float(r.get("cost_consumer_usdc") or 0) * 0.80, now))
-            n += 1
-            if n % 500 == 0:
-                c.commit()
+                  float(r.get("cost_consumer_usdc") or 0), float(r.get("cost_consumer_usdc") or 0) * PUBLISHER_SHARE, now))
+            c.commit()
         c.commit()
     print(f"   inserted {n} rows")
 
