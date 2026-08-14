@@ -22,14 +22,19 @@ describe('fmtUsdMicro — presisi mikro per-request (RC1 fix)', () => {
   });
 });
 
-describe('fmtTs — format waktu relatif', () => {
-  it('hari ini -> HH:mm:ss', () => {
+describe('fmtTs — format waktu relatif (zona LOKAL user)', () => {
+  it('hari ini -> HH:mm:ss (jam LOKAL, bukan UTC)', () => {
     const now = new Date();
-    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
     expect(fmtTs(now.toISOString())).toMatch(new RegExp(`^${hh}:\\d{2}:\\d{2}$`));
   });
-  it('tanggal tua -> dd MMM HH:mm', () => {
-    expect(fmtTs('2026-08-01T14:05:00Z')).toBe('01 Aug 14:05');
+  it('tanggal tua -> dd MMM HH:mm (Lokal)', () => {
+    // 2026-08-01T14:05:00Z = 21:05 WIB (UTC+7) — test pakai konstruksi Date lokal deterministik.
+    const d = new Date('2026-08-01T14:05:00Z');
+    const pad = n => String(n).padStart(2, '0');
+    const expectHh = pad(d.getHours());
+    const expectMm = pad(d.getMinutes());
+    expect(fmtTs('2026-08-01T14:05:00Z')).toBe(`01 Aug ${expectHh}:${expectMm}`);
   });
   it('kosong -> em dash', () => {
     expect(fmtTs(null)).toBe('—');

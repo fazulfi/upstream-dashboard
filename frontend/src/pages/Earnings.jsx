@@ -40,7 +40,6 @@ export default function Earnings() {
           label={`Real income · ${range}`}
           value={usd(totalInterval)}
           sub={`${data?.candles ?? 0} candles · auto-refresh 10s`}
-          spark={candles.length > 1 ? candles : null}
         />
         <KpiCard
           label={`Live requests · ${LOG_RANGE[range]}`}

@@ -11,17 +11,19 @@ export function fmtUsdMicro(v) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 });
 }
 
-// Format timestamp ISO utuh (backend kirim ts utuh sejak Task 1).
-// Hari ini -> "HH:mm:ss"; lebih tua -> "dd MMM HH:mm".
-// Pakai jam UTC dari string ISO (deterministik, tidak terpengaruh TZ lokal).
+// Format timestamp ISO (backend kirim ts UTC, e.g. 2026-08-14T05:50:00Z).
+// Rev2 fix: KONVERSI ke zona waktu LOKAL user (bukan tampil UTC mentah) —
+// user Indonesia melihat jam WIB (UTC+7), "just now" harus sesuai jam lokal.
+// Hari ini -> "HH:mm:ss"; lebih tua -> "dd MMM HH:mm". Deterministik per user.
 export function fmtTs(ts) {
   if (!ts) return '—';
-  const m = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return String(ts);
-  const [, y, mo, d, hh, mm, ss] = m;
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
   const now = new Date();
-  const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
-  if (today === `${y}-${mo}-${d}`) return `${hh}:${mm}:${ss}`;
-  return `${d} ${months[Number(mo) - 1]} ${hh}:${mm}`;
+  const pad = n => String(n).padStart(2, '0');
+  const sameDay = d.toDateString() === now.toDateString();
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (sameDay) return `${hm}:${pad(d.getSeconds())}`;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${pad(d.getDate())} ${months[d.getMonth()]} ${hm}`;
 }
