@@ -221,11 +221,21 @@ def _f(v):
     except Exception:
         return 0.0
 
+# Cache asks per upstream — REV6 (fix cycle 12-14 menit): fetch asks per-provider
+# (cb 176+ provider) tiap cycle ~700-900 HTTP serial. TTL 90s: cycle kedua+
+# pakai cache → cycle < 60s (interval daemon 60s benar-benar 1 menit).
+_ASKS_CACHE = {}
+_ASKS_CACHE_TTL = 90
 
-def get_asks_enabled(upstream):
+
+def get_asks_enabled(upstream, use_cache=True):
     """asks utk SEMUA provider enabled & apiKeyCheckStatus='ok' (bukan invalid).
     R16b: iterasi semua provider upstream (bukan cuma 1) — merge ke satu map
     model_id -> ask obj; konflik harga: pilih ask_in TERENDAH (paling kompetitif)."""
+    if use_cache:
+        hit = _ASKS_CACHE.get(upstream)
+        if hit and time.time() - hit["ts"] < _ASKS_CACHE_TTL:
+            return hit["data"]
     st, provs = api("/publisher/providers")
     if st != 200 or not isinstance(provs, list):
         return {}
@@ -242,6 +252,11 @@ def get_asks_enabled(upstream):
                 break
     if not picks:
         return {}
+    # REV6: SAMPLE max 3 provider/upstream utk data ask (bukan SEMUA 176+) —
+    # cukup utk our_price (harga terendah dari sample) + official + max_ask_in utk PUT.
+    # Anchor kompetitor (market) & orderbook (catalog) TIDAK terpengaruh (full-fetch).
+    if len(picks) > 3:
+        picks = picks[:3]
     out = {}
     for prov in picks:
         st, asks = api(f"/publisher/providers/{prov['id']}/asks")
@@ -266,6 +281,7 @@ def get_asks_enabled(upstream):
                 "demand": int(a.get("avgPriceRequests") or 0),
                 "cheapest_active_pct": float(a.get("cheapestActivePct") or 0),
             }
+    _ASKS_CACHE[upstream] = {"ts": time.time(), "data": out}
     return out
 
 
@@ -448,8 +464,10 @@ def run_cycle(dry_run=False):
     # kumpulkan harga ask kita per model (dari sample provider tiap upstream)
     # utk mengurangi ask kita di level harga kita (anti "mengejar diri sendiri")
     our_price = {}
+    _asks_snapshot = {}  # REV6: reuse hasil get_asks_enabled per cycle (1x fetch per upstream)
     for s in sorted(scope):
         asks_s = get_asks_enabled(s)
+        _asks_snapshot[s] = asks_s
         for cid_s, a_s in asks_s.items():
             our_price[(s, a_s["model_id"])] = a_s["ask_in"]
     # POSISI KOMPETITOR per model (Faiz v2) — total provider vs provider OK kita.
@@ -457,11 +475,7 @@ def run_cycle(dry_run=False):
 
     for slug in sorted(scope):
         cooldown = COOLDOWN_CP if slug == "cline-pass" else COOLDOWN_CB
-        asks = get_asks_enabled(slug)
-        if not asks:
-            log(f"WARN: ask {slug} kosong (sample provider?), skip")
-            continue
-        cat_models = catalog.get(slug, {})
+        asks = _asks_snapshot.get(slug) or get_asks_enabled(slug)
         for cid, a in asks.items():
             if not a["enabled"]:
                 continue
