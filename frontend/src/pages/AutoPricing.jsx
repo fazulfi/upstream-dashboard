@@ -67,6 +67,7 @@ export default function AutoPricing() {
 
   const saveConfig = async (upstream, model_id) => {
     const key = `${upstream}|${model_id}`;
+    const f = form[key] || {};
     const trigger = parseFloat(f.trigger);
     if (!(trigger > 0)) {
       setNote(`Error: trigger (${trigger}) harus > 0`);
@@ -77,15 +78,18 @@ export default function AutoPricing() {
       const r = await apiFetch('/api/auto-pricing/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-
         body: JSON.stringify({ upstream, model_id, trigger_pct: trigger }),
       });
       const d = await r.json();
       if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
-      else { setNote(`✓ ${upstream}/${model_id} → trigger ${trigger}%`); setTimeout(reloadCfg, 300); }
+      else {
+        setNote(`✓ ${upstream}/${model_id} → trigger ${trigger}%`);
+        // clear form state supaya display ikut nilai server (cfgMap ter-refresh)
+        setForm(prev => { const n = { ...prev }; delete n[key]; return n; });
+        setTimeout(reloadCfg, 300);
+      }
     } catch (e) { setNote('Error: ' + e.message); } finally { setSaving(null); }
   };
-
   const resetConfig = async (id, upstream, model_id) => {
     if (!id) return;
     setSaving(`${upstream}|${model_id}`);
