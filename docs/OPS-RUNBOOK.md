@@ -109,12 +109,19 @@ Daemon harus jalan **as gamesim** (bukan root) supaya `~/.hermes-suisui/.env` ke
 - Token sesi expired (>24h) → login ulang via Settings.
 - `VITE_DASHBOARD_PASSWORD` ter-set di bundle → kosongkan `.env.production` & redeploy.
 
-### Frontend Vercel deploy gagal "Root Directory"
-Deploy dari **root repo** `/home/gamesim/dashboard` (project settings `rootDirectory: frontend`),
-bukan dari `frontend/`.
+### Frontend Vercel deploy — WAJIB dari `frontend/` (⚠️ 2026-08-14: fix RC5)
+Deploy **HARUS** dari subfolder `frontend/` (bukan root repo):
+```bash
+cd /home/gamesim/dashboard/frontend
+export VERCEL_TOKEN=$(grep VERCEL_TOKEN ~/.hermes-suisui/.env | cut -d= -f2)
+npx vercel deploy --prod --yes --token "$VERCEL_TOKEN" --cwd /home/gamesim/dashboard/frontend
+```
+⚠️ Deploy dari root (`--cwd /home/gamesim/dashboard`) membuat Vercel build **backend λ**
+(project settings RootDirectory `.`) → rewrite `/api` ke λ lokal tanpa env auth → **SEMUA API 401**.
+Gejala: dashboard tampil tapi data kosong, `/api/login` 401 padahal password benar.
+Verifikasi setelah deploy: `curl -H "Authorization: Bearer <token>" https://upstream-static.vercel.app/api/history?range=24h` → 200 dgn data.
 
 ---
-
 ## 6. Checklist Deploy Kode Baru (5 menit)
 
 1. `git pull origin main` di `/home/gamesim/dashboard`
@@ -122,7 +129,7 @@ bukan dari `frontend/`.
 3. Scripts: `cp scripts/auto_pricing.py scripts/fin_ops.py scripts/gen_finance.py /home/gamesim/scripts/`
 4. Restart daemon: `systemctl --user restart wwma-auto-pricing.service`
 5. Verifikasi: `/health` 200 · auto-pricing log cycle sukses · `cat auto-pricing-arm`
-6. Frontend (bila ada perubahan): `vercel deploy --prod --yes --cwd /home/gamesim/dashboard`
+6. Frontend (bila ada perubahan): `vercel deploy --prod --yes --token "$VERCEL_TOKEN" --cwd /home/gamesim/dashboard/frontend` ⚠️ dari `frontend/`, BUKAN root (lihat §5 troubleshooting).
 
 ---
 
