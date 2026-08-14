@@ -1383,32 +1383,49 @@ def api_upstreams():
 @app.route("/api/earnings-log")
 def api_earnings_log():
     """Earning per-request terbaru — FETCH LANGSUNG ke InferHub /usage/logs segar tiap request
-    (bukan baca DB yang sync lambat ~60s), supaya frontend poll 15s dapat data realtime."""
+    (bukan baca DB yang sync lambat ~60s), supaya frontend poll dapat data realtime.
+    Support ?size & ?range (24h/7d/30d/90d/all) — default 30d. TTL cache 3s per range+size
+    agar poll chart+tabel tidak double-fetch InferHub (rate-limit safety)."""
     try:
         size = int(request.args.get("size", 25))
     except (TypeError, ValueError):
         size = 25
     if size > 200:
         size = 25
-    d = inferhub_get("/usage/logs", {"range": "30d", "page": 1, "pageSize": max(size, 25)})
+    range_id = request.args.get("range", "30d")
+    if range_id not in USAGE_RANGES:
+        range_id = "30d"
+    now = time.time()
+    key = f"{range_id}:{size}"
+    with _lock:
+        ck = _cache.get("earn_log_cache") or {}
+        hit = ck.get(key)
+        if hit and now - hit["ts"] < 3:
+            return jsonify(hit["data"])
+    d = inferhub_get("/usage/logs", {"range": range_id, "page": 1, "pageSize": max(size, 25)})
     if not d:
-        return jsonify({"rows": [], "total": 0, "error": "unavailable"})
+        return jsonify({"rows": [], "total": 0, "range": range_id, "error": "unavailable"})
     rows = []
     for r in (d.get("rows") or []):
         rows.append({
-            "ts": (r.get("ts") or "")[11:19],
+            "ts": r.get("ts") or "",
             "model": r.get("model") or "",
             "upstream": r.get("upstream_label") or "",
             "in_tok": int(r.get("prompt_tokens") or 0),
             "out_tok": int(r.get("completion_tokens") or 0),
             "amount": round(float(r.get("cost_consumer_usdc") or 0) * PUBLISHER_SHARE, 6),
         })
-    return jsonify({
+    payload = {
         "rows": rows,
         "total": int(d.get("total") or len(rows)),
-        "range": "30d",
+        "range": range_id,
         "source": "usage/logs live fetch",
-    })
+    }
+    with _lock:
+        ck = dict(_cache.get("earn_log_cache") or {})
+        ck[key] = {"ts": now, "data": payload}
+        _cache["earn_log_cache"] = ck
+    return jsonify(payload)
 
 
 @app.route("/api/earnings-alltime")
