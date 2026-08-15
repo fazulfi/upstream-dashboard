@@ -222,3 +222,31 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 16:06:11 cache miss + bg refresh (117s) → 16:07:12 (61s) → 16:08:35 (83s)
 ```
 4 undercut PUT [OK] tiap cycle. 0 NameError. ARM=1.
+
+---
+
+## REV10 (2026-08-15) — SELF-UNDERCUT FIX: semua upstream satu publisher
+
+**Keluhan user:** kadang masih undercut sendiri tanpa ada yang di depannya.
+
+**Root cause (audit sistematis):** daemon mengelola 6 upstream MILIK SATU PUBLISHER
+(`codebuddy, codebuddy-cn, cline-pass, codex, commandcode, opencode-go`). Model yang sama
+dijual oleh beberapa upstream kita (mis. `deepseek-v4-flash` oleh 4 slug kita). Bug lama:
+`get_positions` hanya mengurangi ask kita di level harga kita di upstream SAMA → ask dari
+upstream LAIN milik kita (commandcode/opencode-go/codex) dianggap **kompetitor sejati** →
+daemon undercut ask sendiri. Bukti lapangan: `posKomp=0` tapi tetap undercut; 17 level
+orderbook `deepseek-v4-flash` semuanya milik kita.
+
+**Fix (commit `686ae38` + `d2c9f47`):**
+1. `get_my_slugs()` — semua upstreamSlug milik kita (dinamis dari `/publisher/providers` enabled, bukan hardcode).
+2. `get_positions()` — orderbook per model digabung dari SEMUA slug di catalog (`book[mid][price] → [slug,...]`), lalu hanya level yang ada ask dari slug BUKAN milik kita masuk `levels` (kompetitor sejati). qty = jumlah ask non-kita.
+3. `get_market_min()`/`_market_min_from_models()` — exclude slug milik kita dari anchor (jangan anchor ke ask sendiri).
+
+**Hasil live (daemon ARM=1, interval 60s):**
+```
+sebelum fix: 6 undercut / 30 hold  (14:30)
+setelah fix: 0 undercut / 36 hold  (14:31+, 5 cycle konsisten)
+```
+- `deepseek-v4-flash`: `posisi_komp=0`, `levels=[]` — TIDAK ada kompetitor sejati → hold (sebelumnya 17 level ask kita dikejar).
+- **TIDAK ada regresi**: 8 model scope dgn kompetitor sejati (claude-code/z-ai/siliconflow) tetap hold karena **kita termurah** (`our <= comp_low` semua, REGRESI=0).
+- Test TDD 4/4 PASS di lokal & VPS (`scripts/tests/test_self_undercut.py`).
