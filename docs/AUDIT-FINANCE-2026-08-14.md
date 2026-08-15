@@ -127,3 +127,16 @@ CBCN active qty 127, provider ok 33  → ratio 0.26
 commandcode 0.833 · cline-pass 1.0 · codex 0.0 (semua drained/invalid)
 TOTAL CAPITAL = $87.79  (verified manual match tepat)
 ```
+
+## REV9d (2026-08-14) — Drained TETAP dihitung, hanya invalid/deleted yg di-drop
+
+**User:** drained (quota habis, akun masih ada) = aset aktif tetap. Yang di-drop = invalid atau akun dihapus.
+
+**Fix (`c0252a5`)**: query provider aktif `status='ok'` **tanpa `AND NOT drained`** (kedua fungsi). Drained dimasukkan.
+
+**Hasil live:**
+```
+Rasio (incl drained): codebuddy 0.837 · cbcn 0.26 · codex 0.158 (9 ok/57)
+                      opencode-go 1.0 (3/3) · cline-pass 1.0 · commandcode 0.833
+TOTAL CAPITAL = $114.36  (verified manual match)
+```
