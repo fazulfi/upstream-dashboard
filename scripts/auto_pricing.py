@@ -546,6 +546,36 @@ def get_positions(catalog, our_price=None):
                 "levels": comp_levels,
             }
     return out
+def _lowest_competitor_price(levels):
+    """Harga kompetitor sejati terendah dari orderbook (levels[0][0]); None kalau kosong."""
+    if not levels:
+        return None
+    return float(levels[0][0])
+
+
+def _decision_from_levels(our, official, levels, max_in=0):
+    """Decision MURNI dari orderbook; dipakai run_cycle utk competitor_price.
+    Buang level yg sama dgn our, ambil level kompetitor terendah,
+    target = ref - (official*0.001), clamp ke max_in hanya jika max_in>0 & min 0.
+    TANPA trigger filter/clamp — mengikuti kompetitor sejati apa pun harganya
+    (live requirement: ikut kompetitor genuine @ $0.07 walau di bawah trigger)."""
+    competitor_price = _lowest_competitor_price(levels)
+    if competitor_price is None:
+        return {"action": "hold", "target": our, "competitor_price": None}
+    refs = [p for p, _q in levels if abs(p - our) > 1e-6]
+    if not refs:
+        return {"action": "hold", "target": our, "competitor_price": competitor_price}
+    ref = min(refs)
+    offset = official * 0.001
+    target = round(ref - offset, 6)
+    if max_in > 0:
+        target = min(target, max_in)
+    target = max(0.0, round(target, 6))
+    if abs(target - our) <= 0.5e-4:
+        return {"action": "hold", "target": our, "competitor_price": competitor_price}
+    action = "undercut" if target < our else "resume"
+    return {"action": action, "target": target, "competitor_price": competitor_price}
+
 
 
 def run_cycle(dry_run=False):
@@ -595,10 +625,15 @@ def run_cycle(dry_run=False):
                 continue
             our = a["ask_in"]
             official = a["official"]
-            if official <= 0:
-                official = _f(cat_models.get(a["model_id"], {}).get("officialIn")) or official
             max_in = a["max_ask_in"]
             mid = a["model_id"]
+            if official <= 0:
+                cat_models_slug = catalog.get(slug, {})
+                cat_model = cat_models_slug.get(mid)
+                if cat_model is None:
+                    cat_model = cat_models_slug.get(mid.split("/")[-1])
+                if cat_model:
+                    official = _f(cat_model.get("officialIn")) or _f(cat_model.get("official")) or official
 
             # config key bisa bare ("deepseek-v4-flash") atau prefixed ("codebuddy-cn/deepseek-v4-flash")
             conf = config.get((slug, mid))
@@ -637,6 +672,9 @@ def run_cycle(dry_run=False):
             ok_kita = pos.get("provider_ok_kita", 0) if pos else 0
             pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
             levels = pos.get("levels", []) if pos else []          # [(price, qty) asc] — KOMPETITOR MURNI (ask kita sudah dikurangi)
+            dp = _decision_from_levels(our, official, levels, max_in)
+            # competitor_price ke dalam `a` → semua decisions.append({**a, ...}) membawanya
+            a = {**a, "competitor_price": dp["competitor_price"]}
 
 
             # ── FIX (permintaan Faiz): anchor kompetitor TIDAK BOLEH = ask kita sendiri.
@@ -692,10 +730,10 @@ def run_cycle(dry_run=False):
             # Anchor market dapat None saat prefix kompetitor berbeda; jika orderbook
             # punya levels, tetap proses kompetitor sejati. HOLD hanya bila benar-benar
             # tidak ada kompetitor atau kita sudah di bawah anchor valid.
-            if (comp is None and not levels) or (comp is not None and our <= comp + 1e-6):
+            if not levels:
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"leader/no competitor (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}"})
+                                  "reason": f"no orderbook levels (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}"})
                 continue
 
             #

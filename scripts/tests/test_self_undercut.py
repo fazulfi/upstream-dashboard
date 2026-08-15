@@ -100,6 +100,22 @@ class TestGetPositionsSelfUndercut(unittest.TestCase):
         self.assertAlmostEqual(d["our"], d["target"])
         self.assertNotAlmostEqual(d["our"], 0.3206)  # ask lama TIDAK boleh
 
+    def test_orderbook_competitor_below_our_is_not_hold(self):
+        """Decision helper: kompetitor orderbook sejati @0.07 di bawah our 0.14
+        (dg comp /market stale 0.322) HARUS undercut — bukan hold — dan target
+        = 0.07 - (0.1% x official 1.4) = 0.0686."""
+        d = ap._decision_from_levels(our=0.14, official=1.4,
+                                     levels=[(0.07, 1)], max_in=0)
+        self.assertEqual(d["action"], "undercut")
+        self.assertAlmostEqual(d["target"], 0.0686, places=4)
+
+    def test_lowest_competitor_price_comes_from_genuine_orderbook(self):
+        """Harga kompetitor = level orderbook sejati terendah (levels[0][0]);
+        None kalau tidak ada genuine competitor."""
+        levels = [(0.07, 1), (0.322, 1)]
+        self.assertEqual(ap._lowest_competitor_price(levels), 0.07)
+        self.assertIsNone(ap._lowest_competitor_price([]))
+
 
 if __name__ == "__main__":
     unittest.main()
