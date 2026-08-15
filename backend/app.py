@@ -2311,6 +2311,16 @@ def api_auto_pricing_config_put():
         return jsonify({"error": "upstream & model_id required"}), 400
     if trigger_pct <= 0:
         return jsonify({"error": "trigger_pct harus > 0"}), 400
+    # FIX (2026-08-15): normalisasi model_id — strip prefix upstream berulang
+    # (mis. "cline-pass/cline-pass/deepseek-v4-flash" -> "deepseek-v4-flash"),
+    # lalu simpan PREFIXED "upstream/model" (konsisten dgn config lama & lookup
+    # daemon `(slug, mid)` lalu `(slug, f"{slug}/{mid}")`). Cegah duplikat
+    # (bare + prefixed utk upstream yg sama) & config yg tidak kebaca daemon.
+    parts = model_id.split("/")
+    bare = parts[-1] if parts else model_id
+    if not bare:
+        return jsonify({"error": "model_id invalid"}), 400
+    model_id = f"{upstream}/{bare}"
     try:
         with db_connect() as conn, conn.cursor() as cur:
             # keep rebound_pct existing (legacy) — hanya update trigger_pct

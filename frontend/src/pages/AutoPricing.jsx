@@ -44,7 +44,11 @@ export default function AutoPricing() {
   const cfgMap = useMemo(() => {
     const m = {};
     for (const c of cfgData?.configs || []) {
-      m[`${c.upstream}|${c.model_id}`] = c;
+      // FIX (2026-08-15): key bare — strip prefix upstream berulang dari model_id
+      // (mis. "codebuddy/claude-opus-4.6" -> "claude-opus-4.6") supaya cocok dgn
+      // model_id di cycles (codebuddy/cbcn = bare, cline-pass = prefixed).
+      const mid = (c.model_id || '').split('/').pop();
+      m[`${c.upstream}|${mid}`] = c;
     }
     return m;
   }, [cfgData]);
@@ -67,8 +71,15 @@ export default function AutoPricing() {
 
   const saveConfig = async (upstream, model_id) => {
     const key = `${upstream}|${model_id}`;
+    // FIX (2026-08-15): kirim model_id BARE (strip prefix upstream berulang) —
+    // backend normalisasi ke "upstream/model" utk lookup daemon & cegah duplikat.
+    const bare = (model_id || '').split('/').pop();
     const f = form[key] || {};
-    const trigger = parseFloat(f.trigger);
+    // FIX (2026-08-15): kalau user klik Update tanpa mengetik ulang, pakai nilai
+    // yang TAMPAK (config tersimpan / default). Sebelumnya parseFloat(undefined)=NaN
+    // -> error "trigger (NaN) harus > 0" padahal field sudah terisi di layar.
+    const shown = cfgMap[key] ? cfgMap[key].trigger_pct : defaultBand(upstream, bare).trigger;
+    const trigger = f.trigger !== undefined && f.trigger !== '' ? parseFloat(f.trigger) : Number(shown);
     if (!(trigger > 0)) {
       setNote(`Error: trigger (${trigger}) harus > 0`);
       return;
@@ -78,12 +89,12 @@ export default function AutoPricing() {
       const r = await apiFetch('/api/auto-pricing/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ upstream, model_id, trigger_pct: trigger }),
+        body: JSON.stringify({ upstream, model_id: bare, trigger_pct: trigger }),
       });
       const d = await r.json();
       if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
       else {
-        setNote(`✓ ${upstream}/${model_id} → trigger ${trigger}%`);
+        setNote(`✓ ${upstream}/${bare} → trigger ${trigger}%`);
         // clear form state supaya display ikut nilai server (cfgMap ter-refresh)
         setForm(prev => { const n = { ...prev }; delete n[key]; return n; });
         setTimeout(reloadCfg, 300);
