@@ -349,9 +349,12 @@ def db_read_finance():
             if "chatgpt" in n or "chatgpt+" in n or n.startswith("chatgpt"):
                 return "codex"  # OpenAI Codex = ChatGPT
             return None
-        # total qty aset per slug (utk rasio)
+        # total qty aset per slug (utk rasio) — HANYA status active (REV9b fix:
+        # rasio jangan dikecilkan aset retired yg sdh di-exclude di loop bawah)
         asset_qty_by = {}
         for a in assets:
+            if (a.get("status") or "active") != "active":
+                continue
             sl = _slug_of(a.get("upstream") or "")
             if sl:
                 asset_qty_by[sl] = asset_qty_by.get(sl, 0) + int(a.get("qty") or 0)
@@ -1323,6 +1326,8 @@ def _finance_from_ledger(ledger):
         return None
     asset_qty_by = {}
     for a in assets:
+        if (a.get("status") or "active") != "active":
+            continue
         sl = _slug_of_ledger(a.get("upstream") or "")
         if sl:
             asset_qty_by[sl] = asset_qty_by.get(sl, 0) + int(a.get("qty") or 0)
