@@ -609,12 +609,6 @@ def run_cycle(dry_run=False):
             prev = hold.get(hk, {})
             prev_ts = prev.get("ts", 0)
 
-            # ── ANTI-FLICKER (cooldown): setelah kita PUT harga, DIAM dulu.
-            #    Jangan gerak lagi utk model yg sama sebelum COOLDOWN detik. ──
-            if now - prev_ts < cooldown:
-                decisions.append({**a, "action": "cooldown", "target": our, "comp": prev.get("comp"),
-                                  "reason": f"cooldown ({now-prev_ts:.0f}/{cooldown}s) - hold"})
-                continue
 
             # ── BACKOFF (AP-6): kalau PUT kena 429/timeout di cycle lalu, skip
             #    model ini sampai skip_until lewat — tanpa PUT. Reset otomatis. ──
