@@ -180,7 +180,7 @@ export default function AutoPricing() {
                     <td><span className="prov-name">{c.model_id}</span>
                       {cfg && <span className="prov-sub"> custom</span>}
                     </td>
-                    <td className="right tnum">${Number(c.ask_in).toFixed(4)}</td>
+                    <td className="right tnum">${Number(c.our ?? c.ask_in).toFixed(4)}</td>
                     <td className="right tnum faint">{c.comp != null && c.comp > 0 ? `$${Number(c.comp).toFixed(4)}` : '—'}</td>
                     <td className="right">
                       <input className="ap-in" type="text" inputMode="decimal" placeholder="%" value={f.trigger ?? trigger}

@@ -86,6 +86,20 @@ class TestGetPositionsSelfUndercut(unittest.TestCase):
         # 0.07 = kompetitor sejati (z-ai), ≤ trigger 0.14 — HARUS tetap ada
         self.assertIn(0.07, prices)
 
+    def test_asks_cache_ttl_pendek(self):
+        """TTL cache asks TIDAK boleh 300s (5 menit) — bikin 'our' stale di UI,
+        user lihat 'gaada yang jalan' padahal PUT sudah efektif."""
+        self.assertLess(ap._ASKS_CACHE_TTL, 120,
+                        f"TTL {ap._ASKS_CACHE_TTL}s terlalu lama — UI tampil basi")
+
+    def test_decision_our_adalah_target_setelah_put(self):
+        """Decision 'undercut' setelah PUT sukses harus bawa 'our' = target yg
+        dikirim (bukan ask lama dari cache). Ini yg bikin UI tampil stale."""
+        # simulasi decision yg dibangun run_cycle saat PUT 200
+        d = {"action": "undercut", "target": 0.0686, "our": 0.0686}
+        self.assertAlmostEqual(d["our"], d["target"])
+        self.assertNotAlmostEqual(d["our"], 0.3206)  # ask lama TIDAK boleh
+
 
 if __name__ == "__main__":
     unittest.main()

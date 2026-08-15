@@ -247,7 +247,7 @@ def _f(v):
 # (cb 176+ provider) tiap cycle ~700-900 HTTP serial. TTL 90s: cycle kedua+
 # pakai cache → cycle < 60s (interval daemon 60s benar-benar 1 menit).
 _ASKS_CACHE = {}
-_ASKS_CACHE_TTL = 300
+_ASKS_CACHE_TTL = 60   # 2026-08-15: 300s membuat our/state UI stale 5 menit
 _PROVIDERS_CACHE = {"ts": 0, "data": []}
 _PROVIDERS_TTL = 60
 
@@ -742,7 +742,7 @@ def run_cycle(dry_run=False):
                     continue
                 if effective_dry:
                     log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> resume non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
-                    decisions.append({**a, "action": "resume", "target": target, "comp": comp,
+                    decisions.append({**a, "action": "resume", "target": target, "our": target, "comp": comp,
                                       "reason": f"resume 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} (kompetitor wajar di atas kita, level kita kosong) | posisi komp {pos_komp}"})
                     continue
                 st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
@@ -798,7 +798,7 @@ def run_cycle(dry_run=False):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 # AP-6: sukses → reset backoff (buang skip_until)
                 hold[hk].pop("skip_until", None)
-                decisions.append({**a, "action": action, "target": target, "comp": comp,
+                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
                                   "reason": f"{action} 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
             elif st in (429, 0):
                 # AP-6: 429/timeout → backoff: skip model ini selama BACKOFF detik
