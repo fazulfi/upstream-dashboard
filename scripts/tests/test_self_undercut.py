@@ -70,6 +70,22 @@ class TestGetPositionsSelfUndercut(unittest.TestCase):
         self.assertNotIn(("commandcode", "deepseek-v4-flash"), out)
         self.assertIn(("rival", "deepseek-v4-flash"), out)
 
+    def test_kompetitor_di_bawah_trigger_tetap_di_levels(self):
+        """Kompetitor sejati yang harganya ≤ trigger_px TETAP harus ada di levels
+        (agar daemon undercut — user: "auto-pricing gak jalan" krn z-ai @0.07 ≤
+        trigger 0.14 diabaikan). get_positions TIDAK boleh filter level by trigger."""
+        provs = [{"upstreamSlug": "codebuddy", "enabled": True}]
+        catalog = {
+            "codebuddy": {"glm-5.2": {"asksIn": [0.3206], "officialIn": 1.4}},
+            "z-ai": {"glm-5.2": {"asksIn": [0.07], "officialIn": 1.4}},
+        }
+        ap._PROVIDERS_CACHE["ts"] = time.time() + 1000
+        ap._PROVIDERS_CACHE["data"] = provs
+        pos = ap.get_positions(catalog, our_price={("codebuddy", "glm-5.2"): 0.3206})
+        prices = [p for p, q in pos[("codebuddy", "glm-5.2")]["levels"]]
+        # 0.07 = kompetitor sejati (z-ai), ≤ trigger 0.14 — HARUS tetap ada
+        self.assertIn(0.07, prices)
+
 
 if __name__ == "__main__":
     unittest.main()

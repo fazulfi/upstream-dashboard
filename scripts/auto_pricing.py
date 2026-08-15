@@ -705,16 +705,16 @@ def run_cycle(dry_run=False):
                                   "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
                 continue
 
-            # ── Kompetitor di DALAM batas (≤ trigger) TIDAK jadi target undercut.
-            # TAPI jangan langsung hold: tetap cek level orderbook NON-TRIGGER di bawah.
-            # Kalau ada kompetitor wajar (> trigger) yang lebih murah dari kita,
-            # kita undias level itu. (Anchor minAskIn di trigger ≠ tidak ada target wajar.)
-
-            # cari level orderbook NON-TRIGGER terendah (harga wajar paling murah)
-            # kompetitor di range trigger diabaikan — fokus di range non-trigger.
+            # ── FIX (2026-08-15, user: "auto-pricing gak jalan"): kompetitor SEJATI
+            # (dari levels — sudah exclude ask kita) HARUS diundercut APAPUN harganya,
+            # termasuk yang ≤ trigger_px. Sebelumnya filter `p > trigger_px` membuat
+            # daemon DIAM saat kompetitor murah (mis. z-ai glm-5.2 @ $0.07 ≤ trigger
+            # $0.14) — keliatan "gak jalan". Trigger hanya berlaku utk posisi/leader,
+            # BUKAN utk memfilter kompetitor sejati.
+            #
+            # cari level kompetitor SEJATI terendah (semua harga, bukan cuma > trigger)
             # PENTING: exclude harga kita sendiri (our) — jangan undercut diri sendiri.
-            # cari level orderbook NON-TRIGGER (kompetitor wajar, > trigger_px, bukan kita)
-            nontrig_prices = [p for p, _q in levels if p > trigger_px and abs(p - our) > 1e-6]
+            nontrig_prices = [p for p, _q in levels if abs(p - our) > 1e-6]
             # REV5: RESUME — kalau kompetitor wajar CUMAN di ATAS kita (kita yang
             # termurah di range wajar) DAN di level harga kita TIDAK ada kompetitor
             # lain (qty di level our sudah 0 setelah ask kita dikurangi), naik jemput
@@ -768,11 +768,11 @@ def run_cycle(dry_run=False):
                                   "reason": f"komp ${comp:.4f} di trigger ${trigger_px:.4f}; tdk ada level non-trigger kompetitor utk diundercut, hold di ${our:.4f} | posisi komp {pos_komp}"})
                 continue
 
-            # acuan = level NON-TRIGGER terendah di orderbook
+            # acuan = level kompetitor SEJATI terendah di orderbook
             ref_price = nontrig_prices[0]
             target = round(ref_price - offset, 6)
-            # jangan pernah masuk ke range trigger
-            target = max(target, trigger_px)
+            # FIX (2026-08-15): TIDAK clamp ke trigger_px lagi — boleh undercut ke
+            # bawah trigger kalau kompetitor sejati di sana (user: "gak jalan").
             # jangan melebihi max slot harga (max_in)
             if max_in > 0:
                 target = min(target, max_in)
