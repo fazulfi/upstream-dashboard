@@ -36,11 +36,19 @@ function authHeaders(extra = {}) {
   return extra;
 }
 
-/**
- * apiFetch — fetch ke backend dengan auth (Bearer token sesi > X-Auth) & prefix API.
- * Pakai ini untuk SEMUA request manual (POST/PUT/DELETE) di halaman.
- */
+const FOCUSED_API_PREFIX = '/api/auto-pricing';
+
+// Hemat kuota: selama dashboard difokuskan ke Auto Pricing, hanya endpoint
+// auto-pricing yang boleh membuat request. Route halaman lain tetap tersedia,
+// tetapi tidak mengambil data sampai scope ini diubah.
+export function isApiEnabled(path) {
+  return path === FOCUSED_API_PREFIX || path.startsWith(`${FOCUSED_API_PREFIX}/`);
+}
+
 export async function apiFetch(path, options = {}) {
+  if (!isApiEnabled(path)) {
+    throw new Error('API scope aktif: hanya Auto Pricing yang diizinkan');
+  }
   const headers = authHeaders({ ...(options.headers || {}) });
   const url = path.startsWith('/api/') ? `${API}${path}` : path;
   return fetch(url, { ...options, headers });
@@ -58,6 +66,12 @@ export function useApi(path, pollMs = 0) {
   const ac = useRef(null);
 
   const load = useCallback(async () => {
+    if (!isApiEnabled(path)) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     if (ac.current) ac.current.abort();
     const controller = new AbortController();
     ac.current = controller;

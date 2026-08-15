@@ -21,3 +21,13 @@ describe('useApi format helpers', () => {
     expect(usdIdr(5, null)).toBe('$5.00')
   })
 })
+
+describe('API scope gate', () => {
+  it('allows only auto-pricing endpoints while focused mode is active', async () => {
+    const { isApiEnabled } = await import('./useApi.jsx')
+    expect(isApiEnabled('/api/auto-pricing')).toBe(true)
+    expect(isApiEnabled('/api/auto-pricing/config')).toBe(true)
+    expect(isApiEnabled('/api/data')).toBe(false)
+    expect(isApiEnabled('/api/market')).toBe(false)
+  })
+})
