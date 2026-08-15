@@ -609,13 +609,10 @@ def run_cycle(dry_run=False):
             prev = hold.get(hk, {})
             prev_ts = prev.get("ts", 0)
 
-
-            # ── BACKOFF (AP-6): kalau PUT kena 429/timeout di cycle lalu, skip
-            #    model ini sampai skip_until lewat — tanpa PUT. Reset otomatis. ──
+            # BACKOFF hanya untuk 429/timeout API; bukan cooldown harga.
             skip_until = prev.get("skip_until", 0)
             if now < skip_until:
                 remain = int(skip_until - now)
-                # R16a: comp belum di-assign di branch ini (di-assign L500) — pakai prev
                 decisions.append({**a, "action": "backoff", "target": our, "comp": prev.get("comp", 0),
                                   "reason": f"backoff ({remain}s tersisa, 429/timeout sblmnya) - skip PUT"})
                 continue
@@ -692,19 +689,15 @@ def run_cycle(dry_run=False):
             #   Kalau kita lebih murah dari semua kompetitor wajar → DIAM (leader).
             #   Kalau tidak ada kompetitor wajar sama sekali → DIAM di harga kita.
 
-            # kalau kita SUDAH lebih murah / setara kompetitor (our <= comp) → DIAM.
-            if comp is None or our <= comp + 1e-6:
+            # Anchor market dapat None saat prefix kompetitor berbeda; jika orderbook
+            # punya levels, tetap proses kompetitor sejati. HOLD hanya bila benar-benar
+            # tidak ada kompetitor atau kita sudah di bawah anchor valid.
+            if (comp is None and not levels) or (comp is not None and our <= comp + 1e-6):
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"kita ≤ kompetitor (our ${our:.4f} ≤ comp ${comp or 0:.4f}) - diam/leader | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
+                                  "reason": f"leader/no competitor (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}"})
                 continue
 
-            # ── FIX (2026-08-15, user: "auto-pricing gak jalan"): kompetitor SEJATI
-            # (dari levels — sudah exclude ask kita) HARUS diundercut APAPUN harganya,
-            # termasuk yang ≤ trigger_px. Sebelumnya filter `p > trigger_px` membuat
-            # daemon DIAM saat kompetitor murah (mis. z-ai glm-5.2 @ $0.07 ≤ trigger
-            # $0.14) — keliatan "gak jalan". Trigger hanya berlaku utk posisi/leader,
-            # BUKAN utk memfilter kompetitor sejati.
             #
             # cari level kompetitor SEJATI terendah (semua harga, bukan cuma > trigger)
             # PENTING: exclude harga kita sendiri (our) — jangan undercut diri sendiri.
