@@ -70,10 +70,9 @@ export default function AutoPricing() {
   };
 
   const saveConfig = async (upstream, model_id) => {
-    const key = `${upstream}|${model_id}`;
-    // FIX (2026-08-15): kirim model_id BARE (strip prefix upstream berulang) —
-    // backend normalisasi ke "upstream/model" utk lookup daemon & cegah duplikat.
+    // FIX (2026-08-15): key & model_id BARE — konsisten dgn cfgMap & backend.
     const bare = (model_id || '').split('/').pop();
+    const key = `${upstream}|${bare}`;
     const f = form[key] || {};
     // FIX (2026-08-15): kalau user klik Update tanpa mengetik ulang, pakai nilai
     // yang TAMPAK (config tersimpan / default). Sebelumnya parseFloat(undefined)=NaN
@@ -159,7 +158,9 @@ export default function AutoPricing() {
             </tr></thead>
             <tbody>
               {rows.map((c, i) => {
-                const key = `${c.slug}|${c.model_id}`;
+                // FIX (2026-08-15): key bare — konsisten dgn cfgMap (strip prefix
+                // upstream berulang) supaya config custom terdeteksi utk cline-pass.
+                const key = `${c.slug}|${(c.model_id || '').split('/').pop()}`;
                 const cfg = cfgMap[key];
                 const dflt = defaultBand(c.slug, c.model_id);
                 const trigger = cfg ? cfg.trigger_pct : dflt.trigger;
