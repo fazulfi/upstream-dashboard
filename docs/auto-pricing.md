@@ -39,6 +39,31 @@ per model per cycle:
   terus agar tetap termurah di range non-trigger. Ini perilaku benar, bukan bug.
 - **REBOUND DIHAPUS** (v2). Tidak ada self-correct-up, tidak ada floor terpisah.
 
+### 1a. Empat field harga — jangan tertukar (cara baca dashboard & state)
+
+Setiap keputusan cycle di `auto-pricing-state.json` (dan dashboard Auto Pricing) kini
+membawa dua harga kompetitor yang BERBEDA:
+
+| Field | Sumber | Arti | Dipakai dashboard? |
+|---|---|---|---|
+| `comp` | `/market` `minAskIn` | **Anchor diagnostik** — harga terendah dari market view (bisa menyertakan ask kita sendiri / stale) | **TIDAK** — hanya debug/diagnosis |
+| `competitor_price` | orderbook `/catalog` (level genuine terendah, `_lowest_competitor_price`) | **Harga kompetitor sejati** (slug bukan milik publisher) terendah di orderbook | **YA** — kolom "Kompetitor" |
+| `target` | `competitor_price − (official × 0.001)` | Harga PUT yang dikejar daemon | YA — kolom "Target" |
+| `our`/`ask_in` | ask kita sendiri | Harga kita saat ini | YA — kolom "Ask skrg" |
+
+**Aturan pakai (kontrak, jangan diregressi):**
+1. Dashboard **WAJIB** menampilkan `competitor_price`, BUKAN `comp`. Contoh live
+   codebuddy/glm-5.2: `comp = 0.322` (anchor `/market`) sedangkan `competitor_price
+   = 0.07` (z-ai @ $0.0700 di orderbook) — menampilkan `comp` memberi angka
+   salah/tidak relevan. Kolom kompetitor menampilkan `—` hanya saat
+   `competitor_price` null/≤0 (tidak ada kompetitor sejati).
+2. **Target tetap dihitung dari orderbook genuine**: `competitor_price − (official
+   × 0.001)`, dibulatkan 6 desimal. Formula tidak berubah dengan kehadiran `comp`.
+3. **Orderbook scan TIDAK boleh di-short-circuit oleh `comp`** (REV10d): `comp`
+   hanyalah anchor diagnostik `/market` yang bisa kosong/stale/berisi ask kita
+   sendiri. Selama `levels` orderbook mengandung kompetitor sejati, cycle WAJIB
+   tetap memprosesnya (HOLD hanya saat `competitor_price` None).
+
 ---
 
 ## 2. Sumber Config — DB adalah SATU-SATUNYA sumber (C6)

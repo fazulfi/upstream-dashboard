@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApi, apiFetch } from '../hooks/useApi';
 import { SkeletonBlock } from '../components/Skeleton';
+import { fmtCompetitorPrice } from '../lib/fmt';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -181,7 +182,7 @@ export default function AutoPricing() {
                       {cfg && <span className="prov-sub"> custom</span>}
                     </td>
                     <td className="right tnum">${Number(c.our ?? c.ask_in).toFixed(4)}</td>
-                    <td className="right tnum faint">{c.comp != null && c.comp > 0 ? `$${Number(c.comp).toFixed(4)}` : '—'}</td>
+                    <td className="right tnum faint">{fmtCompetitorPrice(c.competitor_price)}</td>
                     <td className="right">
                       <input className="ap-in" type="text" inputMode="decimal" placeholder="%" value={f.trigger ?? trigger}
                         onChange={e => setForm({ ...form, [key]: { ...f, trigger: e.target.value } })} />

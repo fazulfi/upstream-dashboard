@@ -11,6 +11,18 @@ export function fmtUsdMicro(v) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 });
 }
 
+// Format harga kompetitor SEJATI untuk kolom Kompetitor di Auto Pricing.
+// Konsumen WAJIB memakai competitor_price (level orderbook genuine terendah,
+// backend scripts/auto_pricing.py `_lowest_competitor_price`), BUKAN comp
+// (anchor /market diagnostic — nilainya bisa beda: comp=0.322 vs
+// competitor_price=0.07 di live codebuddy/glm-5.2).
+// Aturan display: > 0 -> "$X.XXXX" (4 desimal); null/undefined/<=0/invalid -> "—".
+export function fmtCompetitorPrice(v) {
+  const n = Number(v == null ? 0 : v);
+  if (!isFinite(n) || n <= 0) return '—';
+  return '$' + n.toFixed(4);
+}
+
 // Format timestamp ISO (backend kirim ts UTC, e.g. 2026-08-14T05:50:00Z).
 // Rev2 fix: KONVERSI ke zona waktu LOKAL user (bukan tampil UTC mentah) —
 // user Indonesia melihat jam WIB (UTC+7), "just now" harus sesuai jam lokal.

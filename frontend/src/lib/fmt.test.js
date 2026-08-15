@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtUsdMicro, fmtTs } from './fmt';
+import { fmtUsdMicro, fmtTs, fmtCompetitorPrice } from './fmt';
 
 describe('fmtUsdMicro — presisi mikro per-request (RC1 fix)', () => {
   it('nilai >= $1 -> 2 desimal', () => {
@@ -39,5 +39,31 @@ describe('fmtTs — format waktu relatif (zona LOKAL user)', () => {
   it('kosong -> em dash', () => {
     expect(fmtTs(null)).toBe('—');
     expect(fmtTs('')).toBe('—');
+  });
+});
+
+describe('fmtCompetitorPrice — kolom Kompetitor (genuine orderbook price)', () => {
+  // Kontrak display: kompetitor sejati TERENDAH dari orderbook (competitor_price),
+  // BUKAN anchor /market (comp) — live state codebuddy/glm-5.2: comp=0.322,
+  // competitor_price=0.07 (z-ai @ $0.07). Kalau helper diberi comp, hasilnya
+  // $0.3220 ≠ $0.0700 → test ini BUKTIKAN field lama tidak memenuhi kontrak.
+  it('live state: competitor_price 0.07 tampil $0.0700 (bukan comp 0.322)', () => {
+    const live = { comp: 0.322, competitor_price: 0.07 };
+    expect(fmtCompetitorPrice(live.competitor_price)).toBe('$0.0700');
+    expect(fmtCompetitorPrice(live.competitor_price)).not.toBe(
+      fmtCompetitorPrice(live.comp)
+    );
+  });
+  it('harga kompetitor valid -> 4 desimal', () => {
+    expect(fmtCompetitorPrice(0.322)).toBe('$0.3220');
+    expect(fmtCompetitorPrice(0.01358)).toBe('$0.0136');
+    expect(fmtCompetitorPrice(1.4)).toBe('$1.4000');
+  });
+  it('null / <= 0 / invalid -> em dash', () => {
+    expect(fmtCompetitorPrice(null)).toBe('—');
+    expect(fmtCompetitorPrice(undefined)).toBe('—');
+    expect(fmtCompetitorPrice(0)).toBe('—');
+    expect(fmtCompetitorPrice(-0.001)).toBe('—');
+    expect(fmtCompetitorPrice(NaN)).toBe('—');
   });
 });
