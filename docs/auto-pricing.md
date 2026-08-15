@@ -250,3 +250,27 @@ setelah fix: 0 undercut / 36 hold  (14:31+, 5 cycle konsisten)
 - `deepseek-v4-flash`: `posisi_komp=0`, `levels=[]` — TIDAK ada kompetitor sejati → hold (sebelumnya 17 level ask kita dikejar).
 - **TIDAK ada regresi**: 8 model scope dgn kompetitor sejati (claude-code/z-ai/siliconflow) tetap hold karena **kita termurah** (`our <= comp_low` semua, REGRESI=0).
 - Test TDD 4/4 PASS di lokal & VPS (`scripts/tests/test_self_undercut.py`).
+
+---
+
+## REV10b (2026-08-15) — FIX: "gabisa set manual" trigger%
+
+**Keluhan user:** klik Update di halaman Auto-Pricing → error "trigger (NaN) harus > 0" padahal field sudah terisi.
+
+**Root cause (reproduce di browser nyata):**
+1. `saveConfig` pakai `parseFloat(f.trigger)` — kalau user klik Update TANPA mengetik ulang (field sudah menampilkan nilai), `form[key]` undefined → `parseFloat(undefined)` = **NaN** → error. Tombol Update tidak bisa dipakai tanpa edit ulang.
+2. `model_id` tidak konsisten: cycles cline-pass = prefixed (`cline-pass/deepseek-v4-flash`), codebuddy = bare (`glm-5.2`); config DB campur bare/prefixed/double-prefixed → duplikat config & display salah.
+
+**Fix (commit `4f94458` + `d4fe469`):**
+1. **Frontend `saveConfig`**: fallback ke nilai yang TAMPAK (`cfgMap[key]` / default) saat `form[key]` kosong — Update tanpa edit sekarang simpan nilai tampil.
+2. **Normalisasi key**: `cfgMap`, `form`, `saveConfig` semua pakai **bare model_id** (`split('/').pop()`) — konsisten antar cline-pass/codebuddy/cbcn.
+3. **Backend PUT**: normalisasi `model_id` → selalu simpan **prefixed `upstream/model`** (strip prefix berulang) — cegah duplikat & config tak terbaca daemon.
+4. **Konsolidasi DB**: hapus 22 config duplikat (bare+prefixed), konversi sisa bare → prefixed. Sekarang 37 config, 0 duplikat.
+
+**Verifikasi (browser nyata + API + daemon):**
+```
+Update tanpa edit -> ✓ cline-pass/deepseek-v4-flash -> trigger 2%  (sebelumnya NaN error)
+Edit 8 lalu Update -> ✓ cline-pass/deepseek-v4-flash -> trigger 8%
+DB: id 51 trigger_pct=8.0 (no duplikat)
+Daemon load_config: {'trigger_pct': 8.0} -> dipakai cycle berikutnya
+```
