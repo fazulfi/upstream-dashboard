@@ -293,3 +293,13 @@ sebelum: 0 undercut, 36 hold (daemon diam 30+ menit)
 sesudah: 4 undercut — glm-5.2/glm-5.3/claude-opus-5 turun ke $0.0686 (kejar z-ai @0.07) [OK]
 ```
 Trigger % tetap berfungsi utk config per model — hanya tidak lagi memfilter kompetitor sejati.
+ 
+---
+
+## REV10d (2026-08-15) — FIX: orderbook tetap diproses saat market anchor kosong
+
+**Root cause:** `/market` tidak selalu mengembalikan anchor untuk prefix model yang sama (`z-ai`/`ocg` vs slug publisher). Gate lama `if comp is None: HOLD` menghentikan cycle sebelum membaca `levels` orderbook. Akibatnya kompetitor nyata tetap ada di orderbook tetapi tidak pernah di-undercut.
+
+**Fix (`b85830e`):** HOLD hanya jika `comp` kosong **dan** tidak ada `levels`; bila `levels` berisi kompetitor sejati, daemon lanjut menghitung target `kompetitor - (0.1% × official)`.
+
+Cooldown harga juga dihapus (`4e30323`); backoff hanya tetap aktif setelah HTTP 429/timeout.
