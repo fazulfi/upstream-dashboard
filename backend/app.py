@@ -323,7 +323,7 @@ def db_read_finance():
             cur.execute("SELECT id, upstream, qty, label, buy, lifespan_d, cost_per, curr, status, kurs_idr_usd FROM assets")
             assets = cur.fetchall()
             # provider OK per slug — utk sinkron qty aset aktif (REV9: akun mati jgn dihitung)
-            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' AND NOT drained GROUP BY upstream_slug")
+            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
             prov_ok = {r["upstream_slug"]: r["n"] for r in cur.fetchall()}
             cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments")
             impairments = cur.fetchall()
@@ -1305,7 +1305,7 @@ def _finance_from_ledger(ledger):
     # REV9: qty efektif x rasio provider ok (sama dgn db_read_finance)
     try:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' AND NOT drained GROUP BY upstream_slug")
+            cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
             prov_ok = {r["upstream_slug"]: r["n"] for r in cur.fetchall()}
     except Exception:
         prov_ok = {}
