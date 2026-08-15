@@ -320,6 +320,14 @@ def _get_providers_cached():
         _PROVIDERS_CACHE["data"] = provs
         return provs
     return _PROVIDERS_CACHE["data"] or []  # fallback data lama
+def get_my_slugs(provs=None):
+    """Semua upstreamSlug milik kita (satu publisher) — dari providers enabled.
+    Dipakai utk exclude ask kita lintas-upstream dari orderbook & market anchor.
+    Self-undercut fix (2026-08-15): 6 upstream (codebuddy, cline-pass, codebuddy-cn,
+    codex, commandcode, opencode-go) = satu publisher — ask mereka semua adalah ask KITA."""
+    if provs is None:
+        provs = _get_providers_cached()
+    return {p.get("upstreamSlug") for p in provs if p.get("enabled") and p.get("upstreamSlug")}
 
 
 def get_asks_enabled(upstream, use_cache=True):
@@ -404,39 +412,50 @@ def set_ask(slug, cid, ask_in, ask_out, official=0):
     return api(f"/publisher/upstreams/{slug}/asks/{cid}", method="PUT", payload=payload)
 
 
+def _market_min_from_models(models):
+    """Terjemahkan /market models -> {(slug, model): minAskIn}, EXCLUDE slug milik kita.
+    Prefix petakan: cb->codebuddy, cp->cline-pass, cbcn->codebuddy-cn, dst.
+    Self-undercut fix (2026-08-15): slug yang milik kita (satu publisher) TIDAK boleh
+    jadi anchor — kalau kita yang termurah di market, minAskIn = ask kita sendiri.
+    Slug yang BUKAN milik kita (kompetitor sejati) tetap di-anchor."""
+    my = get_my_slugs()
+    prefix_map = {"cb": "codebuddy", "cp": "cline-pass", "cbcn": "codebuddy-cn"}
+    out = {}
+    for m in (models or []):
+        slug_full = m.get("slug") or ""
+        min_in = m.get("minAskIn")
+        if not slug_full or not min_in:
+            continue
+        # slug = "<prefix>/<model>"; prefix seperti cb, cp, cbcn, cx, zai.
+        parts = slug_full.split("/")
+        if len(parts) < 2:
+            continue
+        model = parts[-1]
+        pc = parts[0]
+        # petakan prefix -> slug scope; fallback: prefix itu sendiri
+        slug = prefix_map.get(pc) or pc
+        if slug in my:
+            continue  # ask kita sendiri — jangan jadi anchor
+        out[(slug, model)] = min_in
+    return out
+
+
 def get_market_min(use_cache=True):
-    """Anchor kompetitor dari /market — minAskIn per (table-prefix/model). Kembalikan dict {(slug, model_id): minAskIn}.
-    Prefix diterjemahkan utk cocokkan dgn slug scope. Cache TTL 120s (rate limit)."""
+    """Anchor kompetitor dari /market — minAskIn per (table-prefix/model).
+    EXCLUDE upstream milik kita (satu publisher) — anchor TIDAK pernah ask sendiri.
+    Cache TTL 120s (rate limit)."""
     if use_cache and time.time() - _MARKET_CACHE["ts"] < _ANCHOR_TTL:
         return _MARKET_CACHE["data"]
     try:
         st, d = api("/market")
         if st != 200 or not isinstance(d, dict):
             return _MARKET_CACHE["data"] if _MARKET_CACHE["data"] else {}
-        out = {}
-        for m in (d.get("models") or []):
-            slug_full = m.get("slug") or ""
-            min_in = m.get("minAskIn")
-            if not slug_full or not min_in:
-                continue
-            # slug = "<prefix>/<model>"; prefix seperti cb, cp, cbcn, cx, zai. model akhir dipakai.
-            parts = slug_full.split("/")
-            if len(parts) < 2:
-                continue
-            model = parts[-1]
-            pc = parts[0]
-            # petakan prefix -> slug scope kita
-            slug = {"cb": "codebuddy", "cp": "cline-pass", "cbcn": "codebuddy-cn"}.get(pc)
-            if not slug:
-                continue
-            out[(slug, model)] = min_in
+        out = _market_min_from_models(d.get("models") or [])
         _MARKET_CACHE["ts"] = time.time()
         _MARKET_CACHE["data"] = out
         return out
     except Exception:
         return _MARKET_CACHE["data"] if _MARKET_CACHE["data"] else {}
-
-
 def get_positions(catalog, our_price=None):
     """POSISI KOMPETITOR per model (Faiz v2 — wajib tiap cycle).
 
@@ -455,25 +474,34 @@ def get_positions(catalog, our_price=None):
         turun saat kita benar2 termurah (level ask kita dikurangi dari orderbook).
         Kompetitor NYATA di bawah kita tetap di orderbook → tetap diundercut.
 
+    SELF-UNDERCUT FIX (2026-08-15): SEMUA upstreamSlug milik kita (satu publisher)
+    = ask KITA, bukan kompetitor. Orderbook per model digabung dari SEMUA slug di
+    catalog, lalu ask dari slug milik kita di-EXCLUDE total (lintas-upstream).
+    Kompetitor sejati = hanya slug yang BUKAN milik kita.
+
     Return {(slug, model_id): {"total_provider", "provider_ok_kita",
                                 "posisi_kompetitor", "levels"}}
-    levels = sorted list of (price, qty) — kompetitor MURNI.
+    levels = sorted list of (price, qty) — kompetitor MURNI (ask kita semua slug dihapus).
     """
+    provs = []
     try:
         provs = _get_providers_cached()
-        ok_kita = {}
-        if provs:
-            for p in provs:
-                if p.get("enabled") and p.get("upstreamSlug"):
-                    s = p.get("upstreamSlug")
-                    ok_kita[s] = ok_kita.get(s, 0) + 1
     except Exception:
         pass
+    try:
+        my_slugs = get_my_slugs(provs)
+    except Exception:
+        my_slugs = set()
+    ok_kita = {}
+    if provs:
+        for p in provs:
+            if p.get("enabled") and p.get("upstreamSlug"):
+                s = p.get("upstreamSlug")
+                ok_kita[s] = ok_kita.get(s, 0) + 1
 
-    out = {}
-    # catalog struktur sebenarnya: dict keyed by slug -> dict keyed by model -> {asksIn, officialIn}
-    # model key bisa bare ("deepseek-v4-flash") atau prefixed ("cline-pass/deepseek-v4-flash").
-    # normalize ke bare model_id (strip sampai-akhir '/') supaya cocok dgn asks model_id.
+    # kumpulkan orderbook GLOBAL per model: {mid: {price: [slug,...]}}
+    # gabungkan ask dari SEMUA slug (kita + kompetitor) utk model yang sama.
+    book = {}
     items_by_slug = catalog.items() if isinstance(catalog, dict) else []
     for slug, sub in items_by_slug:
         if not isinstance(sub, dict):
@@ -481,56 +509,40 @@ def get_positions(catalog, our_price=None):
         for mk, m in sub.items():
             if not isinstance(m, dict):
                 continue
-            asks = m.get("asksIn") or []
-            cnt = {}
-            for price in asks:
+            mid = mk.split("/")[-1].strip().lower()
+            book.setdefault(mid, {})
+            for price in (m.get("asksIn") or []):
                 try:
                     p = round(float(price), 6)
                 except (TypeError, ValueError):
                     continue
                 if p > 0:
-                    cnt[p] = cnt.get(p, 0) + 1
-            total = sum(cnt.values())
-            ok = ok_kita.get(slug, 0)
-            mid = mk.split("/")[-1].strip().lower()
+                    book[mid].setdefault(p, []).append(slug)
 
-            # ── FIX (permintaan Faiz): scan orderbook, KURANGI ask kita sendiri
-            # di LEVEL HARGA KITA (our_price) — bukan dari level terendah.
-            # Kalau ask kita di 0.61 dan ada kompetitor 0.605, kita kurangi qty
-            # di 0.61 (ask kita) sehingga 0.605 tetap jadi kompetitor murni.
-            # Tanpa ini, ask kita sendiri dianggap kompetitor → "mengejar diri
-            # sendiri" → turun terus walau sudah termurah.
-            our_level = None
-            if our_price:
-                op = our_price.get((slug, mid))
-                if op is None:
-                    op = our_price.get((slug, f"{slug}/{mid}"))
-                if op:
-                    our_level = round(float(op), 6)
-            # REV5 FIX: kita publish 1 ask per model (sample provider dari
-            # get_asks_enabled) — BUKAN ok (jumlah provider upstream, bisa 40+).
-            # remaining=ok salah: kurangi 40 dari orderbook yg cuma 6 ask →
-            # semua level habis → levels kosong → resume mati ("nggak balik").
-            remaining = 1
+    out = {}
+    for slug, sub in items_by_slug:
+        if not isinstance(sub, dict):
+            continue
+        for mk, m in sub.items():
+            if not isinstance(m, dict):
+                continue
+            mid = mk.split("/")[-1].strip().lower()
+            levels = book.get(mid, {})
+            total = sum(len(v) for v in levels.values())
+            ok = ok_kita.get(slug, 0)
+            # kompetitor MURNI: level yang ada ask dari slug BUKAN milik kita.
+            # qty = jumlah ask NON-kita di level itu (ask kita di-exclude total).
             comp_levels = []
-            for p, q in sorted(cnt.items()):
-                # kurangi ask kita (1) di level harga kita dulu
-                if our_level is not None and abs(p - our_level) <= 1e-6 and remaining > 0:
-                    take = min(q, remaining)
-                    q_after = q - take
-                    remaining -= take
-                else:
-                    q_after = q
-                if q_after > 0:
-                    comp_levels.append((p, q_after))
-            # kalau ask kita tidak ada di orderbook (our_level tak match level mana pun),
-            # jangan kurangi level kompetitor lain — ask kita bukan di orderbook itu.
-            # levels = cnt penuh (kompetitor murni semua).
+            for p in sorted(levels):
+                owners = levels[p]
+                if any(s not in my_slugs for s in owners):
+                    q_comp = sum(1 for s in owners if s not in my_slugs)
+                    comp_levels.append((p, q_comp))
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
-                "posisi_kompetitor": max(total - ok, 0),
-                # levels = orderbook KOMPETITOR murni (ask kita sudah dikurangi)
+                "posisi_kompetitor": sum(q for _p, q in comp_levels),
+                # levels = orderbook KOMPETITOR murni (ask kita semua slug dihapus)
                 "levels": comp_levels,
             }
     return out
