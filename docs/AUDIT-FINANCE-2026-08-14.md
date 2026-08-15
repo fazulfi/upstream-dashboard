@@ -115,3 +115,15 @@ SESUDAH (REV9b):  total_capital = $72.11 (qty x rasio provider ok)  ✓ match ma
 Rasio: cline-pass 1.0 · codebuddy 0.593 (321/541) · codebuddy-cn 0.193 (36/178)
        commandcode 0.833 · codex(chatgpt) 0.0 (9 drained + 20 invalid, 0 aktif)
 ```
+
+## REV9c — Fix rasio active-only (akurasi CB/CBCN)
+
+**Bug REV9b**: rasio dihitung atas SEMUA aset (termasuk retired A-025 140, A-039 20, A-023 60) → double-count: retired mengecilkan rasio DAN di-exclude. CB ratio 0.59, CBCN 0.193, total $71.
+
+**Fix (`872d968`)**: rasio hanya dari aset `status='active'`. Hasil:
+```
+CB   active qty 381, provider ok 319 → ratio 0.837
+CBCN active qty 127, provider ok 33  → ratio 0.26
+commandcode 0.833 · cline-pass 1.0 · codex 0.0 (semua drained/invalid)
+TOTAL CAPITAL = $87.79  (verified manual match tepat)
+```
