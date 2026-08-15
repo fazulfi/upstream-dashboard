@@ -274,3 +274,22 @@ Edit 8 lalu Update -> ✓ cline-pass/deepseek-v4-flash -> trigger 8%
 DB: id 51 trigger_pct=8.0 (no duplikat)
 Daemon load_config: {'trigger_pct': 8.0} -> dipakai cycle berikutnya
 ```
+
+---
+
+## REV10c (2026-08-15) — FIX: "auto-pricing gak jalan" (daemon diam saat kompetitor murah)
+
+**Keluhan user:** auto-pricing gak jalan — harga tidak turun walau ada kompetitor murah.
+
+**Root cause:** filter `nontrig_prices = [p for p in levels if p > trigger_px]` — kompetitor sejati yang harganya ≤ trigger (mis. z-ai glm-5.2 @ $0.07 ≤ trigger $0.14) diabaikan → daemon HOLD diam padahal kompetitor di bawah. Terlihat "gak jalan".
+
+**Fix (commit `58c3388`):**
+1. `nontrig_prices` → semua level kompetitor SEJATI (hapus filter `p > trigger_px`) — kompetitor sejati APAPUN harganya diundercut.
+2. Hapus clamp `target = max(target, trigger_px)` — boleh turun ke bawah trigger.
+
+**Hasil live (cycle pertama setelah restart):**
+```
+sebelum: 0 undercut, 36 hold (daemon diam 30+ menit)
+sesudah: 4 undercut — glm-5.2/glm-5.3/claude-opus-5 turun ke $0.0686 (kejar z-ai @0.07) [OK]
+```
+Trigger % tetap berfungsi utk config per model — hanya tidak lagi memfilter kompetitor sejati.
