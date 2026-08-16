@@ -13,26 +13,22 @@
 ```
 per model per cycle:
 
-  ANCHOR KOMPETITOR  comp = /market minAskIn (kompetitor sejati, BUKAN catalog kita)
-  TRIGGER            trigger_px = official x trigger_pct   (batas "harga tidak wajar")
+  TRIGGER            trigger_px = official x trigger_pct   (floor harga jual)
   OFFSET             offset = official x 0.1%              (gap undercut/resume)
 
   ALUR:
-  1. our <= comp              -> HOLD leader   (kita sudah termurah, DIAM)
-  2. cek orderbook kompetitor MURNI (ask kita SUDAH dikurangi di level harga kita):
-       nontrig_prices = [p di orderbook jika p > trigger_px DAN p != harga kita]
-  3. tidak ada nontrig      -> HOLD (tidak ada kompetitor wajar utk dikejar)
-  4. ref = nontrig terendah
-     target = ref - offset, clamp [trigger_px, max_in]
-  5. target ~= our           -> HOLD (sudah di target)
-  6. target < our            -> UNDERCUT (turun 0.1%xofficial di bawah kompetitor)
-  7. target > our            -> RESUME   (naik jemput kompetitor — harga balik mahal)
+  1. ambil kompetitor untuk upstream/model yang sedang diproses
+  2. raw_target = kompetitor - (official x 0.1%)
+  3. target = max(raw_target, trigger_px), lalu clamp max_in
+  4. target ~= our           -> HOLD
+  5. target < our            -> UNDERCUT
+  6. target > our            -> RESUME
 ```
 
 **Prinsip kunci (dari Faiz):**
-- **Undercut = 0.1% × official** (BUKAN 0.1% dari harga kompetitor).
-- **Trigger = batas ABAIKAN**: kompetitor ≤ trigger_px → diabaikan (tidak diundercut,
-  tidak dibalas). Hanya kompetitor > trigger_px yang jadi target.
+- **Undercut = 0.1% × official** dari kompetitor upstream yang sedang diproses.
+- **Trigger = floor harga jual per upstream/model**: target tidak boleh turun di bawah `official × trigger_pct`. CB 10% → floor 10%; CBCN 5% → floor 5%.
+- Bila raw undercut berada di bawah floor, daemon clamp ke floor; tidak ada PUT di bawah trigger.
 - **Kalau hanya kita di level harga itu** → naik (resume) ke level kompetitor wajar
   terendah di atas — **tidak perlu reset manual rutin**.
 - **Kalau kompetitor melawan** (turunkan harga di bawah kita) → kita ikut undercut

@@ -106,6 +106,16 @@ class TestGetPositionsSelfUndercut(unittest.TestCase):
         self.assertAlmostEqual(d["competitor_price"], 0.14)
         self.assertAlmostEqual(d["target"], 0.1386)
 
+    def test_trigger_floor_prevents_undercut_below_configured_band(self):
+        cb = ap._decision_from_levels(0.3206, 1.4, [(0.14, 1)], max_in=0,
+                                      market_comp=0.14, trigger_pct=10)
+        cbcn = ap._decision_from_levels(0.3206, 1.4, [(0.07, 1)], max_in=0,
+                                        market_comp=0.07, trigger_pct=5)
+        self.assertAlmostEqual(cb["target"], 0.14)
+        self.assertAlmostEqual(cbcn["target"], 0.07)
+        self.assertEqual(cb["action"], "undercut")
+        self.assertEqual(cbcn["action"], "undercut")
+
     def test_orderbook_competitor_below_our_is_not_hold(self):
         """Decision helper: kompetitor orderbook sejati @0.07 di bawah our 0.14
         (dg comp /market stale 0.322) HARUS undercut — bukan hold — dan target

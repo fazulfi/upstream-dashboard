@@ -553,10 +553,8 @@ def _lowest_competitor_price(levels):
     return float(levels[0][0])
 
 
-def _decision_from_levels(our, official, levels, max_in=0, market_comp=None):
-    """Decision for the current upstream/model only.
-    `market_comp` is accepted only when the caller already resolved the current
-    upstream scope; it is never a global cross-tab mapping."""
+def _decision_from_levels(our, official, levels, max_in=0, market_comp=None, trigger_pct=None):
+    """Decision upstream-scoped with configured trigger floor."""
     competitor_price = float(market_comp) if market_comp is not None and float(market_comp) > 0 else _lowest_competitor_price(levels)
     if competitor_price is None:
         return {"action": "hold", "target": our, "competitor_price": None}
@@ -565,6 +563,8 @@ def _decision_from_levels(our, official, levels, max_in=0, market_comp=None):
     if ref is None:
         return {"action": "hold", "target": our, "competitor_price": competitor_price}
     target = round(ref - official * 0.001, 6)
+    if trigger_pct is not None and trigger_pct > 0:
+        target = max(target, round(official * (trigger_pct / 100.0), 6))
     if max_in > 0:
         target = min(target, max_in)
     target = max(0.0, round(target, 6))
@@ -673,8 +673,7 @@ def run_cycle(dry_run=False):
             # never a global catalog level from another upstream/tab.
             if comp is not None and comp > 0:
                 levels = [(comp, 1)]
-            dp = _decision_from_levels(our, official, levels, max_in, market_comp=comp)
-            a = {**a, "competitor_price": dp["competitor_price"]}
+            dp = _decision_from_levels(our, official, levels, max_in, market_comp=comp, trigger_pct=t_pct * 100)
             # SINGLE DECISION PATH: target/action dari upstream-scoped `dp`.
             # Branch lama di bawah tidak boleh menimpa target hasil helper.
             target = dp["target"]
