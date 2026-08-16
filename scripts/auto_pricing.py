@@ -553,28 +553,25 @@ def _lowest_competitor_price(levels):
     return float(levels[0][0])
 
 
-def _decision_from_levels(our, official, levels, max_in=0):
-    """Decision MURNI dari orderbook; dipakai run_cycle utk competitor_price.
-    Buang level yg sama dgn our, ambil level kompetitor terendah,
-    target = ref - (official*0.001), clamp ke max_in hanya jika max_in>0 & min 0.
-    TANPA trigger filter/clamp — mengikuti kompetitor sejati apa pun harganya
-    (live requirement: ikut kompetitor genuine @ $0.07 walau di bawah trigger)."""
-    competitor_price = _lowest_competitor_price(levels)
+def _decision_from_levels(our, official, levels, max_in=0, market_comp=None):
+    """Decision for the current upstream/model only.
+    `market_comp` is accepted only when the caller already resolved the current
+    upstream scope; it is never a global cross-tab mapping."""
+    competitor_price = float(market_comp) if market_comp is not None and float(market_comp) > 0 else _lowest_competitor_price(levels)
     if competitor_price is None:
         return {"action": "hold", "target": our, "competitor_price": None}
     refs = [p for p, _q in levels if abs(p - our) > 1e-6]
-    if not refs:
+    ref = competitor_price if market_comp is not None and float(market_comp) > 0 else (min(refs) if refs else None)
+    if ref is None:
         return {"action": "hold", "target": our, "competitor_price": competitor_price}
-    ref = min(refs)
-    offset = official * 0.001
-    target = round(ref - offset, 6)
+    target = round(ref - official * 0.001, 6)
     if max_in > 0:
         target = min(target, max_in)
     target = max(0.0, round(target, 6))
     if abs(target - our) <= 0.5e-4:
         return {"action": "hold", "target": our, "competitor_price": competitor_price}
-    action = "undercut" if target < our else "resume"
-    return {"action": action, "target": target, "competitor_price": competitor_price}
+    return {"action": "undercut" if target < our else "resume", "target": target,
+            "competitor_price": competitor_price}
 
 
 
@@ -671,9 +668,12 @@ def run_cycle(dry_run=False):
             tot_prov = pos.get("total_provider", 0) if pos else 0
             ok_kita = pos.get("provider_ok_kita", 0) if pos else 0
             pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
-            levels = pos.get("levels", []) if pos else []          # [(price, qty) asc] — KOMPETITOR MURNI (ask kita sudah dikurangi)
-            dp = _decision_from_levels(our, official, levels, max_in)
-            # competitor_price ke dalam `a` → semua decisions.append({**a, ...}) membawanya
+            levels = pos.get("levels", []) if pos else []
+            # Legacy branch below must use the current upstream's resolved comp,
+            # never a global catalog level from another upstream/tab.
+            if comp is not None and comp > 0:
+                levels = [(comp, 1)]
+            dp = _decision_from_levels(our, official, levels, max_in, market_comp=comp)
             a = {**a, "competitor_price": dp["competitor_price"]}
 
 

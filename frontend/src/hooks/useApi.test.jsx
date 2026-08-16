@@ -23,10 +23,12 @@ describe('useApi format helpers', () => {
 })
 
 describe('API scope gate', () => {
-  it('allows only auto-pricing endpoints while focused mode is active', async () => {
+  it('allows auto-pricing and manual ask endpoints only', async () => {
     const { isApiEnabled } = await import('./useApi.jsx')
     expect(isApiEnabled('/api/auto-pricing')).toBe(true)
     expect(isApiEnabled('/api/auto-pricing/config')).toBe(true)
+    expect(isApiEnabled('/api/orderbook')).toBe(true)
+    expect(isApiEnabled('/api/ask')).toBe(true)
     expect(isApiEnabled('/api/data')).toBe(false)
     expect(isApiEnabled('/api/market')).toBe(false)
   })

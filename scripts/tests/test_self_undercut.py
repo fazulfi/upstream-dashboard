@@ -100,6 +100,12 @@ class TestGetPositionsSelfUndercut(unittest.TestCase):
         self.assertAlmostEqual(d["our"], d["target"])
         self.assertNotAlmostEqual(d["our"], 0.3206)  # ask lama TIDAK boleh
 
+    def test_upstream_market_competitor_drives_target(self):
+        d = ap._decision_from_levels(0.3206, 1.4, [(0.322, 3)], market_comp=0.14)
+        self.assertEqual(d["action"], "undercut")
+        self.assertAlmostEqual(d["competitor_price"], 0.14)
+        self.assertAlmostEqual(d["target"], 0.1386)
+
     def test_orderbook_competitor_below_our_is_not_hold(self):
         """Decision helper: kompetitor orderbook sejati @0.07 di bawah our 0.14
         (dg comp /market stale 0.322) HARUS undercut — bukan hold — dan target

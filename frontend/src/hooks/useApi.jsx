@@ -37,12 +37,13 @@ function authHeaders(extra = {}) {
 }
 
 const FOCUSED_API_PREFIX = '/api/auto-pricing';
+const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
 
-// Hemat kuota: selama dashboard difokuskan ke Auto Pricing, hanya endpoint
-// auto-pricing yang boleh membuat request. Route halaman lain tetap tersedia,
-// tetapi tidak mengambil data sampai scope ini diubah.
+// Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
 export function isApiEnabled(path) {
-  return path === FOCUSED_API_PREFIX || path.startsWith(`${FOCUSED_API_PREFIX}/`);
+  return path === FOCUSED_API_PREFIX
+    || path.startsWith(`${FOCUSED_API_PREFIX}/`)
+    || MANUAL_ASK_PATHS.has(path);
 }
 
 export async function apiFetch(path, options = {}) {
