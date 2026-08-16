@@ -602,6 +602,7 @@ def inferhub_put(path, payload=None, timeout=25):
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read().decode()
             return json.loads(body) if body else {"ok": True}
     except Exception as e:
         _cache["last_error"] = f"inferhub_put {path}: {e}"
