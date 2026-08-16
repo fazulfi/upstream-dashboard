@@ -675,6 +675,35 @@ def run_cycle(dry_run=False):
                 levels = [(comp, 1)]
             dp = _decision_from_levels(our, official, levels, max_in, market_comp=comp)
             a = {**a, "competitor_price": dp["competitor_price"]}
+            # SINGLE DECISION PATH: target/action dari upstream-scoped `dp`.
+            # Branch lama di bawah tidak boleh menimpa target hasil helper.
+            target = dp["target"]
+            action = dp["action"]
+            if action == "hold":
+                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
+                decisions.append({**a, "action": "hold", "target": our, "our": our, "comp": comp,
+                                  "reason": f"upstream scoped competitor ${dp['competitor_price'] or 0:.4f} target ${target:.4f} - hold"})
+                continue
+            if effective_dry:
+                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
+                                  "reason": f"{action} upstream scoped competitor ${dp['competitor_price']:.4f} -> ${target:.4f}"})
+                continue
+            st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
+            status = "OK" if st in (200, 204) else f"HTTP{st}"
+            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} target=${target:.4f} [{status}]")
+            if st in (200, 204):
+                hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
+                hold[hk].pop("skip_until", None)
+                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
+                                  "reason": f"{action} upstream scoped competitor ${dp['competitor_price']:.4f} -> ${target:.4f}", "http": st})
+            elif st in (429, 0):
+                hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts, "skip_until": now + BACKOFF}
+                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
+                                  "reason": f"{status} - backoff", "http": st})
+            else:
+                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
+                                  "reason": f"{status} - skip", "http": st})
+            continue
 
 
             # ── FIX (permintaan Faiz): anchor kompetitor TIDAK BOLEH = ask kita sendiri.
