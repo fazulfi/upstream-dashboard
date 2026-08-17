@@ -78,7 +78,11 @@ export default function Asks() {
           <div className="ob-grid">
             {models.map((m, i) => {
               const allLevels = m.upstreams?.flatMap(u => (u.levels||[]).map(lv => ({...lv, slug:u.slug, label:u.label}))) || [];
-              const sorted = allLevels.filter(l => l.price>0).sort((a,b)=>a.price-b.price).slice(0,4);
+              const hasOurs = (m.upstreams||[]).some(u => u.is_ours);
+              const compLevels = hasOurs
+                ? (m.upstreams||[]).filter(u => !u.is_ours).flatMap(u => (u.levels||[]).map(lv => ({...lv, slug:u.slug, label:u.label})))
+                : allLevels;
+              const sorted = compLevels.filter(l => l.price>0).sort((a,b)=>a.price-b.price).slice(0,4);
               const maxLv = Math.max(...allLevels.map(l=>l.qty||0), 1);
               return (
                 <button key={i} className="ob-card" onClick={() => openModel(m)}>
@@ -121,7 +125,7 @@ export default function Asks() {
               </div>
               <label className="f-label" style={{marginTop:10}}>Provider / upstream</label>
               <select className="inp" value={upSel} onChange={e=>setUpSel(e.target.value)}>
-                {sel.upstreams?.map(u => <option key={u.slug} value={u.slug}>{u.label} ({u.slug}) · {u.levels?.filter(l=>l.price>0).length || 0} level</option>)}
+                {sel.upstreams?.map(u => <option key={u.slug} value={u.slug}>{u.label} ({u.slug}){u.is_ours ? ' · milik kita' : ''} · {u.levels?.filter(l=>l.price>0).length || 0} level</option>)}
               </select>
               {(() => { const u = sel.upstreams?.find(x=>x.slug===upSel); if (!u) return null;
                 const levels = u.levels?.filter(l=>l.price>0).sort((a,b)=>a.price-b.price) || [];

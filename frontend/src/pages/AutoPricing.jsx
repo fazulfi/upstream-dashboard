@@ -7,7 +7,7 @@ const API = import.meta.env.VITE_API_URL || '';
 
 // Default fallback kalau model belum punya config — uniform utk SEMUA provider
 function defaultBand(upstream, mid) {
-  return { trigger: 2 };  // seragam: all providers trigger 2%
+  return { trigger: 10 };  // seragam: all providers trigger 10%
 }
 
 export default function AutoPricing() {
@@ -128,7 +128,7 @@ export default function AutoPricing() {
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="panel-head">
           <div><h2>Auto-pricing · per provider</h2>
-            <div className="sub">undercut kompetitor tic-by-tic · trigger% di-set per model per provider · default 2%</div>
+            <div className="sub">undercut kompetitor tic-by-tic · trigger% di-set per model per provider · default 10%</div>
           </div>
           <button className={data?.armed ? 'btn btn-ghost' : 'btn btn-primary'} onClick={toggle} disabled={arming}>
             {arming ? '…' : (data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)')}
