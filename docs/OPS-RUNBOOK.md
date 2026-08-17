@@ -9,7 +9,7 @@ checklist. Untuk logika auto-pricing & tambah provider lihat `docs/auto-pricing.
 
 | Layer | Detail | Port |
 |---|---|---|
-| Frontend | Vercel (`frontend-fazulfis-projects`, alias `frontend-rouge-five-76`) | 443 |
+| Frontend | Vercel (`upstream-static` → https://upstream-static.vercel.app) | 443 |
 | Nginx | `ops.budgezen.com` → proxy API-only | 80/443 |
 | Backend | Flask + waitress (`backend/app.py`) | 8124 |
 | DB | PostgreSQL `upstream` (gamesim@127.0.0.1) | 5432 |

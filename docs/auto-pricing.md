@@ -3,35 +3,67 @@
 **Upstream:** CodeBuddy (cb) + CodeBuddy.CN (cbcn) + ClinePass (cp) — undercut kompetitor di InferHub market.
 
 > **Status: PRODUCTION, ARMED.** Logika final 2026-08-13 (setelah 5 iterasi fix selama
-> pemantauan live). Dokumen ini adalah satu-satunya sumber kebenaran — jangan pakai
+> pemantauan live); kontrak trigger-area basis B dikunci permanen 2026-08-16 (lihat §1 & REV11);
+> orderbook PER-PROVIDER dikunci 2026-08-17 (REV12 — lihat §1 & REV12).
+> Dokumen ini adalah satu-satunya sumber kebenaran — jangan pakai
 > versi lama (audit-full.md, README lama).
 
 ---
 
-## 1. Logika Keputusan (FINAL — jangan diubah tanpa persetujuan)
+## 1. Logika Keputusan (FINAL — kontrak trigger-area basis B, jangan diubah tanpa persetujuan)
 
 ```
-per model per cycle:
+per model per cycle (contract basis B — official-price trigger area):
 
-  TRIGGER            trigger_px = official x trigger_pct   (floor harga jual)
-  OFFSET             offset = official x 0.1%              (gap undercut/resume)
+  BOUNDARY  boundary  = round(official x trigger_pct, 6)   (batas area trigger)
+            trigger_pct = pecahan (config 10% -> 0.10)
+  OFFSET    offset    = round(official x 0.001, 6)         (gap undercut/resume)
 
   ALUR:
-  1. ambil kompetitor untuk upstream/model yang sedang diproses
-  2. raw_target = kompetitor - (official x 0.1%)
-  3. target = max(raw_target, trigger_px), lalu clamp max_in
-  4. target ~= our           -> HOLD
-  5. target < our            -> UNDERCUT
-  6. target > our            -> RESUME
+  1. ambil orderbook PER-PROVIDER utk upstream/model yang diproses:
+     levels = asksIn catalog[slug][mk] MILIK SLUG ITU SAJA
+     (per-provider orderbook REV12 — TIDAK pernah di-pool antar slug;
+     termasuk level milik kita sendiri di slug itu, persis seperti halaman Asks)
+  2. level VALID = price > 0, price > boundary, |price - our| > 1e-6
+     (kalau boundary = None — official/trigger_pct <= 0 — filter boundary di-skip)
+     -> level price <= boundary (area trigger) IGNORED, tidak diladenin
+    3. pisahkan kandidat VALID menjadi lower (price < our) dan higher (price > our)
+    4. jika ada lower VALID -> UNDERCUT kandidat lower sesuai aturan kompetitor
+    5. jika kita sudah termurah:
+      - jarak <= offset (termasuk tepat 0.1% official) -> HOLD
+      - jarak > offset -> RESUME
+    6. jika tidak ada kandidat luar-area yang valid -> RESUME ke 50% official
+    7. target undercut/resume = round(reference - offset, 6), clamp max_in SAJA
+       (max_in <= 0 = off)
+       -> TIDAK ada clamp ke boundary (boundary BUKAN floor/target)
+       -> target <= 0 (offset > reference) -> HOLD di harga kita
+          (jangan kirim nol/negatif)
+    8. target < our -> UNDERCUT; target > our -> RESUME
+
 ```
 
-**Prinsip kunci (dari Faiz):**
-- **Undercut = 0.1% × official** dari kompetitor upstream yang sedang diproses.
-- **Trigger = floor harga jual per upstream/model**: target tidak boleh turun di bawah `official × trigger_pct`. CB 10% → floor 10%; CBCN 5% → floor 5%.
-- Bila raw undercut berada di bawah floor, daemon clamp ke floor; tidak ada PUT di bawah trigger.
-- **Kalau hanya kita di level harga itu** → naik (resume) ke level kompetitor wajar
-  terendah di atas — **tidak perlu reset manual rutin**.
-- **Kalau kompetitor melawan** (turunkan harga di bawah kita) → kita ikut undercut
+**Prinsip kunci (dari Faiz) — kontrak trigger-area (basis B) + orderbook per-provider (REV12):**
+- **Orderbook PER-PROVIDER (REV12)**: level untuk row `(upstream, model)` = `asksIn`
+  dari catalog entry upstream itu SAJA (`catalog[slug][mk].asksIn`). TIDAK ada pooling
+  global per nama model, TIDAK ada exclude antar-slug — row `codebuddy/glm-5.2` membaca
+  book codebuddy, row `codebuddy-cn/glm-5.2` membaca book codebuddy-cn, dst. Persis
+  seperti halaman Asks (orderbook per provider). `competitor_price` = level terendah
+  dari book slug itu sendiri.
+- **Undercut/Resume = offset 0.1% × official** DI BAWAH `valid_ref` (level valid
+  terendah dari book slug itu). Offset dihitung dari official, bukan dari harga kompetitor.
+- **Boundary = round(official × trigger_pct, 6)** — batas area trigger. Harga `price > boundary`
+  = kompetitor wajar → kandidat undercut. Harga `price <= boundary` = area trigger →
+  DIIGNORASI (cuekin, jangan balas ke area trigger).
+- **Trigger BUKAN floor dan BUKAN target**: tidak ada clamp `max(target, boundary)`; target
+  boleh turun ke/di bawah boundary. Satu-satunya clamp: `max_in` (batas slot atas).
+- **Same-price handling**: level senilai harga kita (`|price − our| ≤ 1e-6`) diabaikan — tidak
+  pernah undercut diri sendiri. Resume murni `target > our` (basis B): kalau `valid_ref` ada
+  dan hasil `valid_ref − offset` lebih tinggi dari harga kita, naik jemput — gate
+  `our_level_qty` dari REV5 sudah dihapus dari kode.
+- **RESUME saat tidak ada level valid**: tidak ada level valid (semua di area trigger / tidak
+  ada kompetitor di book slug kita) → RESUME ke 50% official minus offset
+  (`round(round(official × 0.5, 6) − offset, 6)`) — BUKAN diam di harga kita.
+- **Kalau kompetitor melawan** (turunkan harga tapi masih `> boundary`) → kita ikut undercut
   terus agar tetap termurah di range non-trigger. Ini perilaku benar, bukan bug.
 - **REBOUND DIHAPUS** (v2). Tidak ada self-correct-up, tidak ada floor terpisah.
 
@@ -43,22 +75,26 @@ membawa dua harga kompetitor yang BERBEDA:
 | Field | Sumber | Arti | Dipakai dashboard? |
 |---|---|---|---|
 | `comp` | `/market` `minAskIn` | **Anchor diagnostik** — harga terendah dari market view (bisa menyertakan ask kita sendiri / stale) | **TIDAK** — hanya debug/diagnosis |
-| `competitor_price` | orderbook `/catalog` (level genuine terendah, `_lowest_competitor_price`) | **Harga kompetitor sejati** (slug bukan milik publisher) terendah di orderbook | **YA** — kolom "Kompetitor" |
-| `target` | `competitor_price − (official × 0.001)` | Harga PUT yang dikejar daemon | YA — kolom "Target" |
+| `competitor_price` | orderbook `/catalog` — level terendah dari book slug SENDIRI (`_lowest_competitor_price(levels)`, `_provider_scoped_levels`) | **Harga terendah di orderbook provider itu sendiri** (REV12 per-provider) | **YA** — kolom "Kompetitor" |
+| `target` | `round(valid_ref − round(official × 0.001, 6), 6)`, clamp `max_in` | Harga PUT yang dikejar daemon (`valid_ref` = level valid terendah dari book slug sendiri, lihat aturan 2) | YA — kolom "Target" |
 | `our`/`ask_in` | ask kita sendiri | Harga kita saat ini | YA — kolom "Ask skrg" |
 
 **Aturan pakai (kontrak, jangan diregressi):**
-1. Dashboard **WAJIB** menampilkan `competitor_price`, BUKAN `comp`. Contoh live
-   codebuddy/glm-5.2: `comp = 0.322` (anchor `/market`) sedangkan `competitor_price
-   = 0.07` (z-ai @ $0.0700 di orderbook) — menampilkan `comp` memberi angka
-   salah/tidak relevan. Kolom kompetitor menampilkan `—` hanya saat
-   `competitor_price` null/≤0 (tidak ada kompetitor sejati).
-2. **Target tetap dihitung dari orderbook genuine**: `competitor_price − (official
-   × 0.001)`, dibulatkan 6 desimal. Formula tidak berubah dengan kehadiran `comp`.
+1. Dashboard **WAJIB** menampilkan `competitor_price`, BUKAN `comp`. `competitor_price`
+   kini = level terendah dari orderbook slug itu sendiri (REV12 per-provider), contoh live
+   codebuddy/glm-5.2: `competitor_price = 0.2702` (level terendah book codebuddy),
+   sedangkan `comp` bisa berbeda (anchor `/market`). Kolom kompetitor menampilkan `—`
+   hanya saat `competitor_price` null/≤0 (book slug itu kosong).
+2. **Target = `valid_ref` − offset (0.1% × official)**: `valid_ref` adalah level **valid**
+   terendah dari book slug sendiri: `price > 0`, `price > boundary =
+   round(official × trigger_pct, 6)`, dan `|price − our| > 1e-6` (bukan ask kita). Level
+   `price <= boundary` TIDAK pernah jadi `valid_ref`. Formula:
+   `round(valid_ref − round(official × 0.001, 6), 6)`, clamp `max_in` saja.
 3. **Orderbook scan TIDAK boleh di-short-circuit oleh `comp`** (REV10d): `comp`
    hanyalah anchor diagnostik `/market` yang bisa kosong/stale/berisi ask kita
-   sendiri. Selama `levels` orderbook mengandung kompetitor sejati, cycle WAJIB
-   tetap memprosesnya (HOLD hanya saat `competitor_price` None).
+   sendiri. Selama `levels` orderbook slug sendiri mengandung level, cycle WAJIB
+   tetap memprosesnya (HOLD hanya saat `competitor_price` None dan tidak ada
+   kandidat valid → malah RESUME 50% official, lihat §1).
 
 ---
 
@@ -152,7 +188,7 @@ echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run, tanpa PUT)
 | Anti-self-undercut | Hanya aktif saat `abs(comp - our) <= 1e-4` (comp = ask kita) |
 | Cooldown | `ts` hanya di-update saat PUT sukses; cb/cbcn 10s, cp 15s |
 | Backoff | 429/timeout → skip 180s (`skip_until`) |
-| Clamp | `target = max(target, trigger_px)` & `min(target, max_in)` — tidak pernah di range trigger / di atas slot |
+| Clamp | `target = min(target, max_in)` saja (`max_in <= 0` = off) — TIDAK ada clamp ke boundary (trigger bukan floor); target boleh masuk area trigger |
 | Atomic write | State file: `.tmp` + `os.replace` |
 | 429 handling | Skip cycle, tanpa retry |
 
@@ -164,7 +200,7 @@ echo 0 > ~/.hermes-suisui/logs/auto-pricing-arm   # DISARM (dry-run, tanpa PUT)
 |---|---|---|
 | "no API key" | `INFERHUB_API_KEY` di `~/.hermes-suisui/.env` | Set env / daemon jalan as gamesim |
 | UnboundLocalError / NameError | Kode lama | `git pull` di `/home/gamesim/dashboard`, `cp` ke `/home/gamesim/scripts/`, restart |
-| Tidak undercut padahal kompetitor di bawah | Trigger terlalu tinggi vs harga kompetitor | Turunkan trigger_pct di DB |
+| Tidak undercut padahal kompetitor murah | Kompetitor di area trigger (`≤ boundary`) memang di-ignore (kontrak basis B) | Kalau memang mau undercut mereka, turunkan `trigger_pct` di DB |
 | Harga turun terus | Kompetitor memang melawan (perilaku benar) | Pantau; jangan reset manual |
 | PUT gagal 422 | `pctOff` — official=0 | Set official / cek model |
 | Daemon mati | `systemctl --user status` | Restart; cek log |
@@ -179,7 +215,8 @@ systemctl --user daemon-reload
 systemctl --user enable --now wwma-auto-pricing.service
 ```
 
-Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --interval 30`.
+Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --interval 60`
+(code default `INTERVAL = 30`; service produksi menimpa dengan `--interval 60`).
 
 ---
 
@@ -207,6 +244,11 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 - `remaining = 1` (1 ask per model per upstream).
 - Jangan reset `comp_levels`; kurangi ask kita hanya di `our_level`.
 - **Blok RESUME baru**: kalau `nontrig_below` kosong & `nontrig_above` ada & **level harga kita kosong** (tidak ada kompetitor lain di harga kita — `our_level_qty <= 0`) → RESUME naik ke level wajar terendah di atas (0.1% di bawahnya). Kalau masih ada kompetitor di level kita → TIDAK resume (tetap bersaing).
+
+> ▶ **Ditinjau ulang oleh REV11 / basis B (2026-08-16)**: blok resume ini
+> (`nontrig_below` / `nontrig_above` / `our_level_qty`) sudah dihapus dari
+> kode. `_decide_trigger_area` mengklasifikasi resume murni
+> `target > our` — lihat §1 & REV11.
 
 **Verifikasi live:** cbcn deepseek-v4-flash naik `$0.0077 → $0.01358`; log cline-pass tampil `resume non-trigger`. Commit `59caedc` + `b7723de`.
 
@@ -298,14 +340,19 @@ Daemon load_config: {'trigger_pct': 8.0} -> dipakai cycle berikutnya
 
 ---
 
-## REV10c (2026-08-15) — FIX: "auto-pricing gak jalan" (daemon diam saat kompetitor murah)
+## REV10c (2026-08-15) — root cause "auto-pricing gak jalan" (trigger-as-floor)
 
 **Keluhan user:** auto-pricing gak jalan — harga tidak turun walau ada kompetitor murah.
 
-**Root cause:** filter `nontrig_prices = [p for p in levels if p > trigger_px]` — kompetitor sejati yang harganya ≤ trigger (mis. z-ai glm-5.2 @ $0.07 ≤ trigger $0.14) diabaikan → daemon HOLD diam padahal kompetitor di bawah. Terlihat "gak jalan".
+**Root cause:** perilaku lama memperlakukan trigger sebagai **floor**: filter
+`nontrig_prices = [p for p in levels if p > trigger_px]` membuang level kompetitor ≤ trigger
+(mis. z-ai glm-5.2 @ $0.07 di bawah floor $0.14) DAN clamp `target = max(target, trigger_px)`
+menahan harga di floor → daemon HOLD diam padahal ada kompetitor di bawah. Terlihat
+"gak jalan".
 
-**Fix (commit `58c3388`):**
-1. `nontrig_prices` → semua level kompetitor SEJATI (hapus filter `p > trigger_px`) — kompetitor sejati APAPUN harganya diundercut.
+**Fix saat itu (commit `58c3388`):**
+
+1. Hapus filter `p > trigger_px` dari level kompetitor.
 2. Hapus clamp `target = max(target, trigger_px)` — boleh turun ke bawah trigger.
 
 **Hasil live (cycle pertama setelah restart):**
@@ -313,8 +360,16 @@ Daemon load_config: {'trigger_pct': 8.0} -> dipakai cycle berikutnya
 sebelum: 0 undercut, 36 hold (daemon diam 30+ menit)
 sesudah: 4 undercut — glm-5.2/glm-5.3/claude-opus-5 turun ke $0.0686 (kejar z-ai @0.07) [OK]
 ```
-Trigger % tetap berfungsi utk config per model — hanya tidak lagi memfilter kompetitor sejati.
- 
+
+**▶ Ditinjau ulang & dire-arahkan oleh REV11 (2026-08-16) — jangan salah baca:**
+
+- Yang **PERTAHAN permanen**: penghapusan clamp floor — `boundary` BUKAN floor dan BUKAN
+  target; target tidak pernah di-clamp naik ke boundary (ini bagian kontrak basis B, §1).
+- Yang **DIKOREKSI**: "hapus filter" versi naif di-REPLACE kontrak basis B — level kompetitor
+  VALID hanya `price > boundary`; level `price <= boundary` (area trigger) DIIGNORASI sebagai
+  referensi (tidak diundercut, cuekin). Otoritas filtering sekarang §1 / REV11 / basis B,
+  bukan REV10c.
+
 ---
 
 ## REV10d (2026-08-15) — FIX: orderbook tetap diproses saat market anchor kosong
@@ -324,3 +379,106 @@ Trigger % tetap berfungsi utk config per model — hanya tidak lagi memfilter ko
 **Fix (`b85830e`):** HOLD hanya jika `comp` kosong **dan** tidak ada `levels`; bila `levels` berisi kompetitor sejati, daemon lanjut menghitung target `kompetitor - (0.1% × official)`.
 
 Cooldown harga juga dihapus (`4e30323`); backoff hanya tetap aktif setelah HTTP 429/timeout.
+
+---
+
+## REV11 (2026-08-16) — KONTRAK PERMANEN: official-price trigger area (basis B)
+
+**Tujuan:** mengunci kontrak trigger-area secara permanen — future fix TIDAK
+boleh kembali ke interpretasi trigger-as-floor. Ini adopsi resmi basis B
+(`_decide_trigger_area` di `scripts/auto_pricing.py`) dan menyelesaikan semua
+kontradiksi floor/REV10c di dokumen ini.
+
+**Kontrak (satu-satunya yang berlaku; lihat §1):**
+
+1. **orderbook per-provider (REV12)** — levels row `(upstream, model)` = `asksIn`
+   catalog entry upstream itu saja; TIDAK ada pooling global / exclude antar-slug.
+   (Sebelumnya REV10: exclude semua slug milik kita — kini DIGANTI per-provider.)
+2. **boundary official-based** — `boundary = round(official × trigger_pct, 6)` dengan
+   `trigger_pct` pecahan (config 10% → 0.10); kalau official/trigger_pct ≤ 0 → boundary
+   `None` (tanpa filter boundary).
+3. **strict outside-area filtering** — level VALID: `price > 0`, `price > boundary`,
+   dan `|price − our| > 1e-6`. Level `price <= boundary` (di area trigger) **IGNORED**.
+4. **same-price handling** — level senilai ask kita ditolak sebagai referensi
+   (`|price − our| ≤ 1e-6`, anti self-undercut); resume hanya saat level
+   kosong kompetitor.
+5. **target** — `round(valid_ref − round(official × 0.001, 6), 6)`;
+   `valid_ref` = level VALID terendah.
+6. **clamp `max_in` only** — `min(target, max_in)` (`max_in ≤ 0` = clamp off).
+   **TIDAK ada boundary floor**; target boleh berada di bawah boundary. Guard:
+   `target ≤ 0` (offset > `valid_ref`) → HOLD di harga kita, jangan kirim nol/negatif.
+7. **aksi** — `undercut` (target < our), `resume` (target > our), `hold`
+   (target ≤ our — berarti jarak ≤ offset — atau `target ≤ 0`). Tidak ada level
+   valid → **RESUME 50% official** (`round(round(official × 0.5, 6) − offset, 6)`),
+   BUKAN hold; `max_in` clamp tetap berlaku.
+
+**Menggantikan (dianggap batal):**
+
+- §1 lama: "trigger = floor harga jual", `target = max(raw_target, trigger_px)`.
+- Prinsip kunci lama: "CB 10% → floor 10%; CBCN 5% → floor 5%" —
+  config DB sekarang 10/10.
+- Tabel anti-loop lama: clamp `max(target, trigger_px)`.
+- REV10c klaim "hapus filter kompetitor" (lihat nota ditinjau di REV10c).
+
+**Contoh konkret** (official $1.40, `trigger_pct` 10% → 0.10 → boundary $0.14,
+offset $0.0014):
+
+| Skenario | Level kompetitor | `valid_ref` | `target` | Aksi |
+|---|---|---|---|---|
+| Semua kompetitor di area trigger | kita @ $0.069; z-ai @ $0.07 (≤ boundary) | — (tidak ada) | 0.7 − 0.0014 = **$0.6986** | **RESUME** — tidak ada kandidat valid → 50% official |
+| Kompetitor wajar tepat di atas boundary | kita @ $0.145; rival @ $0.142 | $0.142 | 0.142 − 0.0014 = **$0.1406** | **UNDERCUT** (tetap > boundary) |
+| `valid_ref` tipis di atas boundary → target lintas area | kita @ $0.150; rival @ $0.1401 | $0.1401 | 0.1401 − 0.0014 = **$0.1387** | **UNDERCUT** — target masuk area trigger, TANPA clamp floor |
+| Hanya kita di bawah, kompetitor wajar di atas | kita @ $0.06; rival @ $0.15 | $0.15 | 0.15 − 0.0014 = **$0.1486** | **RESUME** — target > our (basis B) |
+| Kompetitor senilai ask kita | kita @ $0.08; rival @ $0.08 (= our) | di-exclude (`\|p − our\| ≤ 1e-6`) | — | **HOLD** — jangan undercut diri sendiri |
+| Book slug kosong (hanya slug lain yang punya model) | commandcode @ $0.0035 (di slug lain) | — (book slug kita kosong) | 0.7 − 0.0014 = **$0.6986** | **RESUME** — per-provider, book slug lain tidak dibaca → 50% official |
+
+Catatan: contoh memakai `trigger_pct = 0.10`; model dengan config lain (mis. cline-pass
+non-flash 20% → 0.20) boundary ikut berubah. Clamp `max_in` (slot atas) selalu diterapkan
+setelah perhitungan target di atas.
+
+---
+
+## REV12 (2026-08-17) — ORDERBOOK PER-PROVIDER (fix "kompetitor tidak terbaca / salah provider")
+
+**Tujuan:** mengunci kontrak orderbook PER-PROVIDER — daemon membaca `asksIn` dari
+catalog entry upstream itu SAJA, persis seperti halaman Asks. Sebelumnya orderbook
+di-pool global per nama model (`book[mid]`), sehingga row `codebuddy/glm-5.2` ikut
+membaca level dari `codebuddy-cn` / `cline-pass` / `z-ai` — kompetitor tampak
+hilang/salah, dan keputusan undercut salah sasaran.
+
+**Kontrak (menggantikan aturan "exclude semua slug milik kita" dari REV10):**
+
+1. **levels per-provider** — untuk row `(upstream, model)`, `levels` = `asksIn`
+   dari `catalog[slug][mk]` MILIK SLUG ITU SAJA (`_provider_scoped_levels` di
+   `scripts/auto_pricing.py`). TIDAK ada pooling global antar slug, TIDAK ada
+   exclude-slug-lain. Level milik kita sendiri di slug itu TETAP ada di book
+   (persis seperti halaman Asks menampilkan semua ask provider itu).
+2. **`competitor_price`** = level terendah dari book slug itu sendiri
+   (`_lowest_competitor_price(levels)`); `None` hanya saat book slug itu kosong.
+3. **`total_provider` / `posisi_kompetitor`** = kedalaman book slug itu sendiri
+   (jumlah ask di level-levelnya), bukan agregasi global.
+4. **keputusan** tetap basis B (`_decide_trigger_area`): boundary
+   `round(official × trigger_pct, 6)`, valid = `price > 0`, `price > boundary`,
+   `|price − our| > 1e-6`; lower → UNDERCUT, higher jarak ≤ offset → HOLD /
+   > offset → RESUME, tanpa kandidat valid → RESUME 50% official.
+5. **Halaman Asks & daemon kini satu sumber data** (per-provider catalog asksIn) —
+   tidak ada lagi perbedaan semantik antara keduanya.
+
+**Contoh live (catalog produksi 2026-08-17, glm-5.2 official $1.40 — TIDAK di-pool):**
+
+| Upstream | `levels` (book slug itu saja) | `competitor_price` |
+|---|---|---|
+| `codebuddy` | 0.2702, 0.273, 0.2786, 0.28, 0.7 | 0.2702 |
+| `codebuddy-cn` | 0.0868, 0.0896, 0.091, 0.098, 0.1204, 0.126, 0.1302, 0.7 | 0.0868 |
+| `cline-pass` | 0.126, 0.14, 0.6412, 0.644, 0.658, 0.7 | 0.126 |
+| `z-ai` | 0.14, 0.308 | 0.14 |
+
+Row `codebuddy/glm-5.2` hanya melihat level codebuddy; row `cline-pass/glm-5.2`
+hanya melihat level cline-pass. Tidak ada satu pun yang membaca book slug lain.
+
+**Risiko / catatan:**
+- Karena book per-provider, model yang hanya tersedia di slug lain (bukan slug yang
+  dikonfigurasi) → book kosong → RESUME 50% official (bukan HOLD). Pastikan config
+  upstream/model di DB sesuai dengan slug yang benar.
+- Tingkat "kompetisi" kini diukur per-provider (bukan antar-provider kita).
+

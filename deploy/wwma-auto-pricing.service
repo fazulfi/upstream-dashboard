@@ -1,5 +1,5 @@
 [Unit]
-Description=Auto-pricing algo (CodeBuddy + CodeBuddy CN) - undercut competitor, band 2%/5% official
+Description=Auto-pricing daemon (per-provider orderbook, official-price trigger area basis B) — undercut/resume kompetitor per upstream/model
 After=network.target
 
 [Service]
