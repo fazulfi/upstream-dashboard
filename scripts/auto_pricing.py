@@ -49,10 +49,8 @@ PREFIX = {"codebuddy": "cb", "cline-pass": "cp", "codebuddy-cn": "cbcn"}
 
 BACKOFF = 180  # detik — kalau PUT kena 429/timeout, skip model itu selama ini (AP-6)
 _refresh_lock = threading.Lock()
-DEADBAND = 0.0003          # $ — kompetitor harus bergeser > ini sebelum kita reaksi
 COOLDOWN_CB = 10           # detik — cb/cbcn: reaktif, nggak kebekuan lama
 COOLDOWN_CP = 15           # detik — cline-pass: reaktif
-UNDERCUT_PCT = 0.1         # % — undercut: kita pasang 0.1% off lbh besar dr kompetitor (pctOff + 0.1)
 
 
 DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
@@ -456,8 +454,27 @@ def get_market_min(use_cache=True):
         return out
     except Exception:
         return _MARKET_CACHE["data"] if _MARKET_CACHE["data"] else {}
+def _provider_scoped_levels(slug, mid, m):
+    """Orderbook PER-PROVIDER (2026-08-17 — /catalog openapi: asksIn =
+    live per-provider ask utk upstream card itu; halaman Asks = orderbook
+    PER PROVIDER, user: 'bukan model di provider itu yang kamu baca').
+
+    levels row (slug, mid) = asksIn catalog[slug][mk] MILIK slug itu SAJA.
+    TIDAK ada pooling global antar-slug; harga dari slug LAIN tidak pernah
+    masuk row ini. qty = per-price count; harga <= 0 di-drop; sorted asc."""
+    agg = {}
+    for price in (m.get("asksIn") or []):
+        try:
+            p = round(float(price), 6)
+        except (TypeError, ValueError):
+            continue
+        if p > 0:
+            agg[p] = agg.get(p, 0.0) + 1.0
+    return sorted((p, q) for p, q in agg.items())
+
+
 def get_positions(catalog, our_price=None):
-    """POSISI KOMPETITOR per model (Faiz v2 — wajib tiap cycle).
+    """POSISI KOMPETITOR per (slug, model) (Faiz v2 — wajib tiap cycle).
 
     Dari /catalog (sudah di-fetch):
       - asksIn[] per model = harga SEMUA provider di platform utk model itu.
@@ -474,24 +491,21 @@ def get_positions(catalog, our_price=None):
         turun saat kita benar2 termurah (level ask kita dikurangi dari orderbook).
         Kompetitor NYATA di bawah kita tetap di orderbook → tetap diundercut.
 
-    SELF-UNDERCUT FIX (2026-08-15): SEMUA upstreamSlug milik kita (satu publisher)
-    = ask KITA, bukan kompetitor. Orderbook per model digabung dari SEMUA slug di
-    catalog, lalu ask dari slug milik kita di-EXCLUDE total (lintas-upstream).
-    Kompetitor sejati = hanya slug yang BUKAN milik kita.
+    PER-PROVIDER (2026-08-17 — /catalog openapi + halaman Asks): levels row
+    (slug, mid) = asksIn catalog[slug][mk] MILIK slug itu SAJA. TIDAK ada
+    pooling global antar-slug (bug lama: book[mid] global menyatukan semua
+    slug utk model yg sama — row provider A membaca level milik provider B).
+    Harga dari slug LAIN tidak pernah masuk row ini.
 
     Return {(slug, model_id): {"total_provider", "provider_ok_kita",
                                 "posisi_kompetitor", "levels"}}
-    levels = sorted list of (price, qty) — kompetitor MURNI (ask kita semua slug dihapus).
+    levels = sorted list of (price, qty) — orderbook PER-PROVIDER slug tsb.
     """
     provs = []
     try:
         provs = _get_providers_cached()
     except Exception:
         pass
-    try:
-        my_slugs = get_my_slugs(provs)
-    except Exception:
-        my_slugs = set()
     ok_kita = {}
     if provs:
         for p in provs:
@@ -499,26 +513,7 @@ def get_positions(catalog, our_price=None):
                 s = p.get("upstreamSlug")
                 ok_kita[s] = ok_kita.get(s, 0) + 1
 
-    # kumpulkan orderbook GLOBAL per model: {mid: {price: [slug,...]}}
-    # gabungkan ask dari SEMUA slug (kita + kompetitor) utk model yang sama.
-    book = {}
     items_by_slug = catalog.items() if isinstance(catalog, dict) else []
-    for slug, sub in items_by_slug:
-        if not isinstance(sub, dict):
-            continue
-        for mk, m in sub.items():
-            if not isinstance(m, dict):
-                continue
-            mid = mk.split("/")[-1].strip().lower()
-            book.setdefault(mid, {})
-            for price in (m.get("asksIn") or []):
-                try:
-                    p = round(float(price), 6)
-                except (TypeError, ValueError):
-                    continue
-                if p > 0:
-                    book[mid].setdefault(p, []).append(slug)
-
     out = {}
     for slug, sub in items_by_slug:
         if not isinstance(sub, dict):
@@ -527,23 +522,14 @@ def get_positions(catalog, our_price=None):
             if not isinstance(m, dict):
                 continue
             mid = mk.split("/")[-1].strip().lower()
-            levels = book.get(mid, {})
-            total = sum(len(v) for v in levels.values())
+            levels = _provider_scoped_levels(slug, mid, m)
+            total = int(sum(q for _p, q in levels))
             ok = ok_kita.get(slug, 0)
-            # kompetitor MURNI: level yang ada ask dari slug BUKAN milik kita.
-            # qty = jumlah ask NON-kita di level itu (ask kita di-exclude total).
-            comp_levels = []
-            for p in sorted(levels):
-                owners = levels[p]
-                if any(s not in my_slugs for s in owners):
-                    q_comp = sum(1 for s in owners if s not in my_slugs)
-                    comp_levels.append((p, q_comp))
             out[(slug, mid)] = {
                 "total_provider": total,
                 "provider_ok_kita": ok,
-                "posisi_kompetitor": sum(q for _p, q in comp_levels),
-                # levels = orderbook KOMPETITOR murni (ask kita semua slug dihapus)
-                "levels": comp_levels,
+                "posisi_kompetitor": total,
+                "levels": levels,
             }
     return out
 def _lowest_competitor_price(levels):
@@ -552,27 +538,71 @@ def _lowest_competitor_price(levels):
         return None
     return float(levels[0][0])
 
+def _decide_trigger_area(our, official, levels, trigger_pct, max_in=0):
+    """Official-price trigger-area decision (contract basis B + fallback).
 
-def _decision_from_levels(our, official, levels, max_in=0, market_comp=None, trigger_pct=None):
-    """Decision upstream-scoped with configured trigger floor."""
-    competitor_price = float(market_comp) if market_comp is not None and float(market_comp) > 0 else _lowest_competitor_price(levels)
-    if competitor_price is None:
-        return {"action": "hold", "target": our, "competitor_price": None}
-    refs = [p for p, _q in levels if abs(p - our) > 1e-6]
-    ref = competitor_price if market_comp is not None and float(market_comp) > 0 else (min(refs) if refs else None)
-    if ref is None:
-        return {"action": "hold", "target": our, "competitor_price": competitor_price}
-    target = round(ref - official * 0.001, 6)
-    if trigger_pct is not None and trigger_pct > 0:
-        target = max(target, round(official * (trigger_pct / 100.0), 6))
-    if max_in > 0:
-        target = min(target, max_in)
-    target = max(0.0, round(target, 6))
-    if abs(target - our) <= 0.5e-4:
-        return {"action": "hold", "target": our, "competitor_price": competitor_price}
-    return {"action": "undercut" if target < our else "resume", "target": target,
-            "competitor_price": competitor_price}
+    boundary = round(official * trigger_pct, 6) when official and
+    trigger_pct are both positive, else None (no boundary filter).
+    offset   = round(official * 0.001, 6) when official > 0 else 0.
+    Valid competitor refs: price p > 0, strictly above boundary (when
+    present), and not equal to our own ask within 1e-6.
 
+    Contract (corrected):
+      - valid refs split into lower (p < our) and higher (p > our)
+      - lower valid exists -> UNDERCUT lowest lower:
+          target = round(lowest_lower - offset, 6)
+      - already cheapest (no lower) -> lowest higher:
+          distance = higher - our; distance <= offset (incl. exact
+          equality) -> HOLD at our; distance > offset -> RESUME
+          target = round(higher - offset, 6)
+      - no valid outside-area candidate -> RESUME fallback
+          target = round(round(official * 0.5, 6) - offset, 6)
+      - max_in clamps target only (max_in <= 0 disables the clamp)
+      - target <= 0 -> HOLD at our (never emit zero or negative)
+    """
+    boundary = (round(float(official) * float(trigger_pct), 6)
+                if float(official) > 0 and float(trigger_pct) > 0 else None)
+    offset = round(float(official) * 0.001, 6) if float(official) > 0 else 0.0
+    our_f = float(our)
+    refs = [float(p) for p, _q in levels
+            if float(p) > 0
+            and (boundary is None or float(p) > boundary)
+            and abs(float(p) - our_f) > 1e-6]
+    lower = [p for p in refs if p < our_f]
+    higher = [p for p in refs if p > our_f]
+
+    def _clamp(t):
+        if max_in > 0:
+            t = min(t, float(max_in))
+        return t
+
+    if lower:
+        ref = min(lower)
+        target = _clamp(round(ref - offset, 6))
+        if target <= 0:
+            return {"action": "hold", "target": our_f, "ref": ref,
+                    "boundary": boundary, "competitor_price": ref}
+        return {"action": "undercut", "target": target, "ref": ref,
+                "boundary": boundary, "competitor_price": ref}
+
+    if higher:
+        ref = min(higher)
+        target = _clamp(round(ref - offset, 6))
+        if target <= 0 or target <= our_f:
+            # sudah termurah & target resume tak di atas our (jarak ke higher
+            # <= offset, termasuk tepat 0.1% official) -> HOLD di our
+            return {"action": "hold", "target": our_f, "ref": ref,
+                    "boundary": boundary, "competitor_price": ref}
+        return {"action": "resume", "target": target, "ref": ref,
+                "boundary": boundary, "competitor_price": ref}
+
+    # Tidak ada kandidat luar-area valid -> RESUME fallback 50% official.
+    target = _clamp(round(round(float(official) * 0.5, 6) - offset, 6))
+    if target <= 0 or target <= our_f:
+        return {"action": "hold", "target": our_f, "ref": None,
+                "boundary": boundary, "competitor_price": None}
+    return {"action": "resume", "target": target, "ref": None,
+            "boundary": boundary, "competitor_price": None}
 
 
 def run_cycle(dry_run=False):
@@ -669,40 +699,7 @@ def run_cycle(dry_run=False):
             ok_kita = pos.get("provider_ok_kita", 0) if pos else 0
             pos_komp = pos.get("posisi_kompetitor", 0) if pos else 0
             levels = pos.get("levels", []) if pos else []
-            # Legacy branch below must use the current upstream's resolved comp,
-            # never a global catalog level from another upstream/tab.
-            if comp is not None and comp > 0:
-                levels = [(comp, 1)]
-            dp = _decision_from_levels(our, official, levels, max_in, market_comp=comp, trigger_pct=t_pct * 100)
-            # SINGLE DECISION PATH: target/action dari upstream-scoped `dp`.
-            # Branch lama di bawah tidak boleh menimpa target hasil helper.
-            target = dp["target"]
-            action = dp["action"]
-            if action == "hold":
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                decisions.append({**a, "action": "hold", "target": our, "our": our, "comp": comp,
-                                  "reason": f"upstream scoped competitor ${dp['competitor_price'] or 0:.4f} target ${target:.4f} - hold"})
-                continue
-            if effective_dry:
-                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
-                                  "reason": f"{action} upstream scoped competitor ${dp['competitor_price']:.4f} -> ${target:.4f}"})
-                continue
-            st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
-            status = "OK" if st in (200, 204) else f"HTTP{st}"
-            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} target=${target:.4f} [{status}]")
-            if st in (200, 204):
-                hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
-                hold[hk].pop("skip_until", None)
-                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
-                                  "reason": f"{action} upstream scoped competitor ${dp['competitor_price']:.4f} -> ${target:.4f}", "http": st})
-            elif st in (429, 0):
-                hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts, "skip_until": now + BACKOFF}
-                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
-                                  "reason": f"{status} - backoff", "http": st})
-            else:
-                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
-                                  "reason": f"{status} - skip", "http": st})
-            continue
+            a["competitor_price"] = _lowest_competitor_price(levels)
 
 
             # ── FIX (permintaan Faiz): anchor kompetitor TIDAK BOLEH = ask kita sendiri.
@@ -726,152 +723,82 @@ def run_cycle(dry_run=False):
                     # tidak ada kompetitor murni → kita sendiri di market → leader
                     comp = None
 
-            # ── LOGIKA FAIZ v2 (REBOUND DIHAPUS) ──
-            # trigger = official × trigger% (range "harga tidak wajar")
-            # - our <= komp              → HOLD/leader (kita termurah, DIAM)
-            # - komp <= trigger          → IGNORE range trigger.
-            #                              UNDERCUT kompetitor NON-TRIGGER terendah
-            #                              (level orderbook terendah yang masih DI ATAS trigger_px),
-            #                              minus offset. Fokus di range non-trigger.
-            # - komp > trigger           → UNDERCUT normal ikut komp − 0.1% official
-            offset = official * 0.001  # 0.1% dari official price
             trigger_px = round(official * t_pct, 6)
 
-            # ===== LOGIKA FAIZ v3 AKHIR (REBOUND DIHAPUS, trigger = batas ABAIKAN) =====
-            # trigger_px = official x trigger%  (batas "harga tidak wajar" / range trigger)
-            #   kompetitor ≤ trigger  → kita ABAIKAN mereka (cuekin, jangan balas ke range trigger)
-            #   kompetitor > trigger  → kompetitor wajar, kita undercut 0.1% di bawah mereka
-            # UNDERCUT = 0.1% DI BAWAH kompetitor NON-TRIGGER (bukan dari official!).
-            #   - scan orderbook: level terendah yang MASIH di atas trigger (non-trigger / harga wajar)
-            #   - kita pasang 0.1% lebih murah dari level non-trigger terendah itu
-            #   - harga kita tidak pernah masuk ke range trigger (jual di range non-trigger)
-            offset = official * 0.001  # 0.1% dari official price (undercut gap)
-            trigger_px = round(official * t_pct, 6)
-
-            # ── LOGIKA FAIZ v4 (MURNI — sesuai permintaan): trigger = harga BATAS.
-            #   kompetitor yang MELEWATI batas (≤ trigger) → ABAIKAN, jangan diladenin.
-            #   kompetitor di LUAR batas (> trigger) → kita undias 0.1% di bawahnya.
-            #   TIDAK ADA self-correct. TIDAK ada naikin harga ke batas.
-            #   Kalau kita lebih murah dari semua kompetitor wajar → DIAM (leader).
-            #   Kalau tidak ada kompetitor wajar sama sekali → DIAM di harga kita.
-
-            # Anchor market dapat None saat prefix kompetitor berbeda; jika orderbook
-            # punya levels, tetap proses kompetitor sejati. HOLD hanya bila benar-benar
-            # tidak ada kompetitor atau kita sudah di bawah anchor valid.
             if not levels:
+                # Blocker C: levels kosong = tidak ada kompetitor sejati
+                # (semua ask slug milik kita sudah di-exclude di get_positions)
+                # → HOLD. TIDAK ada self-anchor resume dari catalog/ask sendiri.
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"no orderbook levels (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}"})
                 continue
 
-            #
-            # cari level kompetitor SEJATI terendah (semua harga, bukan cuma > trigger)
-            # PENTING: exclude harga kita sendiri (our) — jangan undercut diri sendiri.
-            nontrig_prices = [p for p, _q in levels if abs(p - our) > 1e-6]
-            # REV5: RESUME — kalau kompetitor wajar CUMAN di ATAS kita (kita yang
-            # termurah di range wajar) DAN di level harga kita TIDAK ada kompetitor
-            # lain (qty di level our sudah 0 setelah ask kita dikurangi), naik jemput
-            # level wajar terendah di atas. Kalau masih ada kompetitor di level kita
-            # -> jangan resume (kita masih bersaing di level itu). Persis permintaan user.
-            nontrig_above = [p for p in nontrig_prices if p > our + 1e-6]
-            nontrig_below = [p for p in nontrig_prices if p < our - 1e-6]
-            # apakah masih ada kompetitor murni DI level harga kita (qty > 0 di our)?
-            our_level_qty = 0
-            for p, q in levels:
-                if abs(p - our) <= 1e-6:
-                    our_level_qty = q
-                    break
-            if not nontrig_below and nontrig_above and our_level_qty <= 0:
-                # tidak ada kompetitor wajar di bawah & level kita kosong -> RESUME ke atas
-                ref_price = min(nontrig_above)
-                target = round(ref_price - offset, 6)
-                if max_in > 0:
-                    target = min(target, max_in)
-                target = max(0.0, round(target, 6))
-                if abs(target - our) <= 0.5e-4:
-                    hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                    decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                      "reason": f"already at ${our:.4f} (resume target ${target:.4f} ≈ our) - hold"})
-                    continue
-                if effective_dry:
-                    log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> resume non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
-                    decisions.append({**a, "action": "resume", "target": target, "our": target, "comp": comp,
-                                      "reason": f"resume 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} (kompetitor wajar di atas kita, level kita kosong) | posisi komp {pos_komp}"})
-                    continue
-                st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
-                status = "OK" if st in (200, 204) else f"HTTP{st}"
-                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> resume non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
-                if st in (200, 204):
-                    hold[hk] = {"mode": "resume", "our": target, "comp": comp, "ts": now}
-                    hold[hk].pop("skip_until", None)
-                    decisions.append({**a, "action": "resume", "target": target, "comp": comp,
-                                      "reason": f"resume 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} (kompetitor wajar di atas kita) | posisi komp {pos_komp}", "http": st})
-                elif st in (429, 0):
-                    hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts,
-                                "skip_until": now + BACKOFF}
-                    log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip + backoff {BACKOFF}s")
-                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip + backoff", "http": st})
-                else:
-                    decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
-                continue
-            if not nontrig_prices:
-                # tidak ada level non-trigger selain kita → jangan turun, diam di harga kita
+            # ── KEPUTUSAN LEVEL: _decide_trigger_area (basis B) ──
+            # boundary = round(official * trigger_pct, 6). Ref kompetitor valid =
+            # level orderbook sejati terendah yang > boundary (kompetitor di
+            # area trigger / ≤ boundary DIABAIKAN) dan ≠ ask kita (1e-6).
+            # target = ref - 0.1% official, clamp max_in SAJA (tanpa floor
+            # boundary). target <= 0 → helper HOLD (tidak pernah kirim
+            # nol/negatif). action = undercut / resume / hold (epsilon
+            # 0.00005). Tanpa market-anchor override — level orderbook
+            # kompetitor murni (ask semua slug kita sudah di-exclude di
+            # get_positions) langsung dipakai helper ini.
+            # competitor_price di decision row = a['competitor_price']
+            # (_lowest_competitor_price(levels), orderbook SEJATI), bukan comp.
+            dec = _decide_trigger_area(our, official, levels, t_pct, max_in)
+            target = dec["target"]
+            action = dec["action"]
+            if action == "hold":
+                # Blocker A: jangan format dec['ref'] (None saat tak ada ref
+                # valid) — hold di-append duluan, reason tanpa ref.
+                # Blocker D: pertahankan competitor_price orderbook sejati
+                # (a['competitor_price']), bukan comp market.
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"komp ${comp:.4f} di trigger ${trigger_px:.4f}; tdk ada level non-trigger kompetitor utk diundercut, hold di ${our:.4f} | posisi komp {pos_komp}"})
+                decisions.append({**a, "action": "hold", "target": our, "our": our, "comp": comp,
+                                  "competitor_price": a.get("competitor_price"),
+                                  "reason": f"hold from trigger area (boundary ${dec.get('boundary') or 0:.4f}, orderbook ${a.get('competitor_price') or 0:.4f}) our ${our:.4f} | posisi komp {pos_komp}"})
                 continue
-
-            # acuan = level kompetitor SEJATI terendah di orderbook
-            ref_price = nontrig_prices[0]
-            target = round(ref_price - offset, 6)
-            # FIX (2026-08-15): TIDAK clamp ke trigger_px lagi — boleh undercut ke
-            # bawah trigger kalau kompetitor sejati di sana (user: "gak jalan").
-            # jangan melebihi max slot harga (max_in)
-            if max_in > 0:
-                target = min(target, max_in)
-            target = max(0.0, round(target, 6))
-            if abs(target - our) <= 0.5e-4:
-                hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
-                decisions.append({**a, "action": "hold", "target": our, "comp": comp,
-                                  "reason": f"already at ${our:.4f} (non-trigger low ${ref_price:.4f} - 0.1%) - hold | posisi komp {pos_komp}"})
-                continue
-            # arah: turun = undercut; naik = jemput kompetitor (resume) —
-            # kalau hanya kita di harga itu, kita naik ke level kompetitor di atas.
-            action = "undercut" if target < our else "resume"
-
+            # Actionable (undercut/resume): undercut/resume dari lower/higher
+            # selalu punya ref valid. Resume fallback 50%-official punya
+            # dec['ref']=None — format reason dengan ref_txt biar tidak crash.
+            ref_txt = f"${dec['ref']:.4f}" if dec.get("ref") is not None else "50%-official"
+            reason = (f"{action} 0.1% dr ref {ref_txt} -> ${target:.4f} "
+                      f"(boundary ${dec.get('boundary') or 0:.4f}) | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})")
             if effective_dry:
-                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> {action} non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
-                decisions.append({**a, "action": action, "target": target, "comp": comp,
-                                  "reason": f"{action} 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})"})
+                log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> {action} ref {ref_txt}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
+                decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
+                                  "reason": reason})
                 continue
-            st, res = set_ask(slug, cid, target, a["ask_out"], official=official)
+            st, _ = set_ask(slug, cid, target, a["ask_out"], official=official)
             status = "OK" if st in (200, 204) else f"HTTP{st}"
-            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} non-trigger ${ref_price:.4f}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
+            log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} ref {ref_txt}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 # AP-6: sukses → reset backoff (buang skip_until)
                 hold[hk].pop("skip_until", None)
                 decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
-                                  "reason": f"{action} 0.1% dr level non-trigger ${ref_price:.4f} -> ${target:.4f} | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})", "http": st})
+                                  "reason": reason, "http": st})
             elif st in (429, 0):
                 # AP-6: 429/timeout → backoff: skip model ini selama BACKOFF detik
                 hold[hk] = {"mode": "backoff", "our": our, "comp": comp, "ts": prev_ts,
                             "skip_until": now + BACKOFF}
                 log(f"  !! [{slug}] {mid}: {status} (429/timeout) — skip + backoff {BACKOFF}s")
-                decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip + backoff", "http": st})
+                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
+                                  "reason": f"{status} — skip + backoff", "http": st})
             else:
                 log(f"  !! [{slug}] {mid}: {status} — skip, no retry this cycle")
-                decisions.append({**a, "action": "error", "target": our, "comp": comp, "reason": f"{status} — skip", "http": st})
+                decisions.append({**a, "action": "error", "target": our, "our": our, "comp": comp,
+                                  "reason": f"{status} — skip", "http": st})
             continue
 
+    # Tanpa post-loop fallback ke market comp: competitor_price hanya dari
+    # orderbook sejati (_lowest_competitor_price(levels)), bukan row['comp'].
     save_hold_state(hold)
-    n_lead = sum(1 for d in decisions if d["action"] == "leader")
     n_und = sum(1 for d in decisions if d["action"] in ("undercut", "undercut_floor", "resume"))
     n_hold = sum(1 for d in decisions if d["action"] in ("hold", "stable"))
-    n_cd = sum(1 for d in decisions if d["action"] == "cooldown")
-    n_stable = sum(1 for d in decisions if d["action"] == "stable")
     n_err = sum(1 for d in decisions if d["action"] == "error")
-    log(f"cycle done: {len(decisions)} model, {n_lead} leader, {n_und} undercut, {n_hold} hold, {n_cd} cooldown, {n_stable} stable, {n_err} error")
+    log(f"cycle done: {len(decisions)} model, {n_und} undercut, {n_hold} hold, {n_err} error")
 
     try:
         _atomic_write(STATE_FILE, {"ts": datetime.datetime.now().isoformat(), "cycles": decisions})
