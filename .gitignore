@@ -33,6 +33,7 @@ Thumbs.db
 
 # --- Misc ---
 *.tmp
+*.out
 *.bak
 .dashboard-password
 AUDIT-FULL.md
@@ -42,3 +43,6 @@ AUDIT-FULL.md
 *.egg-info/
 .coverage
 htmlcov/
+coverage/
+.pytest_cache/
+.vercel/
