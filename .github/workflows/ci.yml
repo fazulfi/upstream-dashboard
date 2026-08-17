@@ -24,6 +24,9 @@ jobs:
       - name: Python compile scripts
         working-directory: .
         run: python -m compileall -q scripts/ backend/
+      - name: Auto-pricing unit tests (scripts)
+        working-directory: .
+        run: python -B -m unittest scripts.tests.test_self_undercut -v
       - name: Run tests with coverage (logic >=80%, app smoke)
         run: pytest --cov=logic --cov=app --cov-report=term-missing -q
       - name: Coverage gate on pure logic
@@ -43,6 +46,6 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Test
-        run: npm test -- --coverage --coverageThreshold='{}' 2>/dev/null || npm run test 2>/dev/null || echo "no test script yet"
+        run: npm test -- --run
       - name: Build
         run: npm run build
