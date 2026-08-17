@@ -211,3 +211,33 @@ def test_orderbook_all_ours_has_no_genuine_min_ask(client):
     up = {u["slug"]: u for u in mo["upstreams"]}
     assert up["cline-pass"]["is_ours"] is True
     assert all(lv["price"] >= 0 for u in mo["upstreams"] for lv in u["levels"])
+
+
+def test_orderbook_serves_from_cache_without_fetch(client):
+    """RATE-LIMIT FIX: api_orderbook harus membaca /catalog dari _cache (di-poll
+    background), BUKAN memanggil inferhub_get per request. Kalau inferhub_get dipanggil
+    (cache kosong -> fallback), test ini tetap hijau; untuk memastikan cache jalan,
+    set _cache dan patch inferhub_get agar raise -> request harus tetap 200."""
+    import app as app_mod
+    saved = app_mod._cache.get("catalog")
+    saved_p = app_mod._cache.get("providers")
+    saved_a = app_mod._cache.get("asks")
+    try:
+        app_mod._cache["catalog"] = _CATALOG_DSV
+        app_mod._cache["providers"] = _PROVIDERS_OURS
+        app_mod._cache["asks"] = _ASKS_SAMPLE
+
+        def _boom(path, params=None, timeout=25):
+            raise AssertionError(f"inferhub_get dipanggil utk {path} — harus dari cache")
+
+        with mock.patch.object(app_mod, "inferhub_get", side_effect=_boom):
+            r = client.get("/api/orderbook", headers={"X-Auth": "test-pass"})
+        assert r.status_code == 200
+        data = r.get_json()
+        by_mid = {m["model_id"].split("/")[-1].lower(): m for m in data["models"]}
+        mo = by_mid["deepseek-v4-flash"]
+        assert mo["min_ask"] == 0.05
+    finally:
+        app_mod._cache["catalog"] = saved
+        app_mod._cache["providers"] = saved_p
+        app_mod._cache["asks"] = saved_a

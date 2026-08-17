@@ -61,6 +61,7 @@ HIST = os.path.join(BASE, "revenue", "live-history.ndjson")
 PORT = int(os.environ.get("UPSTREAM_API_PORT", "8124"))
 ENV_FILE = "/home/gamesim/.hermes-suisui/.env"
 POLL_SECONDS = int(os.environ.get("UPSTREAM_POLL_SECONDS", "10"))
+CATALOG_POLL_SECONDS = int(os.environ.get("UPSTREAM_CATALOG_POLL_SECONDS", "60"))
 HISTORY_CAP = 20000  # ~55h at 10s
 
 # ── PostgreSQL (primary store for earning history) ──
@@ -752,6 +753,9 @@ _cache = {
     "calls_updated": None,
     "model_rank": None,     # ranking model publisher (dihitung di background poller)
     "earnings_log": None,   # live earning per-request (poll tiap 30s, dari /usage/logs)
+    "catalog": None,        # /catalog orderbook (poll tiap CATALOG_POLL_SECONDS; dipakai api_orderbook/api_catalog)
+    "providers": None,      # /publisher/providers (poll sejalan catalog; utk is_ours di orderbook)
+    "asks": None,           # /publisher/providers/{id}/asks (poll sejalan catalog; utk our_ask di orderbook)
     "refreshed": None,
     "last_error": None,
 }
@@ -891,6 +895,23 @@ def _poll_once(now_epoch):
                 _cache["_dbsync_done"] = 1
             except Exception as e:
                 _cache["last_error"] = f"dbsync: {e}"
+
+        # ── catalog orderbook + providers + asks (throttle CATALOG_POLL_SECONDS) ──
+        if _cache.get("_catalog_ts", 0) + CATALOG_POLL_SECONDS < _now or _cache.get("catalog") is None:
+            try:
+                cat = inferhub_get("/catalog")
+                if cat:
+                    _cache["catalog"] = cat
+                    prov = inferhub_get("/publisher/providers") or []
+                    _cache["providers"] = prov
+                    sample = next((p for p in prov if p.get("enabled")), None)
+                    if sample:
+                        asks = inferhub_get(f"/publisher/providers/{sample['id']}/asks")
+                        if asks:
+                            _cache["asks"] = asks
+                    _cache["_catalog_ts"] = _now
+            except Exception as e:
+                _cache["last_error"] = f"catalog: {e}"
 
 
 def _compute_model_rank(prov):
@@ -1996,7 +2017,9 @@ def api_market():
 
 @app.route("/api/catalog")
 def api_catalog():
-    d = inferhub_get("/catalog")
+    d = _cache.get("catalog")
+    if not d:
+        d = inferhub_get("/catalog")
     if not d:
         return jsonify({"error": "unavailable"})
     if isinstance(d, list):
@@ -2015,15 +2038,21 @@ def api_orderbook():
     get_positions() di scripts/auto_pricing.py. min_ask/max_ask/spread dihitung dari
     level slug BUKAN milik kita; tiap upstream diberi flag `is_ours`. Level per-upstream
     (termasuk milik kita) tetap disajikan utk modal set-harga-manual."""
-    cat = inferhub_get("/catalog")
+    cat = _cache.get("catalog")
+    if not cat:
+        cat = inferhub_get("/catalog")
     asks_map = {}
-    ad = inferhub_get("/publisher/providers")
+    ad = _cache.get("providers")
+    if ad is None:
+        ad = inferhub_get("/publisher/providers")
     my_slugs = {p.get("upstreamSlug") for p in (ad or []) if p.get("enabled") and p.get("upstreamSlug")}
     sample = None
     if isinstance(ad, list):
         sample = next((p for p in ad if p.get("enabled")), None)
     if sample:
-        a = inferhub_get(f"/publisher/providers/{sample['id']}/asks")
+        a = _cache.get("asks")
+        if a is None:
+            a = inferhub_get(f"/publisher/providers/{sample['id']}/asks")
         if isinstance(a, list):
             for x in a:
                 asks_map[x.get("upstreamCatalogModelId")] = x
@@ -2163,7 +2192,7 @@ def api_provider_recheck():
 
 @app.route("/api/asks")
 def api_asks():
-    """Asks per provider × model dari /publisher/providers/{id}/asks. 
+    """Asks per provider × model dari /publisher/providers/{id}/asks.
     Query: ?upstream=codex&q=model&status=all — agregat per upstream tab-wide.
     Catatan: modelId path PUT = upstreamCatalogModelId (uuid)."""
     up = request.args.get("upstream", "")

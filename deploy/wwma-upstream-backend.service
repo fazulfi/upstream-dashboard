@@ -1,0 +1,18 @@
+[Unit]
+Description=Upstream backend API (Flask/waitress :8124, cached InferHub catalog)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+# User-scoped unit: do not set User=/Group=.
+Environment=UPSTREAM_API_PORT=8124
+Environment=UPSTREAM_POLL_SECONDS=10
+EnvironmentFile=-/home/gamesim/.hermes-suisui/backend.env
+ExecStart=/home/gamesim/.venv-dash/bin/python /home/gamesim/dashboard/backend/app.py
+WorkingDirectory=/home/gamesim/dashboard/backend
+
+[Install]
+WantedBy=default.target

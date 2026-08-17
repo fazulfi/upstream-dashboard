@@ -482,3 +482,34 @@ hanya melihat level cline-pass. Tidak ada satu pun yang membaca book slug lain.
   upstream/model di DB sesuai dengan slug yang benar.
 - Tingkat "kompetisi" kini diukur per-provider (bukan antar-provider kita).
 
+## REV13 (2026-08-17) — PERSISTENSI OPERASIONAL & CACHE CATALOG
+
+REV13 membuat perubahan produksi dapat diaudit dan mengurangi rate-limit pada endpoint orderbook.
+
+### Tabel PostgreSQL
+
+Daemon membuat tabel berikut secara idempotent saat start; `backend/db_schema.py` juga mendaftarkan schema yang sama:
+
+- `auto_pricing_ops`: satu baris untuk setiap keputusan/PUT, termasuk action, harga awal/target, reference, boundary, HTTP status, mode dry-run, dan reason.
+- `auto_pricing_state`: snapshot terakhir per `(slug, model_id)`, di-upsert setiap cycle.
+- `auto_pricing_api_log`: endpoint, method, status, durasi milidetik, dan ukuran response untuk setiap request daemon.
+
+`auto_pricing_ops` dan `auto_pricing_api_log` dibersihkan untuk data lebih tua dari 30 hari saat daemon start. Jika PostgreSQL atau `psycopg` tidak tersedia, daemon tetap menjalankan pricing dan JSON state; kegagalan persistence harus terlihat dari tidak bertambahnya timestamp/row di tabel.
+
+DSN memakai `UPSTREAM_DB` bila tersedia, dengan fallback lokal `postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream`. Secret tidak disimpan di unit service atau repository.
+
+### Cache catalog backend
+
+Backend mem-poll `/catalog`, `/publisher/providers`, dan sample provider asks melalui live-cache dengan interval `UPSTREAM_CATALOG_POLL_SECONDS` (default 60 detik). Endpoint `/api/catalog` dan `/api/orderbook` membaca cache terlebih dahulu dan hanya melakukan fetch fallback bila cache belum tersedia. Akibatnya orderbook dashboard dapat tertinggal hingga interval cache, tetapi menghindari setiap request UI menghabiskan rate limit InferHub.
+
+### Verifikasi produksi
+
+```sql
+SELECT count(*), min(ts), max(ts) FROM auto_pricing_ops;
+SELECT count(*), max(updated_at) FROM auto_pricing_state;
+SELECT count(*), max(ts) FROM auto_pricing_api_log;
+```
+
+Ketiga query harus menunjukkan row baru setelah daemon cycle. Backup PostgreSQL memakai `pg_dump`, sehingga tabel REV13 ikut tercakup tanpa daftar tabel khusus.
+
+**Status lock:** REV13 wajib committed ke `main` sebelum perubahan runtime berikutnya dianggap production source of truth. Runtime hash, service status, DB freshness, dan rollback backup dicatat di `docs/PRODUCTION-LOCK.md`.

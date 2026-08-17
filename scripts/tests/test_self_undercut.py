@@ -651,5 +651,55 @@ class TestProviderScopedPositions(unittest.TestCase):
         self.assertEqual(pos[("codebuddy-cn", "glm-5.2")]["total_provider"], 2)
 
 
+class TestDbHelpers(unittest.TestCase):
+    """REV13: history PUT/ops + state + api-log harus tercatat ke PostgreSQL.
+    Helper daemon graceful-degrade: kalau psycopg/DB tak tersedia, daemon tetap jalan."""
+
+    def test_db_execute_returns_false_when_psycopg_missing(self):
+        with mock.patch.object(ap, "psycopg", None):
+            self.assertFalse(ap._db_execute("SELECT 1"))
+
+    def test_db_log_op_skips_when_psycopg_missing(self):
+        with mock.patch.object(ap, "psycopg", None):
+            ap._db_log_op("codebuddy", "glm-5.2", "undercut", 0.14, 0.1386, 0.14, 0.021, 1.4, 0.15, 0.5, 200, False, "r")
+        # tidak raise = pass
+
+    def test_db_log_api_skips_when_no_status(self):
+        with mock.patch.object(ap, "psycopg", None):
+            ap._db_log_api("/catalog", "GET", 0, 5, 10)
+        # tidak raise = pass
+
+    def test_db_execute_uses_psycopg_connect(self):
+        calls = []
+
+        class FakeCursor:
+            def execute(self, sql, params):
+                calls.append((sql, params))
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        class FakeConn:
+            def cursor(self):
+                return FakeCursor()
+
+            def commit(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        fake_connect = mock.MagicMock(return_value=FakeConn())
+        with mock.patch("psycopg.connect", fake_connect):
+            self.assertTrue(ap._db_execute("INSERT INTO x (a) VALUES (%s)", (1,)))
+        self.assertEqual(calls, [("INSERT INTO x (a) VALUES (%s)", (1,))])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -203,3 +203,58 @@ def ensure_schema(cur):
             slug TEXT PRIMARY KEY, family TEXT, label TEXT, status TEXT, synced_at TIMESTAMPTZ
         )
     """)
+
+    # ── auto-pricing ops history (daemon write) — REV13 (2026-08-17) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_ops (
+            id BIGSERIAL PRIMARY KEY,
+            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+            slug TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            our DOUBLE PRECISION NOT NULL,
+            target DOUBLE PRECISION NOT NULL,
+            ref DOUBLE PRECISION,
+            boundary DOUBLE PRECISION,
+            official DOUBLE PRECISION NOT NULL,
+            trigger_pct DOUBLE PRECISION NOT NULL,
+            max_in DOUBLE PRECISION,
+            http_status INT,
+            dry_run BOOL NOT NULL DEFAULT FALSE,
+            reason TEXT
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_ts ON auto_pricing_ops(ts DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_model ON auto_pricing_ops(slug, model_id, ts DESC)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_state (
+            slug TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            catalog_id TEXT,
+            ask_in DOUBLE PRECISION,
+            ask_out DOUBLE PRECISION,
+            official DOUBLE PRECISION,
+            max_ask_in DOUBLE PRECISION,
+            enabled BOOL,
+            demand DOUBLE PRECISION,
+            competitor_price DOUBLE PRECISION,
+            action TEXT,
+            target DOUBLE PRECISION,
+            comp DOUBLE PRECISION,
+            reason TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (slug, model_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_api_log (
+            id BIGSERIAL PRIMARY KEY,
+            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+            endpoint TEXT NOT NULL,
+            method TEXT NOT NULL DEFAULT 'GET',
+            status INT NOT NULL,
+            ms BIGINT NOT NULL,
+            bytes INT NOT NULL
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ap_api_ts ON auto_pricing_api_log(ts DESC)")

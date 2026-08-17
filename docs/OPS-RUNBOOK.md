@@ -1,6 +1,6 @@
 # OPS RUNBOOK — upstream-dashboard (VPS 82.25.62.204)
 
-**Update:** 2026-08-13. Dokumen operasional harian — layanan, backup/restore, troubleshooting,
+**Update:** 2026-08-17. Dokumen operasional harian — layanan, backup/restore, troubleshooting,
 checklist. Untuk logika auto-pricing & tambah provider lihat `docs/auto-pricing.md`.
 
 ---
@@ -13,7 +13,7 @@ checklist. Untuk logika auto-pricing & tambah provider lihat `docs/auto-pricing.
 | Nginx | `ops.budgezen.com` → proxy API-only | 80/443 |
 | Backend | Flask + waitress (`backend/app.py`) | 8124 |
 | DB | PostgreSQL `upstream` (gamesim@127.0.0.1) | 5432 |
-| Daemon | auto-pricing (`scripts/auto_pricing.py`, interval 30s) | — |
+| Daemon | auto-pricing (`scripts/auto_pricing.py`, service interval 60s; code default 30s) | — |
 
 User layanan: **gamesim** (bukan root). Systemd user instance: `XDG_RUNTIME_DIR=/run/user/1001`.
 
@@ -38,8 +38,8 @@ su - gamesim -c 'export XDG_RUNTIME_DIR=/run/user/1001; systemctl --user restart
 curl -sk http://127.0.0.1:8124/health
 ```
 
-> ⚠️ Backend dijalankan manual via nohup (bukan unit aktif) — `pgrep -f backend/app.py`.
-> Unit file ada utk referensi; jangan start ganda (Address already in use).
+> Backend produksi dijalankan oleh `wwma-upstream-backend.service` sebagai user `gamesim`.
+> Jangan start manual dengan nohup; restart unit agar tidak terjadi `Address already in use`.
 
 ---
 

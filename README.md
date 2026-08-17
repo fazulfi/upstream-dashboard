@@ -4,7 +4,8 @@
 
 Dashboard memantau fleet provider, earnings, keuangan (P&L), market/orderbook, dan mengendalikan
 harga jual (ask) per model secara manual maupun otomatis (auto-pricing daemon) — dengan
-PostgreSQL sebagai sumber kebenaran (single source of truth) untuk data finansial.
+PostgreSQL sebagai sumber kebenaran (single source of truth) untuk data finansial, konfigurasi,
+dan jejak operasional auto-pricing.
 
 ---
 
@@ -14,7 +15,7 @@ PostgreSQL sebagai sumber kebenaran (single source of truth) untuk data finansia
 |---|---|
 | **Fleet** | Health provider per upstream (ok / invalid / drained), usage windows, recheck, enabled toggle |
 | **Market** | Orderbook per model (ladder harga + depth per upstream), min/max/spread, catalog, combos |
-| **Harga** | Set harga ask manual (per model × upstream), auto-pricing daemon (undercut kompetitor non-trigger, HOLD leader) |
+| **Harga** | Set harga ask manual (per model × upstream), auto-pricing daemon (per-provider orderbook, trigger-area undercut/resume) |
 | **Keuangan** | P&L lengkap (amortisasi, impairment, refund, payout), workbook Excel, kurs live, topup/refund/buy/retire CLI |
 | **Analytics** | Earnings trend per-call, breakdown per model/provider, model ranking, publisher analytics per range |
 | **Ops** | API keys InferHub (create/rotate/revoke), budgets & aliases, topup QRIS, settings, arm/disarm auto-pricing |
@@ -51,6 +52,7 @@ PostgreSQL sebagai sumber kebenaran (single source of truth) untuk data finansia
 | Finance CLI | `scripts/fin_ops.py` (input tunggal), `scripts/gen_finance.py` (regen workbook) | Python |
 | Backup | `scripts/backup_db.sh` | pg_dump · gzip · retention 14d |
 | Deploy units | `deploy/*.service` | systemd user |
+| Production lock | `docs/PRODUCTION-LOCK.md` | phase gates, evidence, rollback |
 
 ---
 
@@ -69,7 +71,7 @@ PostgreSQL sebagai sumber kebenaran (single source of truth) untuk data finansia
 
 ```bash
 export DASHBOARD_PASSWORD='...'        # atau Environment= di unit systemd
-export ALLOWED_ORIGINS='https://frontend-fazulfis-projects.vercel.app'
+export ALLOWED_ORIGINS='https://upstream-static.vercel.app'
 export UPSTREAM_DB='postgresql://gamesim:***@127.0.0.1:5432/upstream'
 export UPSTREAM_API_PORT=8124
 export UPSTREAM_POLL_SECONDS=10
@@ -86,7 +88,7 @@ export FOREX_KEY='...'                 # utk gen_finance (kurs live)
 ```bash
 # unit systemd user (lihat deploy/wwma-upstream-backend.service)
 cp deploy/wwma-upstream-backend.service ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now wwma-upstream-backend
+systemctl --user daemon-reload && systemctl --user enable --now wwma-upstream-backend.service
 
 # auto-pricing daemon
 cp deploy/wwma-auto-pricing.service ~/.config/systemd/user/
@@ -104,7 +106,7 @@ systemctl --user enable --now wwma-finance.timer
 
 ```bash
 cd frontend
-vercel link --yes --project frontend
+vercel link --yes --project upstream-static
 vercel --prod        # JANGAN set VITE_DASHBOARD_PASSWORD — pakai /api/login + token
 ```
 
@@ -164,7 +166,7 @@ npm test          # vitest run --coverage
 npm run build
 ```
 
-Workflow: `.github/workflows/ci.yml` (backend) · `.github/workflows/frontend.yml` (frontend).
+Workflow: `.github/workflows/ci.yml` (backend + frontend).
 
 ---
 
@@ -173,7 +175,8 @@ Workflow: `.github/workflows/ci.yml` (backend) · `.github/workflows/frontend.ym
 Tabel inti: `assets`, `payouts`, `refunds`, `impairments` (finance); `earning_history`,
 `usage_logs`, `providers`, `provider_asks`, `model_ranking`, `market_snapshot`, `catalog_models`
 (ops); `api_keys`, `topups`, `budgets`, `budget_aliases`, `combos`, `combo_models`,
-`auto_pricing_config`, `pricing_config`, `ledger_meta`.
+`auto_pricing_config`, `auto_pricing_ops`, `auto_pricing_state`, `auto_pricing_api_log`,
+`pricing_config`, `ledger_meta`.
 
 ```bash
 pg_dump -d upstream | gzip > backups/inferhub-$(date +%F).sql.gz   # manual

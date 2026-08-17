@@ -101,6 +101,138 @@ def load_config():
         return {}
 
 
+def _db_execute(sql, params=None):
+    """Jalankan statement DML/DDL di Postgres (auto_pricing_*). Return True sukses,
+    False kalau psycopg/DB tidak tersedia (daemon tetap jalan tanpa DB)."""
+    if not psycopg:
+        return False
+    try:
+        with psycopg.connect(DB_DSN, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or [])
+            conn.commit()
+        return True
+    except Exception:
+        return False
+
+
+def _db_ensure_schema():
+    """DDL idempotent utk tabel operasional daemon. Aman dipanggil tiap start."""
+    _db_execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_ops (
+            id BIGSERIAL PRIMARY KEY,
+            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+            slug TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            our DOUBLE PRECISION NOT NULL,
+            target DOUBLE PRECISION NOT NULL,
+            ref DOUBLE PRECISION,
+            boundary DOUBLE PRECISION,
+            official DOUBLE PRECISION NOT NULL,
+            trigger_pct DOUBLE PRECISION NOT NULL,
+            max_in DOUBLE PRECISION,
+            http_status INT,
+            dry_run BOOL NOT NULL DEFAULT FALSE,
+            reason TEXT
+        )
+    """)
+    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_ts ON auto_pricing_ops(ts DESC)")
+    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_model ON auto_pricing_ops(slug, model_id, ts DESC)")
+    _db_execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_state (
+            slug TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            catalog_id TEXT,
+            ask_in DOUBLE PRECISION,
+            ask_out DOUBLE PRECISION,
+            official DOUBLE PRECISION,
+            max_ask_in DOUBLE PRECISION,
+            enabled BOOL,
+            demand DOUBLE PRECISION,
+            competitor_price DOUBLE PRECISION,
+            action TEXT,
+            target DOUBLE PRECISION,
+            comp DOUBLE PRECISION,
+            reason TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (slug, model_id)
+        )
+    """)
+    _db_execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_api_log (
+            id BIGSERIAL PRIMARY KEY,
+            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+            endpoint TEXT NOT NULL,
+            method TEXT NOT NULL DEFAULT 'GET',
+            status INT NOT NULL,
+            ms BIGINT NOT NULL,
+            bytes INT NOT NULL
+        )
+    """)
+    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_api_ts ON auto_pricing_api_log(ts DESC)")
+
+
+def _db_log_api(endpoint, method, status, ms, nbytes):
+    if psycopg and status:
+        _db_execute("INSERT INTO auto_pricing_api_log (endpoint, method, status, ms, bytes) VALUES (%s,%s,%s,%s,%s)",
+                    (endpoint, method, int(status), int(ms), int(nbytes)))
+
+
+def _db_log_op(slug, mid, action, our, target, ref, boundary, official, t_pct, max_in, http_status, dry_run, reason):
+    if not psycopg:
+        return
+    _db_execute(
+        "INSERT INTO auto_pricing_ops (slug, model_id, action, our, target, ref, boundary, official, trigger_pct, max_in, http_status, dry_run, reason) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (slug, mid, action, float(our), float(target),
+         float(ref) if ref is not None else None,
+         float(boundary) if boundary is not None else None,
+         float(official), float(t_pct),
+         float(max_in) if max_in is not None else None,
+         http_status, bool(dry_run), reason))
+
+
+def _db_upsert_state(rows):
+    """Upsert snapshot state per model ke auto_pricing_state. rows = list decision dict."""
+    if not psycopg or not rows:
+        return
+    try:
+        with psycopg.connect(DB_DSN, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                for r in rows:
+                    cur.execute("""
+                        INSERT INTO auto_pricing_state
+                            (slug, model_id, catalog_id, ask_in, ask_out, official, max_ask_in, enabled, demand,
+                             competitor_price, action, target, comp, reason, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+                        ON CONFLICT (slug, model_id) DO UPDATE SET
+                            catalog_id=EXCLUDED.catalog_id, ask_in=EXCLUDED.ask_in,
+                            ask_out=EXCLUDED.ask_out, official=EXCLUDED.official,
+                            max_ask_in=EXCLUDED.max_ask_in, enabled=EXCLUDED.enabled,
+                            demand=EXCLUDED.demand, competitor_price=EXCLUDED.competitor_price,
+                            action=EXCLUDED.action, target=EXCLUDED.target, comp=EXCLUDED.comp,
+                            reason=EXCLUDED.reason, updated_at=now()
+                    """, (
+                        r.get("slug"), r.get("model_id"), r.get("catalog_id"),
+                        r.get("ask_in"), r.get("ask_out"), r.get("official"),
+                        r.get("max_ask_in"), r.get("enabled"), r.get("demand"),
+                        r.get("competitor_price"), r.get("action"), r.get("target"),
+                        r.get("comp"), r.get("reason"),
+                    ))
+            conn.commit()
+    except Exception:
+        pass
+
+
+def _db_retention(days=30):
+    """Hapus ops + api_log lebih tua dari `days` hari (sekali per start)."""
+    if not psycopg:
+        return
+    _db_execute("DELETE FROM auto_pricing_ops WHERE ts < now() - make_interval(days => %s)", (days,))
+    _db_execute("DELETE FROM auto_pricing_api_log WHERE ts < now() - make_interval(days => %s)", (days,))
+
+
 def band_for(slug, mid, conf):
     """trigger_pct per model — SATU-SATUNYA sumber: config DB (auto_pricing_config).
     REBOUND DIHAPUS (nilai rebound_pct hanya kompatibilitas config lama, tak dipakai).
@@ -164,15 +296,18 @@ def api(path, method="GET", payload=None, _retries=0):
         "Accept": "application/json",
         "Content-Type": "application/json",
     })
+    _t0 = time.time()
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             body = r.read().decode()
+            _db_log_api(path, method, r.status, int((time.time() - _t0) * 1000), len(body))
             return (r.status, json.loads(body) if body else None)
     except urllib.error.HTTPError as e:
         try:
             body = json.loads(e.read().decode())
         except Exception:
             body = {"raw": str(e)}
+        _db_log_api(path, method, e.code, int((time.time() - _t0) * 1000), len(json.dumps(body)))
         # 429 rate-limit: tunggu retryAfter lalu retry (sekali lagi)
         if e.code == 429 and _retries < 2:
             wait = 5
@@ -730,6 +865,8 @@ def run_cycle(dry_run=False):
                 # (semua ask slug milik kita sudah di-exclude di get_positions)
                 # → HOLD. TIDAK ada self-anchor resume dari catalog/ask sendiri.
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
+                _db_log_op(slug, mid, "hold", our, our, None, trigger_px, official, t_pct, max_in, None, dry_run,
+                           f"no orderbook levels (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}")
                 decisions.append({**a, "action": "hold", "target": our, "comp": comp,
                                   "reason": f"no orderbook levels (our ${our:.4f} comp ${comp or 0:.4f}) | posisi komp {pos_komp}"})
                 continue
@@ -755,6 +892,9 @@ def run_cycle(dry_run=False):
                 # Blocker D: pertahankan competitor_price orderbook sejati
                 # (a['competitor_price']), bukan comp market.
                 hold[hk] = {"mode": "hold", "our": our, "comp": comp, "ts": prev_ts}
+                _db_log_op(slug, mid, "hold", our, our, dec.get("ref"), dec.get("boundary"), official, t_pct, max_in,
+                           None, dry_run,
+                           f"hold from trigger area (boundary ${dec.get('boundary') or 0:.4f}, orderbook ${a.get('competitor_price') or 0:.4f}) our ${our:.4f} | posisi komp {pos_komp}")
                 decisions.append({**a, "action": "hold", "target": our, "our": our, "comp": comp,
                                   "competitor_price": a.get("competitor_price"),
                                   "reason": f"hold from trigger area (boundary ${dec.get('boundary') or 0:.4f}, orderbook ${a.get('competitor_price') or 0:.4f}) our ${our:.4f} | posisi komp {pos_komp}"})
@@ -767,12 +907,16 @@ def run_cycle(dry_run=False):
                       f"(boundary ${dec.get('boundary') or 0:.4f}) | posisi komp {pos_komp} ({ok_kita} ok / {tot_prov})")
             if effective_dry:
                 log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} trigger=${trigger_px:.4f} -> {action} ref {ref_txt}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{'DRY' if not ARMED else 'ARMED'}]")
+                _db_log_op(slug, mid, action, our, target, dec.get("ref"), dec.get("boundary"), official, t_pct,
+                           max_in, None, True, reason)
                 decisions.append({**a, "action": action, "target": target, "our": target, "comp": comp,
                                   "reason": reason})
                 continue
             st, _ = set_ask(slug, cid, target, a["ask_out"], official=official)
             status = "OK" if st in (200, 204) else f"HTTP{st}"
             log(f"  [{slug}] {mid}: our=${our:.4f} comp=${comp or 0:.4f} -> {action} ref {ref_txt}-0.1% = ${target:.4f} totProv={tot_prov} okKita={ok_kita} posKomp={pos_komp} [{status}]")
+            _db_log_op(slug, mid, action, our, target, dec.get("ref"), dec.get("boundary"), official, t_pct,
+                       max_in, st, False, reason)
             if st in (200, 204):
                 hold[hk] = {"mode": action, "our": target, "comp": comp, "ts": now}
                 # AP-6: sukses → reset backoff (buang skip_until)
@@ -804,6 +948,7 @@ def run_cycle(dry_run=False):
         _atomic_write(STATE_FILE, {"ts": datetime.datetime.now().isoformat(), "cycles": decisions})
     except Exception:
         pass
+    _db_upsert_state(decisions)
     return n_und
 
 
@@ -813,6 +958,9 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--interval", type=int, default=INTERVAL)
     args = ap.parse_args()
+
+    _db_ensure_schema()
+    _db_retention()
 
     if args.dry_run:
         log("AUTO-PRICING DRY-RUN (no PUT)")
