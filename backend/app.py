@@ -2008,10 +2008,17 @@ def api_catalog():
 def api_orderbook():
     """Orderbook per model: agregat catalog.asksIn[] -> level harga + depth per upstream.
     Harga termurah -> tertinggi (ladder). Juga min/max/spread/official.
-    dimaksud utk halaman Ask Price orderbook-style (klik model -> modal set manual)."""
+    dimaksud utk halaman Ask Price orderbook-style (klik model -> modal set manual).
+
+    Asks-to-daemon parity (2026-08-16): slug upstream milik kita (satu publisher,
+    /publisher/providers enabled) di-EXCLUDE dari level kompetitor SEJATI — sama dgn
+    get_positions() di scripts/auto_pricing.py. min_ask/max_ask/spread dihitung dari
+    level slug BUKAN milik kita; tiap upstream diberi flag `is_ours`. Level per-upstream
+    (termasuk milik kita) tetap disajikan utk modal set-harga-manual."""
     cat = inferhub_get("/catalog")
     asks_map = {}
     ad = inferhub_get("/publisher/providers")
+    my_slugs = {p.get("upstreamSlug") for p in (ad or []) if p.get("enabled") and p.get("upstreamSlug")}
     sample = None
     if isinstance(ad, list):
         sample = next((p for p in ad if p.get("enabled")), None)
@@ -2022,10 +2029,11 @@ def api_orderbook():
                 asks_map[x.get("upstreamCatalogModelId")] = x
 
     ups = cat if isinstance(cat, list) else (cat or {}).get("upstreams", []) if isinstance(cat, dict) else []
-    # model -> {label, model_id, official_in, upstreams:[{slug,label,levels:[{price,qty}]}], our_ask}
+    # model -> {label, model_id, official_in, upstreams:[{slug,label,levels:[{price,qty}],is_ours}], our_ask}
     models = {}
     for u in ups:
         slug = u.get("slug"); ulabel = u.get("label")
+        is_ours = slug in my_slugs
         for m in (u.get("models") or []):
             cid = m.get("id") or m.get("upstreamCatalogModelId")
             mid = m.get("upstreamModelId")
@@ -2058,12 +2066,12 @@ def api_orderbook():
                 try: mo["our_ask"] = round(float(our_a.get("askInputPerMtok") or 0), 6)
                 except (TypeError, ValueError): pass
             # expose upstreamCatalogModelId (cid) utk set-harga-manual dari frontend
-            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels, "active": u.get("activeProviders"), "cid": cid})
-    # compute min/max/spread + sort models
+            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels, "active": u.get("activeProviders"), "cid": cid, "is_ours": is_ours})
+    # compute min/max/spread from GENUINE competitor levels (non-ours) + sort models
     out = []
     for key, mo in models.items():
-        all_lv = [lv for u in mo["upstreams"] for lv in u["levels"]]
-        prices = [lv["price"] for lv in all_lv if lv["price"] > 0]
+        genuine = [lv for u in mo["upstreams"] if not u.get("is_ours") for lv in u["levels"]]
+        prices = [lv["price"] for lv in genuine if lv["price"] > 0]
         mn = min(prices) if prices else None
         mx = max(prices) if prices else None
         mo["min_ask"] = mn; mo["max_ask"] = mx

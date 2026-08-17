@@ -4,6 +4,7 @@ Conftest sudah: env test, import app, patch inferhub_* & db_connect, fixture cli
 """
 import time
 import inspect
+from unittest import mock
 
 import pytest
 
@@ -123,3 +124,90 @@ def test_rate_limit_429(client):
     finally:
         app_mod.RL_LIMIT = 60
         app_mod._rl.clear()
+
+
+# ── /api/orderbook — Asks-to-daemon parity (2026-08-16) ──
+# Root cause: `/api/orderbook` menampilkan SEMUA `/catalog` asksIn termasuk ask dari
+# slug upstream MILIK KITA; daemon `get_positions()` (scripts/auto_pricing.py) meng-EXCLUDE
+# semua slug milik kita (`my_slugs` dari /publisher/providers enabled). Model non-GLM
+# (mis. DeepSeek V4 Flash) yang semua ask-nya dari upstream kita (ClinePass) tampil penuh
+# di halaman Asks, tapi daemon mengeluarkan levels=[] -> competitor_price=None -> dash.
+# PARITY FIX: `/api/orderbook` menghitung `my_slugs` yang sama, menandai `is_ours` per
+# upstream, dan menghitung min_ask/max_ask/spread hanya dari level kompetitor SEJATI.
+
+_CATALOG_DSV = [
+    {"slug": "codebuddy", "label": "CodeBuddy", "activeProviders": 2, "models": [
+        {"id": "cid-cb", "upstreamModelId": "deepseek-v4-flash", "label": "DeepSeek V4 Flash",
+         "officialIn": 0.8, "asksIn": [0.0220]}]},
+    {"slug": "cline-pass", "label": "ClinePass", "activeProviders": 3, "models": [
+        {"id": "cid-cp", "upstreamModelId": "cline-pass/deepseek-v4-flash", "label": "DeepSeek V4 Flash",
+         "officialIn": 0.8, "asksIn": [0.0220, 0.1098, 0.1100]}]},
+    {"slug": "z-ai", "label": "Z AI", "activeProviders": 1, "models": [
+        {"id": "cid-z", "upstreamModelId": "z-ai/deepseek-v4-flash", "label": "DeepSeek V4 Flash",
+         "officialIn": 0.8, "asksIn": [0.05]}]},
+]
+
+_PROVIDERS_OURS = [
+    {"id": "p1", "upstreamSlug": "codebuddy", "enabled": True},
+    {"id": "p2", "upstreamSlug": "cline-pass", "enabled": True},
+]
+
+_ASKS_SAMPLE = [
+    {"upstreamCatalogModelId": "cid-cb", "upstreamModelId": "deepseek-v4-flash",
+     "askInputPerMtok": 0.022, "askOutputPerMtok": 0.022, "enabled": True},
+]
+
+
+def _orderbook_json(client, catalog=None, providers=None, asks=None):
+    def _fake_get(path, params=None, timeout=25):
+        if path == "/catalog":
+            return catalog if catalog is not None else _CATALOG_DSV
+        if path == "/publisher/providers":
+            return providers if providers is not None else _PROVIDERS_OURS
+        if path.startswith("/publisher/providers/"):
+            return asks if asks is not None else _ASKS_SAMPLE
+        return None
+
+    with mock.patch.object(app_mod, "inferhub_get", side_effect=_fake_get):
+        r = client.get("/api/orderbook", headers={"X-Auth": "test-pass"})
+    assert r.status_code == 200
+    return r.get_json()
+
+
+def test_orderbook_excludes_own_slugs_from_genuine_min_ask(client):
+    """PARITY: own ask (codebuddy) + ClinePass (milik kita) + kompetitor sejati
+    (z-ai @0.05). min_ask model HARUS 0.05 (kompetitor sejati), BUKAN 0.022
+    (ask ClinePass/codebuddy milik kita). Saat ini api_orderbook menampilkan SEMUA
+    ask -> min_ask 0.022 -> FAIL."""
+    data = _orderbook_json(client)
+    by_mid = {m["model_id"].split("/")[-1].lower(): m for m in data["models"]}
+    mo = by_mid["deepseek-v4-flash"]
+    assert mo["min_ask"] == 0.05
+    assert mo["max_ask"] == 0.05
+    up = {u["slug"]: u for u in mo["upstreams"]}
+    assert up["codebuddy"]["is_ours"] is True
+    assert up["cline-pass"]["is_ours"] is True
+    assert up["z-ai"]["is_ours"] is False
+
+
+def test_orderbook_all_ours_has_no_genuine_min_ask(client):
+    """PARITY: model yang SEMUA ask-nya dari slug milik kita (ClinePass @.0220/.1098/
+    .1100, codebuddy @.0220 — tanpa kompetitor sejati) harus min_ask=None — konsisten
+    dgn daemon get_positions() yang mengeluarkan levels=[] / competitor dash. Saat ini
+    min_ask 0.022 (ask kita sendiri ditampilkan sbg market) -> FAIL."""
+    catalog = [
+        {"slug": "codebuddy", "label": "CodeBuddy", "activeProviders": 2, "models": [
+            {"id": "cid-cb", "upstreamModelId": "deepseek-v4-flash", "label": "DeepSeek V4 Flash",
+             "officialIn": 0.8, "asksIn": [0.0220]}]},
+        {"slug": "cline-pass", "label": "ClinePass", "activeProviders": 3, "models": [
+            {"id": "cid-cp", "upstreamModelId": "cline-pass/deepseek-v4-flash", "label": "DeepSeek V4 Flash",
+             "officialIn": 0.8, "asksIn": [0.0220, 0.1098, 0.1100]}]},
+    ]
+    data = _orderbook_json(client, catalog=catalog)
+    by_mid = {m["model_id"].split("/")[-1].lower(): m for m in data["models"]}
+    mo = by_mid["deepseek-v4-flash"]
+    assert mo["min_ask"] is None
+    assert mo["max_ask"] is None
+    up = {u["slug"]: u for u in mo["upstreams"]}
+    assert up["cline-pass"]["is_ours"] is True
+    assert all(lv["price"] >= 0 for u in mo["upstreams"] for lv in u["levels"])
