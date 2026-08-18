@@ -18,7 +18,9 @@ import psycopg
 from psycopg.rows import dict_row
 
 ENV_FILE = "/home/gamesim/.hermes-suisui/.env"
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise RuntimeError("UPSTREAM_DB must be configured")
 # R15: publisher share dari DB (fallback 0.80) — jangan hardcode 0.80
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import finance_share  # noqa: E402

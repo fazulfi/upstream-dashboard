@@ -20,7 +20,9 @@ from psycopg.rows import dict_row
 
 BASE = "/home/gamesim/shared-memory/inferhub-business"
 LEDGER = os.path.join(BASE, "finance", "ledger.json")
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise RuntimeError("UPSTREAM_DB must be configured")
 
 
 def conn():
