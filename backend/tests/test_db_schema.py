@@ -35,6 +35,19 @@ def test_reliability_schema_is_additive_and_idempotent_contract():
     assert not re.search(r"\b(DROP|TRUNCATE|DELETE|ALTER TABLE .*DROP)\b", sql, re.I)
 
 
+def test_finance_table_alters_follow_fresh_table_creation():
+    cur = RecordingCursor()
+    db_schema.ensure_schema(cur)
+    sql = "\\n".join(cur.statements)
+
+    assert sql.index("CREATE TABLE IF NOT EXISTS impairments") < sql.index(
+        "ALTER TABLE impairments ADD COLUMN"
+    )
+    assert sql.index("CREATE TABLE IF NOT EXISTS payouts") < sql.index(
+        "ALTER TABLE payouts ADD COLUMN"
+    )
+
+
 def test_reliability_schema_converges_on_repeated_invocation():
     first = RecordingCursor()
     second = RecordingCursor()
