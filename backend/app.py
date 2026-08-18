@@ -2389,7 +2389,7 @@ def api_reliability_summary():
     try:
         cycle_row = _reliability_query("SELECT started_at, completed_at, status, summary FROM reliability_cycles ORDER BY started_at DESC LIMIT 1")
         cycles_count = _reliability_query("SELECT count(*) AS n FROM reliability_cycles")[0]["n"]
-        hold_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE event_type='model_hold' OR payload::text ILIKE '%hold%'")[0]["n"]
+        hold_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE event_type='model_hold' OR position('hold' in payload::text) > 0")[0]["n"]
         error_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE severity IN ('error','critical')")[0]["n"]
         delayed_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE event_type='delayed_data'")[0]["n"]
         db_fresh = _reliability_query("SELECT max(occurred_at) AS at FROM reliability_events")[0]["at"]
