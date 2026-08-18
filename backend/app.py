@@ -2378,8 +2378,51 @@ def _reliability_query(sql, params=()):
 
 @app.route("/api/reliability/summary")
 def api_reliability_summary():
-    rows = _reliability_query("SELECT metric, value, bucket_start, bucket_granularity FROM reliability_aggregates ORDER BY bucket_start DESC LIMIT 200")
-    return jsonify({"data": rows, "aggregates": rows, "meta": {"cursor": None}})
+    aggregates = _reliability_query("SELECT metric, value, bucket_start, bucket_granularity FROM reliability_aggregates ORDER BY bucket_start DESC LIMIT 200")
+    afile = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-arm")
+    armed = False
+    if os.path.exists(afile):
+        try:
+            armed = open(afile, encoding="utf-8").read().strip() == "1"
+        except OSError:
+            armed = False
+    try:
+        cycle_row = _reliability_query("SELECT started_at, completed_at, status, summary FROM reliability_cycles ORDER BY started_at DESC LIMIT 1")
+        cycles_count = _reliability_query("SELECT count(*) AS n FROM reliability_cycles")[0]["n"]
+        hold_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE event_type='model_hold' OR payload::text ILIKE '%hold%'")[0]["n"]
+        error_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE severity IN ('error','critical')")[0]["n"]
+        delayed_count = _reliability_query("SELECT count(*) AS n FROM reliability_events WHERE event_type='delayed_data'")[0]["n"]
+        db_fresh = _reliability_query("SELECT max(occurred_at) AS at FROM reliability_events")[0]["at"]
+    except Exception:
+        cycle_row, cycles_count, hold_count, error_count, delayed_count, db_fresh = [], 0, 0, 0, 0, None
+    model_count = 0
+    try:
+        model_count = _reliability_query("SELECT count(*) AS n FROM auto_pricing_state")[0]["n"]
+    except Exception:
+        model_count = 0
+    last_heartbeat = None
+    duration_ms = None
+    service_status = "unknown"
+    if cycle_row:
+        last_heartbeat = cycle_row[0]["completed_at"] or cycle_row[0]["started_at"]
+        if cycle_row[0]["started_at"] and cycle_row[0]["completed_at"]:
+            duration_ms = int((cycle_row[0]["completed_at"] - cycle_row[0]["started_at"]).total_seconds() * 1000)
+        service_status = "healthy" if cycle_row[0]["status"] == "completed" else (cycle_row[0]["status"] or "degraded")
+    return jsonify({
+        "armed": armed,
+        "service_status": service_status,
+        "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
+        "duration_ms": duration_ms,
+        "cycle_count": cycles_count,
+        "model_count": model_count,
+        "hold_count": hold_count,
+        "error_count": error_count,
+        "delayed_count": delayed_count,
+        "db_freshness": db_fresh.isoformat() if db_fresh else None,
+        "stale": delayed_count > 0,
+        "aggregates": aggregates,
+        "meta": {"cursor": None},
+    })
 
 
 @app.route("/api/reliability/cycles")

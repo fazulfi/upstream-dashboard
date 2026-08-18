@@ -28,6 +28,17 @@ def test_rest_envelopes_include_data_and_cursor_meta(client, auth_headers, monke
     assert client.get("/api/reliability/events", headers=auth_headers).json["data"] == []
 
 
+def test_summary_contract_has_live_fields(client, auth_headers, monkeypatch):
+    queries = []
+    monkeypatch.setattr("app._reliability_query", lambda sql, params=(): (queries.append(sql) or []))
+    response = client.get("/api/reliability/summary", headers=auth_headers)
+    assert response.status_code == 200
+    payload = response.json
+    for key in ("armed", "service_status", "last_heartbeat", "duration_ms", "cycle_count", "model_count", "hold_count", "error_count", "delayed_count", "db_freshness", "stale", "aggregates", "meta"):
+        assert key in payload, f"missing summary key: {key}"
+    assert "data" not in payload
+
+
 def test_arm_requires_strict_boolean_and_hides_path(client, auth_headers, monkeypatch):
     assert client.post("/api/auto-pricing/arm", json={"armed": 1}, headers=auth_headers).status_code == 400
     monkeypatch.setattr("app._set_auto_pricing_state", lambda armed, **kwargs: {"event_id": "event-1", "armed": armed})
