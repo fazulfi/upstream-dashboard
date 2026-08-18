@@ -101,6 +101,16 @@ curl -sk -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8124/health
 - Vercel gate: `[PASS/FAIL/UNKNOWN]`
 - Backup/rollback gate: `[PASS/FAIL/UNKNOWN]`
 - Overall deployment evidence: **UNSIGNED / BLOCKED** until every field is supported by captured evidence.
+
+## PR #2 verification update (2026-08-18)
+
+- Feature branch: `feat/phase1-reliability`
+- PR: https://github.com/fazulfi/upstream-dashboard/pull/2
+- Backend CI: **PASS** on commit `d6d8a36`
+- Frontend CI: **PASS** on commit `d6d8a36`
+- Vercel preview status: **FAIL**, external project configuration error: framework is set to `services` but no services are declared. This is not production deployment evidence and must not be bypassed.
+- PR review decision: **REVIEW_REQUIRED**; merge state **BLOCKED**.
+- Production deployment: **NOT STARTED**; no VPS/Vercel production mutation performed.
 - Release authorization: **NOT GRANTED**
 - Blocking reasons: `[list exact unresolved items]`
 - Final approver signature and UTC timestamp: `[blank]`
