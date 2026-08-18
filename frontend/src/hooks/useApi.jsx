@@ -38,11 +38,14 @@ function authHeaders(extra = {}) {
 
 const FOCUSED_API_PREFIX = '/api/auto-pricing';
 const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
+const RELIABILITY_PREFIX = '/api/reliability';
 
 // Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
 export function isApiEnabled(path) {
   return path === FOCUSED_API_PREFIX
     || path.startsWith(`${FOCUSED_API_PREFIX}/`)
+    || path === RELIABILITY_PREFIX
+    || path.startsWith(`${RELIABILITY_PREFIX}/`)
     || MANUAL_ASK_PATHS.has(path);
 }
 

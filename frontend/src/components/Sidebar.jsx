@@ -1,9 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../theme';
-import { LayoutDashboard, TrendingUp, Layers, BarChart3, Receipt, Wallet, Settings, Sun, Moon, KeyRound, QrCode, CandlestickChart, Boxes, Gauge, SlidersHorizontal, Activity, Workflow } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Layers, BarChart3, Receipt, Wallet, Settings, Sun, KeyRound, QrCode, CandlestickChart, Boxes, Gauge, SlidersHorizontal, Activity, Workflow, ShieldCheck } from 'lucide-react';
 
 const SECTIONS = [
-  { label: 'Overview', items: [ { to: '/', label: 'Dashboard', Icon: LayoutDashboard, end: true } ] },
+  { label: 'Overview', items: [
+    { to: '/', label: 'Reliability', Icon: ShieldCheck, end: true },
+    { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard, end: true },
+  ] },
   { label: 'Publisher', items: [
     { to: '/earnings', label: 'Earnings', Icon: TrendingUp },
     { to: '/upstreams', label: 'Upstreams', Icon: Layers },
@@ -26,8 +29,8 @@ const SECTIONS = [
   { label: 'System', items: [ { to: '/settings', label: 'Settings', Icon: Settings } ] },
 ];
 
-export default function Sidebar({ account }) {
-  const { theme, toggle } = useTheme();
+export default function Sidebar() {
+  const { toggle } = useTheme();
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -56,9 +59,9 @@ export default function Sidebar({ account }) {
           <div className="sf-name">Ssnford</div>
           <div className="sf-sub">publisher</div>
         </div>
-        <button className="sf-theme" onClick={toggle} aria-label="Toggle theme">
-          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
+<button className="sf-theme" onClick={toggle} aria-label="Light mode enabled" disabled title="Light mode only">
+           <Sun size={14} />
+         </button>
       </div>
     </aside>
   );
