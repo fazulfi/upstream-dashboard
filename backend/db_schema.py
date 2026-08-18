@@ -46,10 +46,6 @@ def ensure_schema(cur):
             label TEXT, date DATE, synced_at TIMESTAMPTZ DEFAULT now()
         )
     """)
-    cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_by TEXT")
-    cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
-    cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_by TEXT")
-    cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
     cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION")
     cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_by TEXT")
     cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
@@ -68,6 +64,10 @@ def ensure_schema(cur):
             completed_at TIMESTAMPTZ, synced_at TIMESTAMPTZ
         )
     """)
+    cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_by TEXT")
+    cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+    cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_by TEXT")
+    cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ledger_meta (
             k TEXT PRIMARY KEY, v TEXT
