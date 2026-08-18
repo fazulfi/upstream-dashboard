@@ -1,7 +1,54 @@
+import datetime
 import os, sys, time, unittest
 from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auto_pricing as ap
+
+
+class TestDaemonReliability(unittest.TestCase):
+    def test_ids_are_uuid4(self):
+        import uuid
+        self.assertEqual(uuid.UUID(ap.new_cycle_id()).version, 4)
+        self.assertEqual(uuid.UUID(ap.new_event_id()).version, 4)
+
+    def test_delayed_data_is_independent(self):
+        self.assertFalse(ap.orderbook_is_delayed(100, now=219))
+        self.assertTrue(ap.orderbook_is_delayed(100, now=220))
+
+    def test_pid_lock_refuses_live_and_takes_over_dead(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "daemon.pid")
+            self.assertTrue(ap.acquire_pid_lock(path, pid=10, is_alive=lambda pid: False))
+            self.assertFalse(ap.acquire_pid_lock(path, pid=11, is_alive=lambda pid: True))
+            self.assertTrue(ap.acquire_pid_lock(path, pid=11, is_alive=lambda pid: False))
+            self.assertTrue(ap.release_pid_lock(path, pid=11))
+
+    def test_arm_flag_requires_canonical_boolean(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+            f.write("true")
+            path = f.name
+        try:
+            with self.assertRaises(ValueError):
+                ap._read_armed_flag(path)
+        finally:
+            os.unlink(path)
+
+    def test_failed_heartbeat_write_is_not_healthy(self):
+        with mock.patch.object(ap, "_atomic_write", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                ap.persist_heartbeat(ap.new_cycle_id())
+
+    def test_utc_bucket_boundaries_and_retention_window(self):
+        now = datetime.datetime(2026, 8, 18, 12, 0, tzinfo=datetime.timezone.utc)
+        self.assertEqual(ap.reliability_bucket_granularity(now - datetime.timedelta(days=30), now), "hour")
+        self.assertEqual(ap.reliability_bucket_granularity(now - datetime.timedelta(days=30, seconds=1), now), "day")
+        self.assertIsNone(ap.reliability_bucket_granularity(now - datetime.timedelta(days=90, seconds=1), now))
+        self.assertEqual(ap.utc_bucket_start(datetime.datetime(2026, 8, 18, 12, 34, tzinfo=datetime.timezone.utc), "hour"),
+                         datetime.datetime(2026, 8, 18, 12, 0, tzinfo=datetime.timezone.utc))
+        self.assertEqual(ap.utc_bucket_start(datetime.datetime(2026, 8, 18, 12, 34, tzinfo=datetime.timezone.utc), "day"),
+                         datetime.datetime(2026, 8, 18, 0, 0, tzinfo=datetime.timezone.utc))
 
 
 class TestGetPositionsSelfUndercut(unittest.TestCase):
