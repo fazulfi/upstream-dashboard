@@ -111,6 +111,9 @@ curl -sk -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8124/health
 - Vercel preview status: **FAIL**, external project configuration error: framework is set to `services` but no services are declared. This is not production deployment evidence and must not be bypassed.
 - PR review decision: **REVIEW_REQUIRED**; merge state **BLOCKED**.
 - Production deployment: **NOT STARTED**; no VPS/Vercel production mutation performed.
+- Approval gate: **BLOCKED**. The PR owner cannot approve their own pull request, and the repository currently has no other collaborator/reviewer available through GitHub API. No bypass or self-approval was attempted.
+- Merge gate: **BLOCKED** despite backend/frontend CI passing because required review and the failing Vercel status remain unresolved.
+- Release action: **STOP**. Do not SSH, merge, deploy, or start the 24-hour observation until an independent approval and required status resolution exist.
 - Release authorization: **NOT GRANTED**
 - Blocking reasons: `[list exact unresolved items]`
 - Final approver signature and UTC timestamp: `[blank]`
