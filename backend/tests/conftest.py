@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 # ── env test-friendly (sebelum import app) ──
-os.environ.setdefault("DASHBOARD_PASSWORD", "test-pass")
+os.environ["DASHBOARD_PASSWORD"] = "test-password-strong"
 os.environ.setdefault(
     "ALLOWED_ORIGINS",
     "http://localhost:5173,https://dash.example",
@@ -38,7 +38,12 @@ def client():
 
 @pytest.fixture()
 def auth_client(client):
-    r = client.post("/api/login", json={"password": "test-pass"})
+    r = client.post("/api/login", json={"password": "test-password-strong"})
     tok = r.get_json()["token"]
-    client.et = {"Authorization": f"Bearer {tok}"}
+    client.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {tok}"
     return client
+
+
+@pytest.fixture()
+def auth_headers(auth_client):
+    return {"Authorization": auth_client.environ_base["HTTP_AUTHORIZATION"]}

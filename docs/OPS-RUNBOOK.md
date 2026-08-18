@@ -47,7 +47,7 @@ curl -sk http://127.0.0.1:8124/health
 
 ### Backup (manual/otomatis)
 ```bash
-# otomatis (script): pg_dump gzip, retensi 14 hari
+# otomatis (script): pg_dump gzip, retensi lokal 14 hari; offsite 30 hari bila dikonfigurasi
 /home/gamesim/scripts/backup_db.sh
 
 # jadwalkan via cron gamesim (mis. 03:30 harian)
@@ -62,6 +62,16 @@ ls /home/gamesim/shared-memory/inferhub-business/backups/
 gunzip -c backups/inferhub-YYYY-MM-DD.sql.gz | PGPASSWORD=upstream_local psql -h 127.0.0.1 -U gamesim -d upstream
 ```
 > ⚠️ Restore menimpa DB. Backup dulu DB saat ini sebelum restore.
+>
+> Reliability retention is separate from backup retention: raw reliability events remain 30 days and UTC aggregates 90 days; the existing 14-day local/30-day offsite backup policy is preserved and does not promise 90-day backup recovery. Cleanup/rollup must be rerun after restore and checked via the reliability aggregate timestamps and maintenance status.
+
+### W6 maintenance checks
+```bash
+# Inspect live retention and aggregate freshness without exposing credentials.
+PGPASSWORD="$PGPASSWORD" psql -h 127.0.0.1 -U gamesim -d upstream -c \
+  "SELECT bucket_granularity, max(bucket_start), count(*) FROM reliability_aggregates GROUP BY bucket_granularity ORDER BY bucket_granularity;"
+```
+The daemon performs bounded cleanup at startup: operational `auto_pricing_ops`/`auto_pricing_api_log` remain on their existing 30-day policy, reliability events are cleaned at 30 days only when their cycle is completed, and aggregates are recomputed/upserted for the 90-day UTC window. Maintenance failures return an error status for audit/reporting and must not be treated as healthy cleanup.
 
 ---
 

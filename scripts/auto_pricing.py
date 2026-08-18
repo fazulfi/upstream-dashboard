@@ -31,7 +31,7 @@ Anti-loop / stabilitas:
   - HTTP 429/timeout -> skip, jangan retry di cycle yg sama
   - atomic write utk semua state (.tmp + os.replace)
 """
-import json, os, time, datetime, argparse, threading
+import json, os, time, datetime, argparse, threading, uuid, errno
 import urllib.request
 try:
     import psycopg
@@ -45,6 +45,87 @@ INTERVAL = 30  # detik
 LOG_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing.log")
 STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-state.json")
 HOLD_STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-hold.json")
+PID_LOCK_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing.pid")
+DELAYED_DATA_SECONDS = 120
+
+
+def new_cycle_id():
+    return str(uuid.uuid4())
+
+
+def new_event_id():
+    return str(uuid.uuid4())
+
+
+def orderbook_is_delayed(observed_at, now=None, threshold=DELAYED_DATA_SECONDS):
+    if observed_at is None:
+        return True
+    return (time.time() if now is None else now) - float(observed_at) >= threshold
+
+
+def acquire_pid_lock(path=PID_LOCK_FILE, pid=None, is_alive=None):
+    pid = os.getpid() if pid is None else int(pid)
+    is_alive = (lambda value: _pid_is_alive(value)) if is_alive is None else is_alive
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    for _ in range(2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w") as lock:
+                lock.write(str(pid) + "\n")
+                lock.flush()
+                os.fsync(lock.fileno())
+            return True
+        except FileExistsError:
+            try:
+                with open(path) as lock:
+                    owner = int(lock.read().strip())
+            except (OSError, ValueError):
+                owner = None
+            if owner and is_alive(owner):
+                return False
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                continue
+    return False
+
+
+def _pid_is_alive(pid):
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as exc:
+        return exc.errno == errno.EPERM
+    return True
+
+
+def release_pid_lock(path=PID_LOCK_FILE, pid=None):
+    try:
+        with open(path) as lock:
+            owner = int(lock.read().strip())
+        if pid is None or owner == int(pid):
+            os.unlink(path)
+            return True
+    except (OSError, ValueError):
+        pass
+    return False
+
+
+def heartbeat_payload(cycle_id, status, **extra):
+    return {"cycle_id": cycle_id, "event_id": new_event_id(), "status": status,
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(), **extra}
+
+
+def persist_heartbeat(cycle_id, **extra):
+    payload = heartbeat_payload(cycle_id, "healthy", **extra)
+    _atomic_write(STATE_FILE, payload)
+    return payload
+
 PREFIX = {"codebuddy": "cb", "cline-pass": "cp", "codebuddy-cn": "cbcn"}
 
 BACKOFF = 180  # detik — kalau PUT kena 429/timeout, skip model itu selama ini (AP-6)
@@ -53,7 +134,9 @@ COOLDOWN_CB = 10           # detik — cb/cbcn: reaktif, nggak kebekuan lama
 COOLDOWN_CP = 15           # detik — cline-pass: reaktif
 
 
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise RuntimeError("UPSTREAM_DB must be configured")
 
 
 def _load_config_db():
@@ -117,60 +200,45 @@ def _db_execute(sql, params=None):
 
 
 def _db_ensure_schema():
-    """DDL idempotent utk tabel operasional daemon. Aman dipanggil tiap start."""
-    _db_execute("""
-        CREATE TABLE IF NOT EXISTS auto_pricing_ops (
-            id BIGSERIAL PRIMARY KEY,
-            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
-            slug TEXT NOT NULL,
-            model_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            our DOUBLE PRECISION NOT NULL,
-            target DOUBLE PRECISION NOT NULL,
-            ref DOUBLE PRECISION,
-            boundary DOUBLE PRECISION,
-            official DOUBLE PRECISION NOT NULL,
-            trigger_pct DOUBLE PRECISION NOT NULL,
-            max_in DOUBLE PRECISION,
-            http_status INT,
-            dry_run BOOL NOT NULL DEFAULT FALSE,
-            reason TEXT
-        )
-    """)
-    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_ts ON auto_pricing_ops(ts DESC)")
-    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_ops_model ON auto_pricing_ops(slug, model_id, ts DESC)")
-    _db_execute("""
-        CREATE TABLE IF NOT EXISTS auto_pricing_state (
-            slug TEXT NOT NULL,
-            model_id TEXT NOT NULL,
-            catalog_id TEXT,
-            ask_in DOUBLE PRECISION,
-            ask_out DOUBLE PRECISION,
-            official DOUBLE PRECISION,
-            max_ask_in DOUBLE PRECISION,
-            enabled BOOL,
-            demand DOUBLE PRECISION,
-            competitor_price DOUBLE PRECISION,
-            action TEXT,
-            target DOUBLE PRECISION,
-            comp DOUBLE PRECISION,
-            reason TEXT,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            PRIMARY KEY (slug, model_id)
-        )
-    """)
-    _db_execute("""
-        CREATE TABLE IF NOT EXISTS auto_pricing_api_log (
-            id BIGSERIAL PRIMARY KEY,
-            ts TIMESTAMPTZ NOT NULL DEFAULT now(),
-            endpoint TEXT NOT NULL,
-            method TEXT NOT NULL DEFAULT 'GET',
-            status INT NOT NULL,
-            ms BIGINT NOT NULL,
-            bytes INT NOT NULL
-        )
-    """)
-    _db_execute("CREATE INDEX IF NOT EXISTS idx_ap_api_ts ON auto_pricing_api_log(ts DESC)")
+    """Use the backend's sole canonical, additive DDL owner."""
+    if not psycopg:
+        return False
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+        from db_schema import ensure_schema
+
+        with psycopg.connect(DB_DSN, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                ensure_schema(cur)
+            conn.commit()
+        return True
+    except Exception:
+        return False
+
+
+def _db_reliability_cycle_start(cycle_id):
+    return _db_execute(
+        "INSERT INTO reliability_cycles (cycle_id, status, summary) VALUES (%s, %s, %s) ON CONFLICT (cycle_id) DO NOTHING",
+        (cycle_id, "running", json.dumps({})),
+    )
+
+
+def _db_reliability_event(cycle_id, event_type, severity, payload, event_id=None):
+    event_id = event_id or new_event_id()
+    return _db_execute(
+        "INSERT INTO reliability_events (event_id, cycle_id, event_type, severity, payload) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (event_id) DO NOTHING",
+        (event_id, cycle_id, event_type, severity, json.dumps(payload or {})),
+    )
+
+
+def _db_reliability_cycle_finish(cycle_id, status, summary):
+    return _db_execute(
+        "UPDATE reliability_cycles SET completed_at = now(), status = %s, summary = %s WHERE cycle_id = %s",
+        (status, json.dumps(summary or {}), cycle_id),
+    )
 
 
 def _db_log_api(endpoint, method, status, ms, nbytes):
@@ -221,16 +289,88 @@ def _db_upsert_state(rows):
                         r.get("comp"), r.get("reason"),
                     ))
             conn.commit()
+        return True
     except Exception:
-        pass
+        return False
+
+
+def utc_bucket_start(value, granularity):
+    """Return a deterministic UTC bucket boundary for a reliability timestamp."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    value = value.astimezone(datetime.timezone.utc)
+    if granularity == "hour":
+        return value.replace(minute=0, second=0, microsecond=0)
+    if granularity == "day":
+        return value.replace(hour=0, minute=0, second=0, microsecond=0)
+    raise ValueError("granularity must be hour or day")
+
+
+def reliability_bucket_granularity(occurred_at, now_utc=None):
+    """Use hourly buckets through 30 UTC days, daily buckets through 90 days."""
+    now_utc = now_utc or datetime.datetime.now(datetime.timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=datetime.timezone.utc)
+    age = now_utc.astimezone(datetime.timezone.utc) - occurred_at.astimezone(datetime.timezone.utc)
+    if age < datetime.timedelta(days=0) or age <= datetime.timedelta(days=30):
+        return "hour"
+    if age <= datetime.timedelta(days=90):
+        return "day"
+    return None
+
+
+def _db_reliability_maintenance(now_utc=None):
+    """Bounded, idempotent W6 maintenance; operational rows remain separate."""
+    if not psycopg:
+        return {"status": "unavailable", "deleted_events": 0, "deleted_aggregates": 0}
+    now_utc = now_utc or datetime.datetime.now(datetime.timezone.utc)
+    result = {"status": "ok", "deleted_events": 0, "deleted_aggregates": 0}
+    try:
+        with psycopg.connect(DB_DSN, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DELETE FROM reliability_events e
+                    USING reliability_cycles c
+                    WHERE e.cycle_id = c.cycle_id
+                      AND e.occurred_at < (%s AT TIME ZONE 'UTC') - INTERVAL '30 days'
+                      AND c.completed_at IS NOT NULL
+                """, (now_utc.replace(tzinfo=None),))
+                result["deleted_events"] = cur.rowcount
+                cur.execute("""
+                    DELETE FROM reliability_aggregates
+                    WHERE bucket_start < (%s AT TIME ZONE 'UTC') - INTERVAL '90 days'
+                """, (now_utc.replace(tzinfo=None),))
+                result["deleted_aggregates"] = cur.rowcount
+                cur.execute("""
+                    INSERT INTO reliability_aggregates
+                        (bucket_start, bucket_granularity, metric, value, updated_at)
+                    SELECT date_trunc(
+                               CASE WHEN e.occurred_at >= (%s AT TIME ZONE 'UTC') - INTERVAL '30 days'
+                                    THEN 'hour' ELSE 'day' END,
+                               e.occurred_at AT TIME ZONE 'UTC'
+                           ) AT TIME ZONE 'UTC',
+                           CASE WHEN e.occurred_at >= (%s AT TIME ZONE 'UTC') - INTERVAL '30 days'
+                                THEN 'hour' ELSE 'day' END,
+                           'event_count', count(*)::double precision, now()
+                    FROM reliability_events e
+                    WHERE e.occurred_at >= (%s AT TIME ZONE 'UTC') - INTERVAL '90 days'
+                    GROUP BY 1, 2
+                    ON CONFLICT (bucket_start, bucket_granularity, metric)
+                    DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                """, (now_utc.replace(tzinfo=None), now_utc.replace(tzinfo=None), now_utc.replace(tzinfo=None)))
+            conn.commit()
+    except Exception as exc:
+        result.update(status="error", error=type(exc).__name__)
+    return result
 
 
 def _db_retention(days=30):
-    """Hapus ops + api_log lebih tua dari `days` hari (sekali per start)."""
+    """Preserve existing 30-day operational-row policy, then run W6 maintenance."""
     if not psycopg:
         return
     _db_execute("DELETE FROM auto_pricing_ops WHERE ts < now() - make_interval(days => %s)", (days,))
     _db_execute("DELETE FROM auto_pricing_api_log WHERE ts < now() - make_interval(days => %s)", (days,))
+    return _db_reliability_maintenance()
 
 
 def band_for(slug, mid, conf):
@@ -740,19 +880,36 @@ def _decide_trigger_area(our, official, levels, trigger_pct, max_in=0):
             "boundary": boundary, "competitor_price": None}
 
 
+def _read_armed_flag(path=None):
+    path = path or os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-arm")
+    with open(path, "r", encoding="utf-8") as f:
+        value = f.read().strip()
+    if value not in {"0", "1"}:
+        raise ValueError("auto-pricing arm flag must be exactly 0 or 1")
+    return value == "1"
+
+
 def run_cycle(dry_run=False):
+    cycle_id = new_cycle_id()
+    persistence_warning = not _db_reliability_cycle_start(cycle_id)
+    _db_reliability_event(cycle_id, "cycle_started", "warning" if persistence_warning else "info", {"dry_run": bool(dry_run)})
     ARMED = True
     try:
-        with open(os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-arm"), "r") as f:
-            ARMED = f.read().strip() == "1"
-    except Exception:
+        ARMED = _read_armed_flag()
+    except (OSError, ValueError):
         ARMED = False
     effective_dry = dry_run or not ARMED
 
     catalog = get_catalog()
     if not catalog:
         log("WARN: /catalog kosong, skip")
-        return
+        if not _db_reliability_event(cycle_id, "catalog_empty", "warning", {}):
+            persistence_warning = True
+        _db_reliability_event(cycle_id, "cycle_completed", "warning", {"status": "catalog_empty", "models": 0})
+        if not _db_reliability_cycle_finish(cycle_id, "skipped", {"status": "catalog_empty", "models": 0, "persistence_warning": persistence_warning}):
+            persistence_warning = True
+        persist_heartbeat(cycle_id, status="skipped", models=0)
+        return 0
     config = load_config()
     hold = load_hold_state()
 
@@ -944,11 +1101,24 @@ def run_cycle(dry_run=False):
     n_err = sum(1 for d in decisions if d["action"] == "error")
     log(f"cycle done: {len(decisions)} model, {n_und} undercut, {n_hold} hold, {n_err} error")
 
+    state = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             "cycle_id": cycle_id, "event_id": new_event_id(), "status": "healthy",
+             "cycles": decisions}
+    _atomic_write(STATE_FILE, state)
     try:
-        _atomic_write(STATE_FILE, {"ts": datetime.datetime.now().isoformat(), "cycles": decisions})
+        state["status"] = "healthy"
+        if not _db_upsert_state(decisions):
+            persistence_warning = True
+        if not _db_reliability_event(cycle_id, "cycle_completed", "warning" if persistence_warning else "info", {"models": len(decisions), "errors": n_err}):
+            persistence_warning = True
+        if not _db_reliability_cycle_finish(cycle_id, "completed", {"models": len(decisions), "errors": n_err, "persistence_warning": persistence_warning}):
+            persistence_warning = True
     except Exception:
-        pass
-    _db_upsert_state(decisions)
+        persistence_warning = True
+    if persistence_warning:
+        state["status"] = "persistence_warning"
+        log(f"WARN persistence_warning cycle_id={cycle_id}")
+    _atomic_write(STATE_FILE, state)
     return n_und
 
 
@@ -959,24 +1129,30 @@ def main():
     ap.add_argument("--interval", type=int, default=INTERVAL)
     args = ap.parse_args()
 
-    _db_ensure_schema()
-    _db_retention()
+    if not acquire_pid_lock():
+        log("AUTO-PRICING already running; refusing duplicate PID")
+        return
+    try:
+        _db_ensure_schema()
+        _db_retention()
 
-    if args.dry_run:
-        log("AUTO-PRICING DRY-RUN (no PUT)")
-        run_cycle(dry_run=True)
-        return
-    if args.once:
-        log("AUTO-PRICING once")
-        run_cycle()
-        return
-    log(f"AUTO-PRICING daemon start (interval {args.interval}s)")
-    while True:
-        try:
+        if args.dry_run:
+            log("AUTO-PRICING DRY-RUN (no PUT)")
+            run_cycle(dry_run=True)
+            return
+        if args.once:
+            log("AUTO-PRICING once")
             run_cycle()
-        except Exception as e:
-            log(f"ERROR cycle: {e}")
-        time.sleep(args.interval)
+            return
+        log(f"AUTO-PRICING daemon start (interval {args.interval}s)")
+        while True:
+            try:
+                run_cycle()
+            except Exception as e:
+                log(f"ERROR cycle: {e}")
+            time.sleep(args.interval)
+    finally:
+        release_pid_lock()
 
 
 if __name__ == "__main__":

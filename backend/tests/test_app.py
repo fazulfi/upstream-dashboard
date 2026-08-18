@@ -32,13 +32,13 @@ def test_query_auth_ditolak(client):
 
 
 def test_xauth_ok_not_401(client):
-    r = client.get("/api/data", headers={"X-Auth": "test-pass"})
+    r = client.get("/api/data", headers={"X-Auth": "test-password-strong"})
     assert r.status_code != 401
 
 
 # ── Sesi token ──
 def test_login_ok(client):
-    r = client.post("/api/login", json={"password": "test-pass"})
+    r = client.post("/api/login", json={"password": "test-password-strong"})
     assert r.status_code == 200
     assert "token" in r.get_json()
 
@@ -48,7 +48,7 @@ def test_login_wrong(client):
 
 
 def test_bearer_token_ok(client):
-    tok = client.post("/api/login", json={"password": "test-pass"}).get_json()["token"]
+    tok = client.post("/api/login", json={"password": "test-password-strong"}).get_json()["token"]
     r = client.get("/api/data", headers={"Authorization": f"Bearer {tok}"})
     assert r.status_code != 401
 
@@ -118,8 +118,8 @@ def test_rate_limit_429(client):
     app_mod.RL_LIMIT = 3
     try:
         for _ in range(3):
-            client.get("/api/data", headers={"X-Auth": "test-pass"})
-        r = client.get("/api/data", headers={"X-Auth": "test-pass"})
+            client.get("/api/data", headers={"X-Auth": "test-password-strong"})
+        r = client.get("/api/data", headers={"X-Auth": "test-password-strong"})
         assert r.status_code == 429
     finally:
         app_mod.RL_LIMIT = 60
@@ -169,7 +169,7 @@ def _orderbook_json(client, catalog=None, providers=None, asks=None):
         return None
 
     with mock.patch.object(app_mod, "inferhub_get", side_effect=_fake_get):
-        r = client.get("/api/orderbook", headers={"X-Auth": "test-pass"})
+        r = client.get("/api/orderbook", headers={"X-Auth": "test-password-strong"})
     assert r.status_code == 200
     return r.get_json()
 
@@ -231,7 +231,7 @@ def test_orderbook_serves_from_cache_without_fetch(client):
             raise AssertionError(f"inferhub_get dipanggil utk {path} — harus dari cache")
 
         with mock.patch.object(app_mod, "inferhub_get", side_effect=_boom):
-            r = client.get("/api/orderbook", headers={"X-Auth": "test-pass"})
+            r = client.get("/api/orderbook", headers={"X-Auth": "test-password-strong"})
         assert r.status_code == 200
         data = r.get_json()
         by_mid = {m["model_id"].split("/")[-1].lower(): m for m in data["models"]}

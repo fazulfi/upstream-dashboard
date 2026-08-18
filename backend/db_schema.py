@@ -34,18 +34,25 @@ def ensure_schema(cur):
         )
     """)
     cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION")
-    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION")
     # ── Actor log (audit trail siapa mencatat transaksi) — item 9 audit keuangan ──
     cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by TEXT")
     cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
     cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS retired_by TEXT")
     cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS retired_at TIMESTAMPTZ")
-    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_by TEXT")
-    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS refunds (
+            id TEXT PRIMARY KEY, upstream TEXT, qty INT DEFAULT 0,
+            amount_idr DOUBLE PRECISION DEFAULT 0, amount_usdc DOUBLE PRECISION DEFAULT 0,
+            label TEXT, date DATE, synced_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
     cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_by TEXT")
     cur.execute("ALTER TABLE impairments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
     cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_by TEXT")
     cur.execute("ALTER TABLE payouts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS kurs_idr_usd DOUBLE PRECISION")
+    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_by TEXT")
+    cur.execute("ALTER TABLE refunds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS impairments (
@@ -153,18 +160,6 @@ def ensure_schema(cur):
             UNIQUE(upstream, model_id)
         )
     """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS refunds (
-            id TEXT PRIMARY KEY,
-            upstream TEXT,
-            qty INT DEFAULT 0,
-            amount_idr DOUBLE PRECISION DEFAULT 0,
-            amount_usdc DOUBLE PRECISION DEFAULT 0,
-            label TEXT,
-            date DATE,
-            synced_at TIMESTAMPTZ DEFAULT now()
-        )
-    """)
 
     # ── schema sync (full_sync init_db — R11: harus ada di kedua path) ──
     cur.execute("""
@@ -258,3 +253,64 @@ def ensure_schema(cur):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ap_api_ts ON auto_pricing_api_log(ts DESC)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_control (
+            id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id = TRUE),
+            armed BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auto_pricing_control_audit (
+            event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            operator TEXT NOT NULL,
+            occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            old_armed BOOLEAN NOT NULL,
+            new_armed BOOLEAN NOT NULL,
+            source TEXT NOT NULL,
+            result TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            correlation_id UUID
+        )
+    """)
+    cur.execute("ALTER TABLE auto_pricing_control_audit ADD COLUMN IF NOT EXISTS reason TEXT NOT NULL DEFAULT ''")
+    cur.execute("ALTER TABLE auto_pricing_control_audit ADD COLUMN IF NOT EXISTS correlation_id UUID")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reliability_cycles (
+            cycle_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            completed_at TIMESTAMPTZ,
+            status TEXT NOT NULL,
+            summary JSONB
+        )
+    """)
+    cur.execute("ALTER TABLE reliability_cycles ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_reliability_cycles_started ON reliability_cycles(started_at DESC)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reliability_events (
+            event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            cycle_id UUID NOT NULL REFERENCES reliability_cycles(cycle_id),
+            cursor BIGSERIAL UNIQUE,
+            event_type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            payload JSONB
+        )
+    """)
+    cur.execute("ALTER TABLE reliability_events ADD COLUMN IF NOT EXISTS cursor BIGINT")
+    cur.execute("CREATE SEQUENCE IF NOT EXISTS reliability_events_cursor_seq")
+    cur.execute("ALTER TABLE reliability_events ALTER COLUMN cursor SET DEFAULT nextval('reliability_events_cursor_seq')")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_reliability_events_cursor ON reliability_events(cursor)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_reliability_events_cycle ON reliability_events(cycle_id, occurred_at DESC)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reliability_aggregates (
+            bucket_start TIMESTAMPTZ NOT NULL,
+            bucket_granularity TEXT NOT NULL,
+            metric TEXT NOT NULL,
+            value DOUBLE PRECISION NOT NULL DEFAULT 0,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (bucket_start, bucket_granularity, metric)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_reliability_aggregates_bucket ON reliability_aggregates(bucket_start DESC)")

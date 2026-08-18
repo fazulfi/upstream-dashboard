@@ -3,7 +3,8 @@ import Sidebar from './Sidebar';
 import { useApi } from '../hooks/useApi';
 
 const TITLES = {
-  '/': { crumb: 'Dashboard / Overview', title: 'Operations overview' },
+  '/': { crumb: 'Reliability / Overview', title: 'Reliability' },
+  '/dashboard': { crumb: 'Dashboard / Overview', title: 'Operations overview' },
   '/earnings': { crumb: 'Operations / Earnings', title: 'Earnings' },
   '/upstreams': { crumb: 'Operations / Upstreams', title: 'Upstream fleet' },
   '/analytics': { crumb: 'Operations / Analytics', title: 'Analytics' },

@@ -27,12 +27,15 @@ import hashlib
 from collections import defaultdict
 from functools import wraps
 from datetime import datetime, timezone
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 import logic  # pure functions (auth, bucketing, sanitize) — unit-testable
 
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD")
+if not DASHBOARD_PASSWORD or len(DASHBOARD_PASSWORD) < 12:
+    raise RuntimeError("DASHBOARD_PASSWORD must be configured with at least 12 characters")
+AUDIT_SERVER_PRINCIPAL = "dashboard-api"
 # CORS: hanya origin dashboard yang diizinkan (bukan `*`). Sesi/Bearer token
 # dipakai agar password tidak perlu di-bundle ke frontend.
 ALLOWED_ORIGINS = set(
@@ -65,7 +68,9 @@ CATALOG_POLL_SECONDS = int(os.environ.get("UPSTREAM_CATALOG_POLL_SECONDS", "60")
 HISTORY_CAP = 20000  # ~55h at 10s
 
 # ── PostgreSQL (primary store for earning history) ──
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise RuntimeError("UPSTREAM_DB must be configured")
 
 # ── Konstanta global (dipindah ke atas supaya tidak NameError di module scope) ──
 # Publisher share: konsumen bayar cost_consumer_usdc; publisher dapat X% (pricing config).
@@ -2303,19 +2308,142 @@ def api_auto_pricing():
     })
 
 
-@app.route("/api/auto-pricing/arm", methods=["POST"])
-def api_auto_pricing_arm():
-    """Toggle arm flag (1 eksekusi PUT, 0 dry-run). Body: {armed: bool}"""
-    body = request.get_json(silent=True) or {}
-    armed = bool(body.get("armed"))
+def _set_auto_pricing_state(armed, operator=AUDIT_SERVER_PRINCIPAL, source="rest", reason="operator transition", correlation_id=None):
+    if type(armed) is not bool:
+        raise ValueError("armed must be boolean")
     afile = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-arm")
+    operator = operator or AUDIT_SERVER_PRINCIPAL
+    correlation_id = correlation_id or str(uuid.uuid4())
+    old = False
+    try:
+        with open(afile, encoding="utf-8") as f:
+            old = f.read().strip() == "1"
+    except OSError:
+        pass
+    event_id = str(uuid.uuid4())
+    result = "committed"
+    with db_connect() as conn, conn.cursor() as cur:
+        import db_schema
+        db_schema.ensure_schema(cur)
+        cur.execute("SELECT armed FROM auto_pricing_control WHERE id=TRUE")
+        row = cur.fetchone()
+        if row:
+            old = bool(row[0])
+        cur.execute("INSERT INTO auto_pricing_control(id, armed) VALUES (TRUE, %s) ON CONFLICT (id) DO UPDATE SET armed=EXCLUDED.armed, updated_at=now()", (armed,))
+        cur.execute("INSERT INTO auto_pricing_control_audit(event_id, operator, old_armed, new_armed, source, result, reason, correlation_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (event_id, operator, old, armed, source, result, reason, correlation_id))
+        conn.commit()
     try:
         os.makedirs(os.path.dirname(afile), exist_ok=True)
-        with open(afile, "w") as f:
+        tmp = f"{afile}.{correlation_id}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             f.write("1" if armed else "0")
-        return jsonify({"armed": armed, "file": afile})
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, afile)
+    except Exception:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE auto_pricing_control SET armed=%s, updated_at=now() WHERE id=TRUE", (old,))
+            cur.execute("UPDATE auto_pricing_control_audit SET result=%s WHERE event_id=%s", ("file_write_failed", event_id))
+            conn.commit()
+        raise
+    return {"event_id": event_id, "correlation_id": correlation_id, "operator": operator, "reason": reason, "timestamp": datetime.now(timezone.utc).isoformat(), "armed": armed}
+
+
+@app.route("/api/auto-pricing/arm", methods=["POST"])
+def api_auto_pricing_arm():
+    body = request.get_json(silent=True) or {}
+    armed = body.get("armed")
+    if type(armed) is not bool:
+        return jsonify({"error": "armed must be a boolean"}), 400
+    try:
+        _set_auto_pricing_state(armed)
+        return jsonify({"armed": armed, "outcome": "committed"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "state transition outcome unknown", "armed": armed, "outcome": "unknown"}), 500
+
+
+def _bounded_int(name, default, maximum):
+    try:
+        value = int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, maximum))
+
+
+def _reliability_query(sql, params=()):
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+@app.route("/api/reliability/summary")
+def api_reliability_summary():
+    rows = _reliability_query("SELECT metric, value, bucket_start, bucket_granularity FROM reliability_aggregates ORDER BY bucket_start DESC LIMIT 200")
+    return jsonify({"data": rows, "aggregates": rows, "meta": {"cursor": None}})
+
+
+@app.route("/api/reliability/cycles")
+def api_reliability_cycles():
+    limit = _bounded_int("limit", 50, 200)
+    rows = _reliability_query("SELECT cycle_id, started_at, completed_at, status, summary FROM reliability_cycles ORDER BY started_at DESC LIMIT %s", (limit,))
+    return jsonify({"data": rows, "cycles": rows, "limit": limit, "meta": {"cursor": None}})
+
+
+@app.route("/api/reliability/events")
+def api_reliability_events():
+    limit = _bounded_int("limit", 100, 500)
+    rows = _reliability_query("SELECT cursor, event_id, cycle_id, event_type, severity, occurred_at, payload FROM reliability_events WHERE cursor > COALESCE(NULLIF(%s, '')::bigint, 0) ORDER BY cursor ASC LIMIT %s", (request.args.get("after", ""), limit))
+    next_cursor = str(rows[-1]["cursor"]) if rows else request.args.get("after") or "0"
+    return jsonify({"data": rows, "events": rows, "limit": limit, "meta": {"cursor": next_cursor}})
+
+
+@app.route("/api/reliability/models")
+def api_reliability_models():
+    rows = _reliability_query("SELECT slug, model_id, action, updated_at, reason FROM auto_pricing_state ORDER BY updated_at DESC LIMIT 500")
+    return jsonify({"data": rows, "models": rows, "meta": {"cursor": None}})
+
+
+@app.route("/api/reliability/arm", methods=["POST"])
+def api_reliability_arm():
+    body = request.get_json(silent=True) or {}
+    try:
+        result = _set_auto_pricing_state(True, operator=AUDIT_SERVER_PRINCIPAL, reason=(body.get("reason") or "operator transition"))
+        return jsonify({**result, "outcome": "committed"})
+    except Exception as e:
+        return jsonify({"error": "state transition outcome unknown", "outcome": "unknown"}), 500
+
+
+@app.route("/api/reliability/disarm", methods=["POST"])
+def api_reliability_disarm():
+    try:
+        result = _set_auto_pricing_state(False, operator=AUDIT_SERVER_PRINCIPAL, reason=((request.get_json(silent=True) or {}).get("reason") or "operator transition"))
+        return jsonify({**result, "outcome": "committed"})
+    except Exception as e:
+        return jsonify({"error": "state transition outcome unknown", "outcome": "unknown"}), 500
+
+
+@app.route("/api/reliability/stream")
+def api_reliability_stream():
+    last_id = request.headers.get("Last-Event-ID") or request.args.get("after") or ""
+    try:
+        int(last_id or 0)
+    except ValueError:
+        return jsonify({"error": "invalid cursor"}), 400
+    interval = min(max(float(request.args.get("interval", "2")), 0.5), 10.0)
+    @stream_with_context
+    def generate():
+        cursor = last_id
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            rows = _reliability_query("SELECT cursor, event_id, event_type, severity, occurred_at, payload FROM reliability_events WHERE cursor > COALESCE(NULLIF(%s, '')::bigint, 0) ORDER BY cursor ASC LIMIT 50", (cursor,))
+            if rows:
+                for row in rows:
+                    cursor = str(row["cursor"])
+                    yield "id: %s\nevent: %s\ndata: %s\n\n" % (cursor, row["event_type"], json.dumps(dict(row), default=str))
+            else:
+                yield ": keepalive\n\n"
+            time.sleep(interval)
+    return Response(generate(), mimetype="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.route("/api/auto-pricing/config")

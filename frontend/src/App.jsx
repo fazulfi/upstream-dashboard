@@ -4,6 +4,7 @@ import { ThemeProvider } from './theme';
 import Layout from './components/Layout';
 import LoginGate from './components/LoginGate';
 import Dashboard from './pages/Dashboard';
+import Reliability from './pages/Reliability';
 import Earnings from './pages/Earnings';
 import Upstreams from './pages/Upstreams';
 import Pnl from './pages/Pnl';
@@ -28,7 +29,8 @@ export default function App() {
         <HashRouter>
           <Routes>
             <Route element={<LoginGate><Layout /></LoginGate>}>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Reliability />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/earnings" element={<Earnings />} />
               <Route path="/upstreams" element={<Upstreams />} />
               <Route path="/analytics" element={<Analytics />} />
