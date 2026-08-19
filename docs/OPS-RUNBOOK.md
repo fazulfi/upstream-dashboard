@@ -21,7 +21,7 @@ User layanan: **gamesim** (bukan root). Systemd user instance: `XDG_RUNTIME_DIR=
 **Fakta produksi:** VPS `root@82.25.62.204`, checkout `/home/gamesim/dashboard`, venv
 `/home/gamesim/.venv-dash`, backend `127.0.0.1:8124` via nginx:443, units
 `wwma-upstream-backend.service` + `wwma-auto-pricing.service`, Vercel project `upstream-static`,
-`main` @ `9733e48`. `DASHBOARD_PASSWORD` adalah secret server-side (baca dari
+`main` @ `613d204`. `DASHBOARD_PASSWORD` adalah secret server-side (baca dari
 `~/.hermes-suisui/backend.env`, 0600) — **jangan pernah menuliskan nilainya di dokumen apa pun**.
 
 ---
@@ -276,7 +276,7 @@ Alur incident: **DISARM kalau ragu → catat di event/audit history → diagnosi
 
 ## 6. Checklist Deploy Kode Baru (5 menit)
 
-1. `git pull origin main` di `/home/gamesim/dashboard` (pastikan `main` @ `9733e48` atau lebih baru)
+1. `git pull origin main` di `/home/gamesim/dashboard` (pastikan `main` @ `613d204` atau lebih baru)
 2. Backend: `backend/app.py` sudah ter-pull → restart backend via unit
 3. Scripts: `cp scripts/auto_pricing.py scripts/fin_ops.py scripts/gen_finance.py /home/gamesim/scripts/`
 4. Restart daemon: `sudo -u gamesim XDG_RUNTIME_DIR=/run/user/$(id -u gamesim) systemctl --user restart wwma-auto-pricing.service`
