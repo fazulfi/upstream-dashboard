@@ -77,4 +77,4 @@ Not applicable — soak gate removed by owner directive. Any regression in live 
 - Operator signature and UTC: `Sisyphus / 2026-08-18T19:45:00Z`
 - Independent reviewer signature and UTC: `[blank]`
 
-**Remaining governance items (not blocking, tracked separately):** push fix commits to remote + open/merge PR; rotate exposed credentials (`579N2mAjbR50Ya4nfx`, `99ABWwOOcUBjOzukDC6uhUQhfK0IWVLYcem_J0bNZB4`); confirm branch-review protection restoration; delete junk working-tree files.
+**Remaining governance items (not blocking, tracked separately):** push fix commits to remote + open/merge PR; rotate exposed credentials (`<redacted>`, `<redacted>`); confirm branch-review protection restoration; delete junk working-tree files.

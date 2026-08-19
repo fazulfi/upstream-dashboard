@@ -226,7 +226,7 @@ Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --in
 ## 8. Phase 1 Reliability — Perilaku Daemon (shipped)
 
 Bagian ini mendokumentasikan perilaku reliability daemon **yang benar-benar diimplementasikan &
-berjalan di produksi** (commit `207a259`). Endpoint API + SSE + retention + ARM/DISARM audit dijelaskan
+berjalan di produksi** (commit `9733e48`). Endpoint API + SSE + retention + ARM/DISARM audit dijelaskan
 di `docs/PRODUCTION-LOCK.md`; health check & journal di `docs/OPS-RUNBOOK.md`.
 
 ### 8a. Interval & struktur cycle
