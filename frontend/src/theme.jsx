@@ -65,7 +65,11 @@ export const ThemeContext = createContext({ theme: 'dark', toggle: () => {} });
 export const useTheme = () => useContext(ThemeContext);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const saved = window.localStorage?.getItem('upstream-theme');
+    return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+  });
 
   useEffect(() => {
     const root = document.documentElement;
@@ -77,6 +81,6 @@ export function ThemeProvider({ children }) {
     window.localStorage?.setItem('upstream-theme', theme);
   }, [theme]);
 
-  const toggle = useCallback(() => setTheme('light'), []);
+  const toggle = useCallback(() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark')), []);
   return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
 }

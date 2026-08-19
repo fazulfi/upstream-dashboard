@@ -30,19 +30,25 @@ export default function LoginGate({ children }) {
   if (authed) return children;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg, #0a0a0a)', padding: 20 }}>
-      <form onSubmit={doLogin} style={{ width: 360, maxWidth: '100%', background: 'var(--card, #1a1a1a)', border: '1px solid var(--border, #292929)', borderRadius: 8, padding: 28 }}>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Upstream — Operations</h2>
-        <p style={{ margin: '0 0 20px', color: 'var(--text2, #a1a1a1)', fontSize: 13, lineHeight: 1.5 }}>
+    <div className="login-wrap">
+      <form onSubmit={doLogin} className="login-card">
+        <div className="login-brand">
+          <div className="brand-mark">U</div>
+          <div>
+            <div className="brand-name">Upstream</div>
+            <div className="brand-sub">publisher</div>
+          </div>
+        </div>
+        <h2 className="login-title">Upstream — Operations</h2>
+        <p className="login-sub">
           Dashboard InferHub publisher. Masukkan password untuk akses penuh.
         </p>
         <input
           type="password" value={pw} onChange={e => setPw(e.target.value)} autoFocus placeholder="Dashboard password"
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border, #333)', background: 'transparent', color: 'inherit', boxSizing: 'border-box' }}
+          className="login-input"
         />
-        {msg && <div style={{ marginTop: 10, fontSize: 13, color: '#e5484d' }}>{msg}</div>}
-        <button type="submit" disabled={busy || !pw}
-          style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, background: 'var(--accent, #0080ff)', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+        {msg && <div className="login-err" role="alert">{msg}</div>}
+        <button type="submit" disabled={busy || !pw} className="btn-primary login-btn">
           {busy ? 'Login…' : 'Masuk'}
         </button>
       </form>

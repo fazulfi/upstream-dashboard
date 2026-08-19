@@ -55,7 +55,7 @@ export default function Settings() {
           <button type="submit" disabled={busy} style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent, #3b82f6)', border: 'none', color: '#fff', cursor: 'pointer' }}>
             {busy ? 'Login…' : 'Login'}
           </button>
-          {loginMsg && <div className="setting-sub" style={{ color: loginMsg.startsWith('Login OK') ? 'var(--ok, #2ecc71)' : 'var(--danger, #e5484d)' }}>{loginMsg}</div>}
+          {loginMsg && <div className="setting-sub" style={{ color: loginMsg.startsWith('Login OK') ? 'var(--pos, #30a46c)' : 'var(--neg, #e5484d)' }}>{loginMsg}</div>}
         </form>
       </section>
       <section className="panel" style={{ marginTop: 16 }}>
