@@ -279,7 +279,7 @@ python3 backend/ledger_update.py add-payout --date 2026-08-13 --amount_usdc 10
 3. Deploy manual: `git pull` di VPS (`/home/gamesim/dashboard`) → restart unit systemd
    (`wwma-upstream-backend.service`, `wwma-auto-pricing.service`) → `vercel --prod` (frontend,
    dari `frontend/`). **Phase 1 deployment** mensyaratkan CI hijau + PR disetujui + persetujuan
-   deploy manual eksplisit; `main` saat ini @ `207a259`.
+   deploy manual eksplisit; `main` saat ini @ `9733e48`.
 
 > Deploy flow lengkap + rollback: `docs/OPS-RUNBOOK.md` §6 (checklist) & §5b (rollback).
 

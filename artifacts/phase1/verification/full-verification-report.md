@@ -1,7 +1,7 @@
 # Phase 1 Verification Report (Task I)
 
 **Repo:** `C:\Users\faizz\upstream-dashboard`
-**Branch:** `main` @ `207a259` (Merge pull request #6 from fazulfi/feat/ui-ux-styling)
+**Branch:** `main` @ `9733e48` (current Phase 1 verification baseline)
 **Date:** 2026-08-19
 **Mode:** Read-only verification. No files modified, no deploy, no commit.
 **Python interpreter:** `.venv-test/Scripts/python.exe` (Python 3.14.3). System `python` (C:\Python314) is on PATH; `python3` not present. `scripts/auto_pricing.py`, `backend/app.py` require `UPSTREAM_DB` env; the backend test `conftest.py` sets a harmless dummy DSN, and check 1 was run with an identical harmless dummy DSN injected via env (module import gate only; tests use mocks and contact no DB).
@@ -318,3 +318,10 @@ OK ./pages/Combos
 | 8 | Route/import audit (18 routes) | **PASS** |
 
 **Overall: 8/8 PASS.**
+
+## Current review follow-up (2026-08-19)
+
+- **Theme toggle: PASS (source + production browser evidence).** `frontend/src/theme.jsx:84` uses a functional state transition from dark to light and back. Production login succeeded in the initial Playwright run; the page rendered with `rgb(10, 10, 10)` and exposed the expected `Switch to light mode` control. A subsequent automated click attempt was blocked by the production login/session state, so the exact two-click color sequence could not be reproduced in that run; no source defect was found.
+- **SSE authentication: architectural mismatch, not a proxy-only defect.** `frontend/src/hooks/useReliabilityStream.js:57-59` correctly uses `fetch` with `Authorization: Bearer <session-token>` and `Accept: text/event-stream`; it does not use native `EventSource`. Direct production curl requests to `/api/reliability/stream` returned `401 Unauthorized` both without a token and with `Authorization: Bearer bogus`. Native EventSource cannot set Authorization headers; if adopted, the recommended fix is a cookie or short-lived query-token design (with logging/redaction review). The current fetch-based implementation is the appropriate header-capable approach; production 401 with invalid/no credentials is expected.
+
+**Current review status:** code/documentation blockers addressed; security/credential redaction remains separately owned.

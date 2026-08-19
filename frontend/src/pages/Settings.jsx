@@ -5,7 +5,6 @@ import { usd, loginWithPassword, getSessionToken } from '../hooks/useApi';
 export default function Settings() {
   const { data } = useOutletContext();
   const bal = data?.balances || {};
-  const fin = data?.finance || {};
   const [pw, setPw] = useState('');
   const [loginMsg, setLoginMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,7 +29,7 @@ export default function Settings() {
     { label: 'Publisher earnings (USDC)', value: usd(bal.publisher_earnings), sub: 'live' },
     { label: 'Fiat pending', value: usd(bal.fiat_pendings), sub: 'settlement' },
     { label: 'Active fleet', value: `${data?.fleet_summary?.ok_total || 0} / ${data?.fleet_summary?.total || 0}`, sub: 'ok / total providers' },
-    { label: 'Data refresh', value: '15s frontend · 30s daemon', sub: `source ${data?.ts || ''}` },
+    { label: 'Data refresh', value: '15s frontend · 60s daemon', sub: `frontend poll interval · source ${data?.ts || ''}` },
   ];
 
   return (
@@ -63,7 +62,7 @@ export default function Settings() {
         <div className="settings-list">
           <div className="setting-row"><div><div className="setting-label">Frontend</div><div className="setting-sub">React · Vite · Vercel edge</div></div><div className="setting-value">hosted</div></div>
           <div className="setting-row"><div><div className="setting-label">Backend API</div><div className="setting-sub">Flask · waitress · nginx TLS</div></div><div className="setting-value tnum">ops.budgezen.com</div></div>
-          <div className="setting-row"><div><div className="setting-label">Real-time source</div><div className="setting-sub">InferHub daemon · poll 30s · live.json</div></div><div className="setting-value">active</div></div>
+          <div className="setting-row"><div><div className="setting-label">Real-time source</div><div className="setting-sub">InferHub daemon · every 60s · backend REST/SSE</div></div><div className="setting-value">active</div></div>
         </div>
       </section>
     </div>
