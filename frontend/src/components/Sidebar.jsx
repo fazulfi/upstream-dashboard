@@ -30,7 +30,8 @@ const SECTIONS = [
 ];
 
 export default function Sidebar() {
-  const { toggle } = useTheme();
+  const { theme, toggle } = useTheme();
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -59,9 +60,9 @@ export default function Sidebar() {
           <div className="sf-name">Ssnford</div>
           <div className="sf-sub">publisher</div>
         </div>
-<button className="sf-theme" onClick={toggle} aria-label="Light mode enabled" disabled title="Light mode only">
-           <Sun size={14} />
-         </button>
+        <button className="sf-theme" onClick={toggle} aria-label={label} title={label}>
+          <Sun size={14} />
+        </button>
       </div>
     </aside>
   );
