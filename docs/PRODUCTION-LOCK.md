@@ -5,7 +5,7 @@
 **Production frontend:** <https://upstream-static.vercel.app> (Vercel project `upstream-static`)
 **Production host:** `faiz-prod` / `82.25.62.204`
 **Backend:** `https://ops.budgezen.com` (nginx :443 → Flask `127.0.0.1:8124`)
-**Current `main` commit:** `9733e48`
+**Current `main` commit:** `613d204`
 **Last reviewed:** 2026-08-17
 
 This document is the release gate for production. A phase is complete only when its evidence is recorded; a green local test without deployment evidence is not a production lock.
