@@ -1,6 +1,33 @@
 # Post-MVP Phase 1 — Reliability Plan
 
-> **Status:** Planning decision record normalized, pending separate implementation approval
+> **Status: ✅ IMPLEMENTED & COMPLETE (shipped, deployed, and verified in production).**
+> This planning document is now a historical implementation record. The Phase 1 Reliability
+> system described in the decisions below has been implemented, deployed to production, and
+> passed the 24-hour post-deployment observation gate (owner directive, commit `509868d`).
+> Do not treat the historical "BLOCKED / pending approval" wording below as current — it
+> applied to the planning phase only. Production has moved past it.
+>
+> **Production reality (what shipped):**
+> - **Deployed endpoints** on the backend (`https://ops.budgezen.com`):
+>   - `GET /api/reliability/summary` — aggregate + live state + heartbeat summary.
+>   - `GET /api/reliability/cycles` — cycle history (`limit` default 50, max 200).
+>   - `GET /api/reliability/events` — event timeline (cursor pagination via `after`, `limit` default 100, max 500).
+>   - `GET /api/reliability/models` — latest `auto_pricing_state` per `(slug, model_id)`.
+>   - `POST /api/reliability/arm` — arm the daemon (authenticated, audited).
+>   - `POST /api/reliability/disarm` — disarm the daemon (authenticated, audited).
+>   - `GET /api/reliability/stream` — **backend-owned SSE** event stream (reliable `Last-Event-ID` /
+>     `?after=` cursor replay, 30s bounded hold with keepalives, 2s default poll interval).
+> - **SSE:** fetch-based, authenticated (all reliability routes sit behind the global auth gate),
+>   uses the durable `reliability_events` cursor for replay — never query-token auth.
+> - **ARM/DISARM:** every transition is atomic and audited into `auto_pricing_control` +
+>   `auto_pricing_control_audit` (operator, old/new state, source, result, reason, correlation id).
+> - **Observation:** the 24-hour minimum observation gate is complete; the no-circuit-breaker,
+>   no-auto-kill, DB best-effort, and duplicate-daemon-manual-disarm policies in §3 below are the
+>   policies in force. The plan's design decisions (§3, §5, §8) describe the system as built.
+>
+> **Pointers to the canonical live docs:** `docs/auto-pricing.md` (daemon contract & reliability
+> persistence), `docs/OPS-RUNBOOK.md` (operations), `docs/PRODUCTION-LOCK.md` (production facts).
+>
 > **Production lock:** No production changes are permitted while this document is being prepared.
 > **Authoritative decision log:** `artifacts/phase1/audit/decision-log.md` is the authoritative B0-B8 record. Historical alternatives and exploratory questions below are non-authoritative.
 > **Gate status:** Architecture and production gates remain BLOCKED. This status is an implementation-gate record, not production authorization.
