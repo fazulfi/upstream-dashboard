@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.request
 
 import psycopg
 from psycopg.rows import dict_row
@@ -49,10 +50,43 @@ def _ser_date(v):
     return v.isoformat() if hasattr(v, "isoformat") else str(v)
 
 
+def load_forex_key():
+    """Baca FOREX_KEY dari env file user (default ~/.hermes-suisui/.env)."""
+    for path in (os.path.expanduser("~/.hermes-suisui/.env"),
+                 os.path.expanduser("~/.env")):
+        try:
+            with open(path) as f:
+                for line in f:
+                    if line.startswith("FOREX_KEY="):
+                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            continue
+    return ""
+
+
+def fetch_live_kurs():
+    """Tarik kurs IDR realtime (forexrateapi). Gagal = None (pakai meta DB)."""
+    key = load_forex_key()
+    if not key:
+        print("  ⚠️ FOREX_KEY tidak ada — kurs pakai nilai meta DB")
+        return None
+    try:
+        url = ("https://api.forexrateapi.com/v1/latest?api_key=%s&base=USD&currencies=IDR" % key)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+        kurs = float(data["rates"]["IDR"])
+        print("  Kurs live: $1 = Rp %.2f" % kurs)
+        return kurs
+    except Exception as e:
+        print("  ⚠️ Gagal fetch kurs live (%s) — pakai nilai meta DB" % e)
+        return None
+
+
 def read_db():
     with conn() as c:
         with c.cursor() as cur:
-            cur.execute("SELECT id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label FROM assets")
+            cur.execute("SELECT id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd FROM assets")
             assets = cur.fetchall()
             cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments")
             imps = cur.fetchall()
@@ -70,19 +104,24 @@ def read_db():
     return {"meta": meta, "assets": assets, "impairments": imps, "payouts": pays}
 
 
-def upsert_asset(a):
+def upsert_asset(a, kurs=None):
     with conn() as c:
         with c.cursor() as cur:
+            if a.get("curr") == "IDR":
+                a_kurs = a.get("kurs_idr_usd") or kurs
+            else:
+                a_kurs = None
             cur.execute("""
-                INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO assets (id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (id) DO UPDATE SET
                   upstream=EXCLUDED.upstream, qty=EXCLUDED.qty, cost_per=EXCLUDED.cost_per,
                   curr=EXCLUDED.curr, buy=EXCLUDED.buy, lifespan_d=EXCLUDED.lifespan_d,
-                  status=EXCLUDED.status, label=EXCLUDED.label
+                  status=EXCLUDED.status, label=EXCLUDED.label,
+                  kurs_idr_usd=COALESCE(EXCLUDED.kurs_idr_usd, assets.kurs_idr_usd)
             """, (a["id"], a.get("upstream"), int(a.get("qty") or 0), float(a.get("cost_per") or 0),
                   a.get("curr", "USD"), str(a.get("buy") or "")[:10], int(a.get("lifespan_d") or 30),
-                  a.get("status", "active"), a.get("label")))
+                  a.get("status", "active"), a.get("label"), a_kurs))
         c.commit()
 
 
@@ -130,9 +169,10 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "add-asset":
+        kurs = fetch_live_kurs() if args.curr == "IDR" else None
         upsert_asset({"id": args.id, "upstream": args.upstream, "qty": args.qty, "cost_per": args.cost,
                       "curr": args.curr, "buy": args.buy, "lifespan_d": args.lifespan,
-                      "status": "active", "label": args.label})
+                      "status": "active", "label": args.label}, kurs)
         print(f"  [OK] asset {args.id} ditambahkan ke DB")
         sync_db_to_file()
     elif args.cmd == "retire-asset":
