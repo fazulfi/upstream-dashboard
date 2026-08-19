@@ -5,6 +5,9 @@
 > **Status: PRODUCTION, ARMED.** Logika final 2026-08-13 (setelah 5 iterasi fix selama
 > pemantauan live); kontrak trigger-area basis B dikunci permanen 2026-08-16 (lihat §1 & REV11);
 > orderbook PER-PROVIDER dikunci 2026-08-17 (REV12 — lihat §1 & REV12).
+> **Phase 1 Reliability: IMPLEMENTED & shipped** — reliability REST API + SSE + ARM/DISARM audit +
+> retention + PID lock tersedia; lihat §8. Fakta produksi di `docs/PRODUCTION-LOCK.md`, operasional
+> di `docs/OPS-RUNBOOK.md`.
 > Dokumen ini adalah satu-satunya sumber kebenaran — jangan pakai
 > versi lama (audit-full.md, README lama).
 
@@ -217,6 +220,78 @@ systemctl --user enable --now wwma-auto-pricing.service
 
 Unit: `deploy/wwma-auto-pricing.service` → `ExecStart=.../auto_pricing.py --interval 60`
 (code default `INTERVAL = 30`; service produksi menimpa dengan `--interval 60`).
+
+---
+
+## 8. Phase 1 Reliability — Perilaku Daemon (shipped)
+
+Bagian ini mendokumentasikan perilaku reliability daemon **yang benar-benar diimplementasikan &
+berjalan di produksi** (commit `207a259`). Endpoint API + SSE + retention + ARM/DISARM audit dijelaskan
+di `docs/PRODUCTION-LOCK.md`; health check & journal di `docs/OPS-RUNBOOK.md`.
+
+### 8a. Interval & struktur cycle
+
+- Service produksi menjalankan daemon dengan **`--interval 60`** detik (unit
+  `deploy/wwma-auto-pricing.service`); default kode `INTERVAL = 30` ditimpa oleh service.
+- Setiap cycle memproses **38 model** dalam scope (default `codebuddy`, `cline-pass`,
+  `codebuddy-cn`, ditambah upstream dari config DB yang ada di catalog). Aksi per model:
+  **`undercut`** (turun), **`resume`** (naik jemput), **`hold`**/**`stable`** (diam), **`error`**
+  (gagal). Semua model yang diproses — termasuk HOLD — dicatat.
+- Tiap cycle membuat `cycle_id` UUID baru dan `event_id` UUID baru (idempotency key).
+
+### 8b. `max_in` clamp (satu-satunya clamp harga)
+
+Kontrak harga basis B hanya meng-clamp **`max_in`** (slot atas): `target = min(target, max_in)`
+dengan `max_in <= 0` = off. **Tidak ada** clamp ke boundary (boundary BUKAN floor), dan **tidak ada**
+clamp persentase tambahan (decision §3.5: "no additional percentage guard"). Target boleh berada
+di bawah boundary; `target <= 0` → HOLD di harga kita (jangan kirim nol/negatif).
+
+### 8c. No circuit breaker
+
+- **Tidak ada circuit breaker otomatis** dan **tidak ada auto-stop** berbasis error berturut-turut.
+- Setelah **5 error teknis berturut-turut** pada satu model (timeout, HTTP 5xx, invalid response,
+  PUT gagal), sistem menaikkan **dashboard/audit warning** dan persist event; pricing tidak berhenti
+  dan scope model/provider lain tidak berubah. Delayed orderbook (≥120s) **bukan** error teknis.
+- Error handling dalam cycle: PUT `429`/`0` → backoff 180s (`skip_until`); `429` skip cycle tanpa retry.
+
+### 8d. No auto-kill & PID lock (duplicate daemon)
+
+- **PID lock** (`~/.hermes-suisui/logs/auto-pricing.pid`) adalah identitas daemon (dibuat dengan
+  `O_CREAT|O_EXCL`, ditulis dengan `fsync`, dihapus di `finally`). `main()` menolak start bila lock
+  sudah dipegang PID hidup (`acquire_pid_lock` → log "already running; refusing duplicate PID").
+- **Tidak ada auto-kill.** Kalau lock dipegang PID mati → daemon baru boleh take over (hapus stale lock).
+  Kalau lock dipegang PID hidup → operator harus **manual disarm + investigasi**; tidak ada proses yang
+  dibunuh otomatis. Steady state produksi = **tepat satu daemon**.
+
+### 8e. DB outage best-effort
+
+- Kalau PostgreSQL tidak tersedia tetapi InferHub/pricing sehat, daemon **lanjut pricing & PUT normal**
+  (decision §3.9). Persistence DB best-effort; JSON state + log tetap jalan. Kegagalan persistence
+  terlihat sebagai `persistence_warning` (state `status=persistence_warning` + log), bukan blocking.
+- `_db_reliability_cycle_start`/`_db_reliability_event`/`_db_reliability_cycle_finish` mengembalikan
+  falsy saat DB gagal → `persistence_warning = True`. Tidak ada local queue/replay file tambahan.
+
+### 8f. Reliability event persistence
+
+Daemon mem-persist ke PostgreSQL (schema idempotent di `backend/db_schema.py`, dibuat saat start):
+
+- `reliability_cycles` — satu row per cycle (`cycle_id`, `started_at`, `completed_at`, `status`, `summary`).
+- `reliability_events` — `event_id` (uuid PK, idempotency), `cycle_id` (FK), `cursor` (bigserial),
+  `event_type`, `severity`, `occurred_at`, `payload` (jsonb). Event types di daemon: `cycle_started`,
+  `catalog_empty`, `cycle_completed`; keputusan model & `delayed_data` ikut di event history.
+- `reliability_aggregates` — rollup `event_count` per bucket UTC (hour/daily), di-upsert saat maintenance.
+- Heartbeat: satu heartbeat per cycle selesai (cycle ID, timestamps, durasi, model count,
+  undercut/resume/hold/error counts) via JSON state write; DB failure = warning terpisah.
+- Retention: raw event 30 hari (dihapus hanya bila cycle selesai); aggregate 90 hari — hourly utk 30
+  hari terakhir, daily utk hari 31–90; dijalankan saat daemon start (W6 maintenance, bounded & idempotent).
+- Operasional lama `auto_pricing_ops`/`auto_pricing_api_log` tetap 30 hari.
+
+### 8g. ARM/DISARM interaksi
+
+Daemon membaca flag ARM dari file `~/.hermes-suisui/logs/auto-pricing-arm` tiap cycle
+(`_read_armed_flag`, nilai wajib `0`/`1`). Saat DISARM daemon tetap jalan dalam dry-run (tanpa PUT,
+log `[DRY]`); re-ARM mengembalikan PUT normal. ARM/DISARM dari API/dashboard di-audit ke
+`auto_pricing_control` + `auto_pricing_control_audit` (lihat `docs/PRODUCTION-LOCK.md`).
 
 ---
 
