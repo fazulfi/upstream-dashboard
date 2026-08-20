@@ -112,7 +112,7 @@ sudo cat /proc/$(pgrep -f 'dashboard/backend/app.py' | head -1)/environ | tr '\0
 
 ### Backup (manual/otomatis)
 ```bash
-# otomatis (script): pg_dump gzip, retensi lokal 14 hari; offsite 30 hari bila dikonfigurasi
+# otomatis (script): pg_dump gzip, retensi lokal 14 hari; offsite 30 hari hanya jika status marker `offsite ok` (cek /home/gamesim/.backup-offsite-status)
 /home/gamesim/scripts/backup_db.sh
 
 # jadwalkan via cron gamesim (mis. 03:30 harian)
@@ -128,7 +128,7 @@ gunzip -c backups/inferhub-YYYY-MM-DD.sql.gz | PGPASSWORD=upstream_local psql -h
 ```
 > ⚠️ Restore menimpa DB. Backup dulu DB saat ini sebelum restore.
 >
-> Reliability retention is separate from backup retention: raw reliability events remain 30 days and UTC aggregates 90 days; the existing 14-day local/30-day offsite backup policy is preserved and does not promise 90-day backup recovery. Cleanup/rollup must be rerun after restore and checked via the reliability aggregate timestamps and maintenance status.
+> Reliability retention is separate from backup retention: raw reliability events remain 30 days and UTC aggregates 90 days; backup retention is 14d local; 30d offsite hanya jika status marker `offsite ok` (cek `/home/gamesim/.backup-offsite-status`) and does not promise 90-day backup recovery. Cleanup/rollup must be rerun after restore and checked via the reliability aggregate timestamps and maintenance status.
 
 ### W6 maintenance checks
 ```bash

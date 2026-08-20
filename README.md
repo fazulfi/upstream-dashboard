@@ -204,7 +204,7 @@ This is a single-tenant publisher operations dashboard with best-effort support 
 
 ## Data Retention & Backup
 
-Database backups are retained for **14 days locally** and **30 days offsite** when the offsite path is configured. Take a fresh backup before every production deploy or restore. Reliability-event retention is documented separately in the operations runbook and does not promise backup recovery for that duration.
+Database backups are retained for **14 days locally**; **30 days offsite only when the status marker is `offsite ok`** (check `/home/gamesim/.backup-offsite-status`). Take a fresh backup before every production deploy or restore. Reliability-event retention is documented separately in the operations runbook and does not promise backup recovery for that duration.
 
 ## Architecture Decision Records (ADR)
 
@@ -244,7 +244,7 @@ The decision index is [`docs/adr/`](docs/adr/):
 
 ### Backup and restore
 
-[`scripts/backup_db.sh`](scripts/backup_db.sh) uses `pg_dump` through `UPSTREAM_DB`, compresses the dump with gzip, stores dated files, and removes local backups older than 14 days. When the configured offsite path is available, it copies backups offsite with a 30-day remote retention policy; an offsite upload failure does not fail the local backup. Always take a fresh backup before a restore or production change. Restore procedures are in [`docs/OPS-RUNBOOK.md`](docs/OPS-RUNBOOK.md).
+[`scripts/backup_db.sh`](scripts/backup_db.sh) uses `pg_dump` through `UPSTREAM_DB`, compresses the dump with gzip, stores dated files, and removes local backups older than 14 days. It copies backups offsite with a 30-day remote retention policy only when the status marker is `offsite ok` (check `/home/gamesim/.backup-offsite-status`); an offsite upload failure does not fail the local backup. Always take a fresh backup before a restore or production change. Restore procedures are in [`docs/OPS-RUNBOOK.md`](docs/OPS-RUNBOOK.md).
 
 Reliability retention is separate from backup retention: raw reliability events are retained for 30 days and UTC aggregates for 90 days. This does not promise 90 days of backup recovery.
 

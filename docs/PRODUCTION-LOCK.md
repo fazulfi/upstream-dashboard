@@ -10,5 +10,5 @@
 - **Live bundle**: index-CbDxkYac.js (Phase 3 — 5 routes: Reliability, Ask Price, Auto-Pricing, Settings; contains FinanceStatus badge + session-expired)
 - **Backend**: ops.budgezen.com — MainPID 301370 (619d853), finance unit = repo scripts/gen_finance.py + EnvironmentFile /home/gamesim/.dashboard.env
 - **Evidence**: artifacts/phase3/deploy/evidence-20260820T162819Z.md (signed, current)
-  - Backup: inferhub-20260820-161606.sql.gz sha256 dd3c044f588fb1c97e309e8b1b9296788ddb6a85f0c993cb0d51e54504de7b42 (14d local / 30d offsite)
+  - Backup: inferhub-20260820-161606.sql.gz sha256 dd3c044f588fb1c97e309e8b1b9296788ddb6a85f0c993cb0d51e54504de7b42 (14d local; 30d offsite hanya jika status marker `offsite ok`, cek `/home/gamesim/.backup-offsite-status`)
   - Phase 2: artifacts/phase2/deploy/evidence-20260820T090000Z.md + rollback-evidence.md + restore-rehearsal-evidence.md (signed); evidence-20260820T084412Z.md superseded
