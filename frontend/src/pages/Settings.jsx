@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { usd, loginWithPassword, getSessionToken } from '../hooks/useApi';
+import { usd, loginWithPassword, getSessionToken, useApi } from '../hooks/useApi';
+import FinanceStatus from '../components/FinanceStatus';
 
 export default function Settings() {
   const { data } = useOutletContext();
+  const { data: financeData } = useApi('/api/finance');
   const bal = data?.balances || {};
+  const financeMetrics = [
+    { key: 'net_income', label: 'Net Income', value: financeData?.net_income ?? '—', verified: Boolean(financeData?.net_income) },
+    { key: 'kurs', label: 'Kurs', value: financeData?.kurs ?? '—', verified: Boolean(financeData?.kurs) },
+  ];
   const [pw, setPw] = useState('');
   const [loginMsg, setLoginMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,6 +62,10 @@ export default function Settings() {
           </button>
           {loginMsg && <div className="setting-sub" style={{ color: loginMsg.startsWith('Login OK') ? 'var(--pos, #30a46c)' : 'var(--neg, #e5484d)' }}>{loginMsg}</div>}
         </form>
+      </section>
+      <section className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-head"><div><h2>Finance</h2><div className="sub">decision-grade metrics</div></div></div>
+        <FinanceStatus metrics={financeMetrics} variance={financeData?.variance ?? ''} />
       </section>
       <section className="panel" style={{ marginTop: 16 }}>
         <div className="panel-head"><div><h2>Architecture</h2><div className="sub">hybrid deployment</div></div></div>
