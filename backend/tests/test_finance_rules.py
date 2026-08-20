@@ -60,3 +60,11 @@ def test_compute_finance_payout_hanya_confirmed():
     res = compute_finance([], payouts, [], [], 17000.0)
     assert res["total_payout"] == 100.0
     assert res["n_payout"] == 1
+
+
+def test_amort_bug_dashboard_harus_hitung_retired():
+    # Regression: bug lama db_read_finance membuat amort_assets selalu [].
+    assets = [_asset("A-001", "retired", cost=10.0)]
+    res = compute_finance(assets, [], [], [], 17000.0)
+    assert res["amort_usd"] == 10.0
+    assert len(res["amort_assets"]) == 1

@@ -315,22 +315,17 @@ def db_read_model_rank():
 
 
 def db_read_finance():
-    """Baca finance dari DB (assets/impairments/payouts tables) — full DB migration."""
+    """Baca finance dari DB (assets/impairments/payouts/refunds tables) — via rule engine."""
+    from finance_rules import compute_finance
     try:
-        kurs = 17801.17
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT v FROM ledger_meta WHERE k='kurs_idr_usd'")
             r = cur.fetchone()
-            if r:
-                try:
-                    kurs = float(r["v"])
-                except Exception:
-                    pass
+            kurs = float(r["v"]) if r else 17801.17
             cur.execute("SELECT id, upstream, qty, label, buy, lifespan_d, cost_per, curr, status, kurs_idr_usd FROM assets")
             assets = cur.fetchall()
-            # provider OK per slug — utk sinkron qty aset aktif (REV9: akun mati jgn dihitung)
             cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
-            prov_ok = {r["upstream_slug"]: r["n"] for r in cur.fetchall()}
+            providers = cur.fetchall()
             cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments")
             impairments = cur.fetchall()
             cur.execute("SELECT id, date, amount_usdc, status, destination FROM payouts WHERE status='confirmed'")
@@ -338,133 +333,20 @@ def db_read_finance():
             cur.execute("SELECT id, upstream, qty, amount_idr, amount_usdc, label, kurs_idr_usd FROM refunds")
             refunds = cur.fetchall()
 
-        # REV9: normalisasi aset.upstream -> slug InferHub. aset yg akunnya mati
-        # (provider status != ok/drained) tidak dihitung penuh; qty efektif = qty x rasio.
-        def _slug_of(name):
-            n = (name or "").strip().lower()
-            if "clinepass" in n or n.startswith("cline-pass"):
-                return "cline-pass"
-            if "codebuddy" in n and ("cn" in n or n.endswith("cn")):
-                return "codebuddy-cn"
-            if "codebuddy" in n:
-                return "codebuddy"
-            if "command code" in n:
-                return "commandcode"
-            if "opencode" in n or "open code" in n:
-                return "opencode-go"
-            if "chatgpt" in n or "chatgpt+" in n or n.startswith("chatgpt"):
-                return "codex"  # OpenAI Codex = ChatGPT
-            return None
-        # total qty aset per slug (utk rasio) — HANYA status active (REV9b fix:
-        # rasio jangan dikecilkan aset retired yg sdh di-exclude di loop bawah)
-        asset_qty_by = {}
-        for a in assets:
-            if (a.get("status") or "active") != "active":
-                continue
-            sl = _slug_of(a.get("upstream") or "")
-            if sl:
-                asset_qty_by[sl] = asset_qty_by.get(sl, 0) + int(a.get("qty") or 0)
-        ratio_by = {sl: min(1.0, prov_ok.get(sl, 0) / q) for sl, q in asset_qty_by.items() if q > 0}
+        def _norm(rows):
+            return [dict(r) for r in rows]
 
-        asset_list = []
-        total_capital = 0.0
-        total_asset_qty = 0
-        for a in assets:
-            try:
-                cost_per = float(a["cost_per"] or 0)
-                qty_raw = int(a["qty"] or 0)
-                # qty efektif = raw x ratio provider ok (REV9: akun mati jgn dihitung)
-                sl = _slug_of(a.get("upstream") or "")
-                ratio = ratio_by.get(sl, 1.0)
-                qty = int(round(qty_raw * ratio))
-                curr = (a.get("curr") or "USD").strip().upper()
-                a_kurs = float(a.get("kurs_idr_usd") or 0) or kurs
-                cost_usd = cost_per * qty / a_kurs if curr == "IDR" else cost_per * qty
-                if (a.get("status") or "active") != "active":
-                    continue  # REV9: aset retired/akun mati TIDAK dihitung ke total_capital
-                total_capital += cost_usd
-                total_asset_qty += qty
-                asset_list.append({
-                    "id": a["id"], "upstream": a["upstream"], "qty": qty,
-                    "label": a.get("label") or "", "buy": str(a.get("buy") or "")[:10],
-                    "lifespan_d": int(a.get("lifespan_d") or 30),
-                    "cost_usd": round(cost_usd, 4), "status": a.get("status") or "active",
-                })
-            except Exception:
-                pass
-
-        aktif = sum(1 for a in asset_list if a["status"] == "active")
-
-        imp_list = []
-        total_imp_loss = 0.0
-        for im in impairments:
-            try:
-                # Seed-residue check: impairment dgn upstream 'upstream-N' adalah
-                # placeholder migrasi ledger lama (akun mati yg detail-nya hilang).
-                # JANGAN hapus baris (jejak audit), tapi JANGAN hitung loss-nya ke
-                # net income karena nilainya tak terverifikasi (Rp 27.167 default template).
-                # Label '[DATA-HILANG]' utk audit trail. (Koreksi Faiz: ini data-hilang,
-                # bukan fiktif — beda: hapus vs zero-kan.)
-                _up = im.get("upstream") or ""
-                seed = _up.startswith("upstream-")
-                loss_raw = float(im.get("loss") or 0)
-                if seed:
-                    loss = 0.0  # zero-kan (jangan ke net income), baris tetap
-                    label_note = " [DATA-HILANG]"
-                else:
-                    loss = loss_raw
-                    label_note = ""
-                loss_usd = loss / kurs if loss > 100 else loss
-                total_imp_loss += loss_usd
-                imp_list.append({
-                    "id": im["id"], "upstream": _up,
-                    "qty": int(im.get("qty") or 0), "loss_usd": round(loss_usd, 2),
-                    "label": (im.get("label") or "") + label_note,
-                    "seed_residue": seed,
-                })
-            except Exception:
-                pass
-        total_imp_loss_usd = round(total_imp_loss, 2)
-
-        total_payout = sum(float(p.get("amount_usdc") or 0) for p in payouts)
-        n_payout = len(payouts)
-
-        amort_assets = [a for a in asset_list if a["status"] != "active"]
-        amort_usd = round(sum(a["cost_usd"] for a in amort_assets), 4)
-
-        # refund = uang kembali (income) — kurangi beban rugi bersih
-        total_refund_usd = 0.0
-        refund_list = []
-        for rd in refunds:
-            try:
-                aidr = float(rd.get("amount_idr") or 0)
-                ausd = float(rd.get("amount_usdc") or 0)
-                r_kurs = float(rd.get("kurs_idr_usd") or 0) or kurs
-                v = ausd if ausd > 0 else (aidr / r_kurs if aidr > 100 else aidr)
-                total_refund_usd += v
-                refund_list.append({
-                    "id": rd["id"], "upstream": rd.get("upstream") or "",
-                    "qty": int(rd.get("qty") or 0), "amount_idr": round(aidr, 2),
-                    "amount_usdc": round(ausd, 4), "refund_usd": round(v, 4),
-                    "label": rd.get("label") or "",
-                })
-            except Exception:
-                pass
-        total_refund_usd = round(total_refund_usd, 2)
-
-        opex = 0.10
-        net_income = round(total_payout + total_refund_usd - amort_usd - total_imp_loss_usd - opex, 2)
-
-        return {
-            "total_payout": total_payout, "n_payout": n_payout,
-            "total_refund_usd": total_refund_usd, "refunds": refund_list,
-            "amort_usd": amort_usd, "amort_assets": amort_assets,
-            "total_imp_loss_usd": total_imp_loss_usd, "impairments": imp_list,
-            "opex": opex, "net_income": net_income,
-            "total_capital_usd": round(total_capital, 4), "total_asset_qty": total_asset_qty,
-            "assets": asset_list, "aktif": aktif,
-            "kurs": kurs, "source": "db (assets/impairments/payouts/refunds tables)",
-        }
+        res = compute_finance(
+            assets=_norm(assets),
+            payouts=[{"amount_usdc": p.get("amount_usdc"), "status": p.get("status") or "confirmed",
+                      "date": p.get("date"), "id": p.get("id")} for p in payouts],
+            refunds=_norm(refunds),
+            impairments=_norm(impairments),
+            kurs_meta=kurs,
+            providers=_norm(providers),
+        )
+        res["source"] = "db (finance_rules)"
+        return res
     except Exception as e:
         return {"error": str(e), "source": "db_read_finance failed"}
 
