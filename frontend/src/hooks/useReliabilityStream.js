@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSessionToken, setSessionToken } from './useApi.jsx';
+import { getSessionToken, handleSessionExpiry } from './useApi.jsx';
 
 const API = import.meta.env.VITE_API_URL || '';
 const INITIAL_DELAY = 1000;
@@ -58,10 +58,7 @@ export function useReliabilityStream(onEvent, recover) {
       if (cursorRef.current) headers['Last-Event-ID'] = cursorRef.current;
       const response = await fetch(`${API}/api/reliability/stream`, { headers, signal: controller.signal });
       if (response.status === 401 || response.status === 403) {
-        setSessionToken('');
-        window.dispatchEvent(new CustomEvent('session-expired', {
-          detail: { message: 'Sesi berakhir. Silakan masuk kembali.' },
-        }));
+        handleSessionExpiry('/api/reliability/stream', headers, response);
         setStatus('auth-required');
         return;
       }

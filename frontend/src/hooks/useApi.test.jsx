@@ -39,6 +39,33 @@ describe('useApi session and fetch behavior', () => {
     expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session-expired' }))
   })
 
+  it('does not clear a NEWER token when a stale request returns 401 (stale-response guard)', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    setSessionToken('new-token')
+
+    // Simulasi late response: request memakai token LAMA, token aktif sudah diganti
+    const lateHeaders = { Authorization: 'Bearer old-token' }
+    const response401 = { status: 401, ok: false }
+    const { handleSessionExpiry } = await import('./useApi.jsx')
+    handleSessionExpiry('/api/reliability/summary', lateHeaders, response401)
+
+    expect(sessionStorage.getItem('upstream_session_token')).toBe('new-token')
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session-expired' }))
+  })
+
+  it('does not expire the session for non-401/403 responses or non-Bearer requests', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    setSessionToken('active-token')
+    const { handleSessionExpiry } = await import('./useApi.jsx')
+
+    handleSessionExpiry('/api/reliability/summary', { Authorization: 'Bearer active-token' }, { status: 500, ok: false })
+    handleSessionExpiry('/api/reliability/summary', { 'X-Auth': 'pw' }, { status: 401, ok: false })
+    handleSessionExpiry('/api/login', { Authorization: 'Bearer active-token' }, { status: 401, ok: false })
+
+    expect(sessionStorage.getItem('upstream_session_token')).toBe('active-token')
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session-expired' }))
+  })
+
   it('tracks HTTP errors and aborts on unmount', async () => {
     const fetchMock = vi.fn((_url, { signal }) => new Promise((resolve, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))

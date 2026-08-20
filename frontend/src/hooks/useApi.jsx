@@ -41,18 +41,25 @@ const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
 const RELIABILITY_PREFIX = '/api/reliability';
 const SESSION_EXPIRED_MESSAGE = 'Sesi berakhir. Silakan masuk kembali.';
 
-function handleSessionExpiry(path, headers, response) {
-  const bearerUsed = Object.entries(headers).some(([key, value]) =>
-    key.toLowerCase() === 'authorization' && typeof value === 'string' && value.startsWith('Bearer '),
-  );
+export function handleSessionExpiry(path, headers, response) {
   const isLoginRequest = path === '/api/login' || path.endsWith('/api/login');
+  if (isLoginRequest || (response.status !== 401 && response.status !== 403)) return;
 
-  if (bearerUsed && !isLoginRequest && (response.status === 401 || response.status === 403)) {
-    setSessionToken('');
-    window.dispatchEvent(new CustomEvent('session-expired', {
-      detail: { message: SESSION_EXPIRED_MESSAGE },
-    }));
-  }
+  const authHeader = Object.entries(headers).find(
+    ([key, value]) => key.toLowerCase() === 'authorization' && typeof value === 'string' && value.startsWith('Bearer '),
+  );
+  if (!authHeader) return;
+
+  // Stale-response guard: hanya invalidasi sesi bila token yang dipakai request
+  // MASIH sama dengan token aktif. Late 401 dari request lama tidak boleh
+  // menghapus token baru setelah user login ulang.
+  const usedToken = authHeader[1].slice('Bearer '.length);
+  if (!usedToken || usedToken !== getSessionToken()) return;
+
+  setSessionToken('');
+  window.dispatchEvent(new CustomEvent('session-expired', {
+    detail: { message: SESSION_EXPIRED_MESSAGE },
+  }));
 }
 
 // Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
