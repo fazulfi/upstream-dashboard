@@ -39,6 +39,21 @@ function authHeaders(extra = {}) {
 const FOCUSED_API_PREFIX = '/api/auto-pricing';
 const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
 const RELIABILITY_PREFIX = '/api/reliability';
+const SESSION_EXPIRED_MESSAGE = 'Sesi berakhir. Silakan masuk kembali.';
+
+function handleSessionExpiry(path, headers, response) {
+  const bearerUsed = Object.entries(headers).some(([key, value]) =>
+    key.toLowerCase() === 'authorization' && typeof value === 'string' && value.startsWith('Bearer '),
+  );
+  const isLoginRequest = path === '/api/login' || path.endsWith('/api/login');
+
+  if (bearerUsed && !isLoginRequest && (response.status === 401 || response.status === 403)) {
+    setSessionToken('');
+    window.dispatchEvent(new CustomEvent('session-expired', {
+      detail: { message: SESSION_EXPIRED_MESSAGE },
+    }));
+  }
+}
 
 // Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
 export function isApiEnabled(path) {
@@ -55,7 +70,9 @@ export async function apiFetch(path, options = {}) {
   }
   const headers = authHeaders({ ...(options.headers || {}) });
   const url = path.startsWith('/api/') ? `${API}${path}` : path;
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+  handleSessionExpiry(path, headers, response);
+  return response;
 }
 
 /**
@@ -82,16 +99,17 @@ export function useApi(path, pollMs = 0) {
     try {
       const headers = authHeaders();
       const r = await fetch(`${API}${path}`, { signal: controller.signal, headers });
+      handleSessionExpiry(path, headers, r);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const json = await r.json();
-      if (ac.current && !ac.current.signal.aborted) {
+      if (ac.current === controller && !controller.signal.aborted) {
         setData(json);
         setError(null);
       }
     } catch (e) {
-      if (ac.current && !ac.current.signal.aborted) setError(e.message);
+      if (ac.current === controller && !controller.signal.aborted) setError(e.message);
     } finally {
-      if (ac.current && !ac.current.signal.aborted) setLoading(false);
+      if (ac.current === controller && !controller.signal.aborted) setLoading(false);
     }
   }, [path]);
 

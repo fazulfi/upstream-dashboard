@@ -1,3 +1,4 @@
+import React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CircleOff, Database, RefreshCw, ShieldCheck } from 'lucide-react';
 import { reliabilityApi, unwrap } from '../lib/reliabilityApi';

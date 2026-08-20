@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { loginWithPassword, getSessionToken } from '../hooks/useApi';
+import React, { useEffect, useState } from 'react';
+import { loginWithPassword, getSessionToken, setSessionToken } from '../hooks/useApi';
 
 /**
  * LoginGate — tampilkan layar login kalau belum ada token sesi.
@@ -12,7 +12,20 @@ export default function LoginGate({ children }) {
   const [msg, setMsg] = useState('');
   const [authed, setAuthed] = useState(() => !!getSessionToken());
 
+  useEffect(() => {
+    const onSessionExpired = (event) => {
+      setSessionToken('');
+      setAuthed(false);
+      setPw('');
+      setMsg(event.detail?.message || 'Sesi berakhir. Silakan masuk kembali.');
+    };
+
+    window.addEventListener('session-expired', onSessionExpired);
+    return () => window.removeEventListener('session-expired', onSessionExpired);
+  }, []);
+
   const doLogin = async (e) => {
+
     e.preventDefault();
     if (!pw) return;
     setBusy(true); setMsg('');

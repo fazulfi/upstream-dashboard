@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSessionToken } from './useApi.jsx';
+import { getSessionToken, setSessionToken } from './useApi.jsx';
 
 const API = import.meta.env.VITE_API_URL || '';
 const INITIAL_DELAY = 1000;
@@ -57,7 +57,14 @@ export function useReliabilityStream(onEvent, recover) {
       const headers = { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' };
       if (cursorRef.current) headers['Last-Event-ID'] = cursorRef.current;
       const response = await fetch(`${API}/api/reliability/stream`, { headers, signal: controller.signal });
-      if (response.status === 401 || response.status === 403) { setStatus('auth-required'); return; }
+      if (response.status === 401 || response.status === 403) {
+        setSessionToken('');
+        window.dispatchEvent(new CustomEvent('session-expired', {
+          detail: { message: 'Sesi berakhir. Silakan masuk kembali.' },
+        }));
+        setStatus('auth-required');
+        return;
+      }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
       delayRef.current = INITIAL_DELAY;
       setStatus('recovering'); setError(null);
