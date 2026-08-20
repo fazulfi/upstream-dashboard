@@ -4,23 +4,10 @@ import Sidebar from './Sidebar';
 import { useApi } from '../hooks/useApi';
 
 const TITLES = {
+  '': { crumb: 'Reliability / Overview', title: 'Reliability' },
   '/': { crumb: 'Reliability / Overview', title: 'Reliability' },
-  '/dashboard': { crumb: 'Dashboard / Overview', title: 'Operations overview' },
-  '/earnings': { crumb: 'Operations / Earnings', title: 'Earnings' },
-  '/upstreams': { crumb: 'Operations / Upstreams', title: 'Upstream fleet' },
-  '/analytics': { crumb: 'Operations / Analytics', title: 'Analytics' },
-  '/pnl': { crumb: 'Operations / Profit & Loss', title: 'Profit & loss' },
-  '/settlements': { crumb: 'Operations / Settlements', title: 'Settlements' },
-  '/market': { crumb: 'Market / Pricing', title: 'Market & Pricing' },
-  '/catalog': { crumb: 'Catalog / Capacity', title: 'Catalog & Capacity' },
-  '/usage': { crumb: 'Usage / Cache', title: 'Usage & Cache' },
   '/asks': { crumb: 'Ask Price / Manual', title: 'Ask Price' },
-  '/fleet-health': { crumb: 'Fleet / Health', title: 'Fleet Health' },
   '/auto-pricing': { crumb: 'Auto / Pricing', title: 'Auto-Pricing' },
-  '/budgets': { crumb: 'Publisher / Budgets', title: 'Budgets' },
-  '/combos': { crumb: 'Publisher / Combos', title: 'Combos' },
-  '/keys': { crumb: 'Account & Billing / API Keys', title: 'API keys' },
-  '/topups': { crumb: 'Account & Billing / Top-ups', title: 'Top-ups' },
   '/settings': { crumb: 'System / Settings', title: 'Settings' },
 };
 

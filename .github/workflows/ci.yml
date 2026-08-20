@@ -33,6 +33,11 @@ jobs:
         run: pytest --cov=logic --cov=app --cov-report=term-missing -q
       - name: Coverage gate on pure logic
         run: pytest tests/test_logic.py --cov=logic --cov-report=term-missing --cov-fail-under=80 -q
+      - name: Rule engine finance coverage gate
+        run: |
+          pytest tests/test_finance_rules.py tests/test_financial_audit.py tests/test_recon_checks.py \
+            --cov=finance_rules --cov=financial_audit \
+            --cov-report=term-missing --cov-fail-under=80 -q
 
   frontend:
     runs-on: ubuntu-latest

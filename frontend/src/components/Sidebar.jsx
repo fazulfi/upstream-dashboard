@@ -1,31 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../theme';
-import { LayoutDashboard, TrendingUp, Layers, BarChart3, Receipt, Wallet, Settings, Sun, KeyRound, QrCode, CandlestickChart, Boxes, Gauge, SlidersHorizontal, Activity, Workflow, ShieldCheck } from 'lucide-react';
+import { Settings, Sun, Activity, MessageSquare, Zap } from 'lucide-react';
 
 const SECTIONS = [
   { label: 'Overview', items: [
-    { to: '/', label: 'Reliability', Icon: ShieldCheck, end: true },
-    { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard, end: true },
+    { to: '/', label: 'Reliability', Icon: Activity, end: true },
   ] },
   { label: 'Publisher', items: [
-    { to: '/earnings', label: 'Earnings', Icon: TrendingUp },
-    { to: '/upstreams', label: 'Upstreams', Icon: Layers },
-    { to: '/market', label: 'Market & Pricing', Icon: CandlestickChart },
-    { to: '/asks', label: 'Ask Price', Icon: SlidersHorizontal },
-    { to: '/auto-pricing', label: 'Auto-Pricing', Icon: Workflow },
-    { to: '/fleet-health', label: 'Fleet Health', Icon: Activity },
-    { to: '/catalog', label: 'Catalog & Capacity', Icon: Boxes },
-    { to: '/budgets', label: 'Budgets', Icon: Wallet },
-    { to: '/combos', label: 'Combos', Icon: Boxes },
-    { to: '/analytics', label: 'Analytics', Icon: BarChart3 },
-    { to: '/pnl', label: 'Profit & Loss', Icon: Receipt },
-    { to: '/settlements', label: 'Settlements', Icon: Wallet },
-  ]},
-  { label: 'Consumer', items: [
-    { to: '/usage', label: 'Usage & Cache', Icon: Gauge },
-    { to: '/keys', label: 'API Keys', Icon: KeyRound },
-    { to: '/topups', label: 'Top-ups', Icon: QrCode },
+    { to: '/asks', label: 'Ask Price', Icon: MessageSquare },
+    { to: '/auto-pricing', label: 'Auto-Pricing', Icon: Zap },
   ]},
   { label: 'System', items: [ { to: '/settings', label: 'Settings', Icon: Settings } ] },
 ];

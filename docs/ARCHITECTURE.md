@@ -64,6 +64,9 @@ Daemon (separate systemd user unit):
 
 ## Deployment topology
 
+- **Deploy model**: GitHub Actions = CI only (no CD). Frontend Vercel `upstream-static` deploy
+  manual via token (lihat OPS-RUNBOOK). Backend VPS manual via SSH + systemd. Tidak ada
+  auto-deploy ke production pada main merge.
 - **Vercel** (frontend): `upstream-static.vercel.app` — build via `vercel build --prod`, deploy `vercel deploy --prod --prebuilt`.
 - **VPS** `root@82.25.62.204` (backend + daemon + finance): checkout `/home/gamesim/dashboard`, venv `/home/gamesim/.venv-dash`. Systemd user units (user `gamesim`): `wwma-upstream-backend.service`, `wwma-auto-pricing.service`.
 - **Secrets** live server-side only (systemd drop-in / proc environ). Never committed.

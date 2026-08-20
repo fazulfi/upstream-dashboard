@@ -25,8 +25,13 @@ import psycopg
 import json
 import urllib.request
 
-# DSN sama dgn backend/app.py & full_sync.py (peer/password auth via env).
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
+from financial_audit import audit_write  # noqa: E402
+
+# DSN wajib dari env — TIDAK ada fallback hardcode.
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise SystemExit("UPSTREAM_DB env wajib diisi (DB production). Refuse to run.")
 
 
 def db():
@@ -65,7 +70,7 @@ def fetch_live_kurs():
         return None
 
 
-def update_meta_kurs(conn, cur, kurs):
+def update_meta_kurs(conn, cur, kurs, actor):
     """Simpan kurs terbaru ke ledger_meta (agar report lain ikut realtime)."""
     try:
         cur.execute(
@@ -73,6 +78,8 @@ def update_meta_kurs(conn, cur, kurs):
             "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
             (str(round(kurs, 4)),),
         )
+        audit_write(conn, "ledger_meta", "kurs_idr_usd", "update-kurs", actor, "fin_ops.buy",
+                    before=None, after={"kurs_idr_usd": kurs})
         cur.execute(
             "INSERT INTO ledger_meta (k, v) VALUES ('kurs_updated', %s) "
             "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
@@ -154,6 +161,12 @@ def cmd_buy(a):
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s)",
                 (aid, up, qty, cost, curr, buy, lifespan, label, kurs if curr == "IDR" else None, a.actor),
             )
+            if kurs is not None:
+                update_meta_kurs(conn, cur, kurs, a.actor)
+            audit_write(conn, "assets", aid, "add-asset", a.actor, "fin_ops.buy",
+                        before=None, after={"id": aid, "upstream": up, "qty": qty,
+                                             "cost_per": cost, "curr": curr, "buy": buy,
+                                             "lifespan_d": lifespan, "label": label})
         conn.commit()
 
 
@@ -177,6 +190,8 @@ def cmd_retire(a):
                 cur.execute(
                     "UPDATE assets SET status='retired', retired_by=%s, retired_at=now() WHERE id=%s",
                     (a.actor, aid))
+            audit_write(conn, "assets", aid, "retire-asset", a.actor, "fin_ops.retire",
+                        before={"status": "active"}, after={"status": "retired"})
         conn.commit()
     print(f"✓ RETIRE  {aid}  ({rows[0][1]}) -> status retired")
 
@@ -219,12 +234,18 @@ def cmd_refund(a):
                 )
             if cur.fetchone():
                 print(f"✗ Refund duplikat terdeteksi: {up} {d} sudah tercatat. Abort.")
+                return
+            rid = str(uuid.uuid4())
             cur.execute(
                 "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd, created_by) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (rid, up, a.qty or 0, a.amount_idr or 0, a.amount_usdc or 0, a.label or "", d,
                  kurs if idr_ok else None, a.actor),
             )
+            audit_write(conn, "refunds", rid, "add-refund", a.actor, "fin_ops.refund",
+                        before=None, after={"upstream": up, "qty": a.qty or 0,
+                                           "amount_idr": a.amount_idr, "amount_usdc": a.amount_usdc,
+                                           "label": a.label})
     print(f"✓ REFUND  {rid}  {up}  qty {a.qty or 0}  IDR {a.amount_idr or 0:,.0f}  USDC {a.amount_usdc or 0}  kurs {kurs or 'meta'}")
 
 

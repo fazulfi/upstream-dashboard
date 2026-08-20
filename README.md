@@ -7,7 +7,7 @@ Production operations dashboard for an AI-model pricing publisher, with live rel
 [![CI](https://img.shields.io/github/actions/workflow/status/fazulfi/upstream-dashboard/ci.yml?branch=main&label=CI)](https://github.com/fazulfi/upstream-dashboard/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-Vitest%203%20%7C%20pytest-blue)](https://github.com/fazulfi/upstream-dashboard)
 [![Coverage](https://img.shields.io/badge/coverage-frontend%2080%25%2B%20%7C%20backend%2080%25%2B-success)](https://github.com/fazulfi/upstream-dashboard/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-see%20repository-lightgrey)](https://github.com/fazulfi/upstream-dashboard)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Overview
 
@@ -101,7 +101,21 @@ cd frontend
 npm install
 ```
 
-### Configure the local environment
+### Environment Variables
+
+Copy `.env.example` to a protected runtime file and replace every `change-me` or placeholder value locally. Never commit `.env` files or real credentials.
+
+| Variable | Scope | Required | Exposure |
+|---|---|---|---|
+| `VITE_API_URL` | frontend build/local | optional | public |
+| `DASHBOARD_PASSWORD` | backend | yes | server-only |
+| `UPSTREAM_DB` | backend/scripts | yes | server-only |
+| `ALLOWED_ORIGINS` | backend | yes in production | server-only |
+| `VERCEL_TOKEN` | deploy operator | deploy-only | secret |
+| `INFERHUB_API_KEY` | backend/daemon | yes in production | server-only |
+| `FOREX_KEY` | finance service | depending | server-only |
+
+## Configure the local environment
 
 The frontend reads its API base from `VITE_API_URL`. Create a local frontend environment file with a non-production API URL when needed:
 
@@ -159,9 +173,18 @@ pytest tests/test_logic.py --cov=logic --cov-report=term-missing --cov-fail-unde
 
 The single workflow, [`.github/workflows/ci.yml`](.github/workflows/ci.yml), runs backend compilation, daemon tests, pytest and coverage, frontend Oxlint, frontend tests, and the Vite build. GitHub Actions is CI-only: it does not deploy.
 
+## API Reference
+
+The InferHub API contract is captured in [`docs/inferhub-openapi-spec.json`](docs/inferhub-openapi-spec.json). Quickstart after obtaining a session token:
+
+```bash
+curl -sS -H "Authorization: Bearer <session-token>" \
+  "https://ops.budgezen.com/api/reliability/summary"
+```
+
 ## Deployment
 
-Deployment is manual by design under the production C3 constraint:
+Deployment is manual by design under the production C3 constraint. **GitHub Actions = CI only (no CD). Frontend Vercel `upstream-static` deploy manual via token; backend VPS manual via SSH + systemd. Vercel auto-deploy pada main merge TIDAK digunakan sebagai mekanisme rilis; rilis = PR merged + CI green + manual promote.**
 
 1. Open a reviewed pull request to `main` and wait for green CI and approval.
 2. Take a database backup before backend, schema, daemon, or other production changes.
@@ -170,6 +193,42 @@ Deployment is manual by design under the production C3 constraint:
 5. Verify health, service uniqueness, heartbeat freshness, database freshness, ARM state, and the deployed frontend before re-arming pricing.
 
 There is **no continuous deployment** in GitHub Actions. The production lock and rollback evidence are maintained in [`docs/PRODUCTION-LOCK.md`](docs/PRODUCTION-LOCK.md) and the [`artifacts/`](artifacts/) evidence directory. Do not treat a local green build as production evidence without the documented deployment and runtime checks.
+
+## Release & Versioning
+
+Releases follow Semantic Versioning (`MAJOR.MINOR.PATCH`). A release is promoted only after the reviewed PR is merged, CI is green, and the operator completes the manual frontend and backend deployment checks. Release notes and compatibility-impacting changes are recorded in [`CHANGELOG.md`](CHANGELOG.md) when that file is present; this repository does not create it automatically.
+
+## Support & SLA
+
+This is a single-tenant publisher operations dashboard with best-effort support from the repository owner, Faiz (fazulfi). There is no contractual uptime SLA in this repository. Production incidents follow the runbook: DISARM when pricing safety is uncertain, preserve evidence, restore service, and re-ARM only after verification.
+
+## Data Retention & Backup
+
+Database backups are retained for **14 days locally** and **30 days offsite** when the offsite path is configured. Take a fresh backup before every production deploy or restore. Reliability-event retention is documented separately in the operations runbook and does not promise backup recovery for that duration.
+
+## Architecture Decision Records (ADR)
+
+The decision index is [`docs/adr/`](docs/adr/):
+
+- [ADR-001 — Rule engine finance](docs/adr/ADR-001-rule-engine-finance.md)
+- [ADR-002 — Remove blocked pages](docs/adr/ADR-002-hapus-page-blocked.md)
+- [ADR-003 — Manual deploy, no CD](docs/adr/ADR-003-deploy-manual-no-cd.md)
+
+## CI Status Matrix
+
+| Area | Runtime | Checks |
+|---|---|---|
+| Backend | Python 3.11 | `compileall`, unittest, pytest, coverage |
+| Frontend | Node 20 | Oxlint, Vitest, production build |
+
+## RACI
+
+| Activity | Responsible | Accountable | Consulted | Informed |
+|---|---|---|---|---|
+| Code review and CI | Contributor | Repository owner | Maintainers | Stakeholders |
+| Production backend deploy | VPS operator | Repository owner | Operations | Stakeholders |
+| Production frontend deploy | Vercel operator | Repository owner | Operations | Stakeholders |
+| Incident response | On-call operator | Repository owner | Operations | Stakeholders |
 
 ## Security
 
@@ -222,4 +281,4 @@ The repository currently provides [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTIN
 
 ## License
 
-No license file is currently present in this repository. Contact the repository owner regarding permission to use or redistribute the software.
+This project is licensed under the [MIT License](LICENSE).

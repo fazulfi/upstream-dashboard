@@ -11,12 +11,15 @@ Usage:
   python ledger_update.py show
 """
 import argparse
+import getpass
 import json
 import os
 import sys
 import urllib.request
 
 import psycopg
+
+from financial_audit import audit_write
 from psycopg.rows import dict_row
 
 BASE = "/home/gamesim/shared-memory/inferhub-business"
@@ -104,9 +107,15 @@ def read_db():
     return {"meta": meta, "assets": assets, "impairments": imps, "payouts": pays}
 
 
-def upsert_asset(a, kurs=None):
+def _actor(args):
+    return getattr(args, "actor", None) or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser()
+
+
+def upsert_asset(a, kurs=None, actor=None):
     with conn() as c:
         with c.cursor() as cur:
+            cur.execute("SELECT id, upstream, qty, cost_per, curr, status, label FROM assets WHERE id=%s", (a["id"],))
+            prior = cur.fetchone()
             if a.get("curr") == "IDR":
                 a_kurs = a.get("kurs_idr_usd") or kurs
             else:
@@ -122,17 +131,29 @@ def upsert_asset(a, kurs=None):
             """, (a["id"], a.get("upstream"), int(a.get("qty") or 0), float(a.get("cost_per") or 0),
                   a.get("curr", "USD"), str(a.get("buy") or "")[:10], int(a.get("lifespan_d") or 30),
                   a.get("status", "active"), a.get("label"), a_kurs))
+        audit_write(c, "assets", a["id"], "upsert-asset", actor or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
+                    "ledger_update.upsert_asset", before=dict(prior) if prior else None,
+                    after={"id": a["id"], "upstream": a.get("upstream"), "qty": a.get("qty"),
+                           "cost_per": a.get("cost_per"), "curr": a.get("curr"),
+                           "buy": str(a.get("buy") or "")[:10], "lifespan_d": a.get("lifespan_d"),
+                           "status": a.get("status", "active"), "label": a.get("label")})
         c.commit()
 
 
-def update_asset_status(aid, status, label=None):
+def update_asset_status(aid, status, label=None, actor=None):
     with conn() as c:
         with c.cursor() as cur:
-            cur.execute("UPDATE assets SET status=%s, label=COALESCE(%s,label) WHERE id=%s", (status, label, aid))
-            if cur.rowcount == 0:
+            cur.execute("SELECT status FROM assets WHERE id=%s", (aid,))
+            row = cur.fetchone()
+            if row is None:
                 print(f"  [!] asset {aid} tidak ditemukan di DB")
-            else:
-                print(f"  [OK] {aid} -> {status}")
+                return
+            old_status = row["status"]
+            cur.execute("UPDATE assets SET status=%s, label=COALESCE(%s,label) WHERE id=%s", (status, label, aid))
+        audit_write(c, "assets", aid, f"set-{status}", actor or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
+                    "ledger_update.update_asset_status", before={"status": old_status},
+                    after={"status": status, "label": label})
+        print(f"  [OK] {aid} -> {status}")
         c.commit()
 
 
@@ -154,13 +175,13 @@ def main():
     ap = argparse.ArgumentParser(description="Upstream ledger updater (DB + file sync)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("add-asset"); p.add_argument("--id", required=True); p.add_argument("--upstream", required=True)
+    p = sub.add_parser("add-asset"); p.add_argument("--id", required=True); p.add_argument("--upstream", required=True); p.add_argument("--actor", default=None)
     p.add_argument("--qty", type=int, default=1); p.add_argument("--cost", type=float, required=True)
     p.add_argument("--curr", default="IDR"); p.add_argument("--buy", required=True)
     p.add_argument("--lifespan", type=int, default=30); p.add_argument("--label", default="")
 
-    p = sub.add_parser("retire-asset"); p.add_argument("--id", required=True); p.add_argument("--label", default="mati/expired")
-    p = sub.add_parser("reactivate-asset"); p.add_argument("--id", required=True)
+    p = sub.add_parser("retire-asset"); p.add_argument("--id", required=True); p.add_argument("--label", default="mati/expired"); p.add_argument("--actor", default=None)
+    p = sub.add_parser("reactivate-asset"); p.add_argument("--id", required=True); p.add_argument("--actor", default=None)
     p = sub.add_parser("add-payout"); p.add_argument("--date", required=True); p.add_argument("--usd", type=float, required=True); p.add_argument("--note", default="")
     p = sub.add_parser("sync-from-file")
     p = sub.add_parser("sync-to-file")
@@ -172,22 +193,22 @@ def main():
         kurs = fetch_live_kurs() if args.curr == "IDR" else None
         upsert_asset({"id": args.id, "upstream": args.upstream, "qty": args.qty, "cost_per": args.cost,
                       "curr": args.curr, "buy": args.buy, "lifespan_d": args.lifespan,
-                      "status": "active", "label": args.label}, kurs)
+                      "status": "active", "label": args.label}, kurs, actor=_actor(args))
         print(f"  [OK] asset {args.id} ditambahkan ke DB")
         sync_db_to_file()
     elif args.cmd == "retire-asset":
-        update_asset_status(args.id, "retired", args.label)
+        update_asset_status(args.id, "retired", args.label, actor=_actor(args))
         sync_db_to_file()
     elif args.cmd == "add-payout":
         add_payout(args.date, args.usd, args.note)  # raise SystemExit dgn pesan jelas
         sync_db_to_file()
     elif args.cmd == "reactivate-asset":
-        update_asset_status(args.id, "active")
+        update_asset_status(args.id, "active", actor=_actor(args))
         sync_db_to_file()
     elif args.cmd == "sync-from-file":
         led = load_file()
         for a in led.get("assets", []) or []:
-            upsert_asset(a)
+            upsert_asset(a, actor=_actor(args))
         print(f"  [OK] ledger.json diimpor ke DB: {len(led.get('assets',[]))} assets")
     elif args.cmd == "sync-to-file":
         sync_db_to_file()
