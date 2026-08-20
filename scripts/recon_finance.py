@@ -17,12 +17,43 @@ import json
 import urllib.request
 from datetime import date
 
-DB_DSN = os.environ.get("UPSTREAM_DB", "postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise SystemExit("UPSTREAM_DB env wajib diisi (DB production). Refuse to run.")
 
 
 def db():
     import psycopg
     return psycopg.connect(DB_DSN)
+
+
+def parity_rule_engine():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
+    from finance_rules import compute_finance
+
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COALESCE(v, '') FROM ledger_meta WHERE k='kurs_idr_usd'")
+        r = cur.fetchone()
+        kurs = float(r[0]) if r and r[0] else 17801.17
+        cur.execute("SELECT id, upstream, qty, cost_per, curr, status, kurs_idr_usd FROM assets")
+        assets = [dict(zip(["id", "upstream", "qty", "cost_per", "curr", "status", "kurs_idr_usd"], row))
+                  for row in cur.fetchall()]
+        cur.execute("SELECT amount_usdc, status FROM payouts")
+        payouts = [{"amount_usdc": row[0], "status": row[1] or "confirmed"} for row in cur.fetchall()]
+        cur.execute("SELECT amount_idr, amount_usdc, kurs_idr_usd FROM refunds")
+        refunds = [{"amount_idr": row[0], "amount_usdc": row[1], "kurs_idr_usd": row[2]} for row in cur.fetchall()]
+        cur.execute("SELECT upstream, loss FROM impairments")
+        impairments = [{"upstream": row[0], "loss": row[1]} for row in cur.fetchall()]
+        cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
+        providers = [{"upstream_slug": row[0], "n": row[1]} for row in cur.fetchall()]
+
+    res = compute_finance(assets, payouts, refunds, impairments, kurs, providers=providers)
+    expected = round(res["total_payout"] + res["total_refund_usd"] - res["amort_usd"]
+                     - res["total_imp_loss_usd"] - res["opex"], 2)
+    ok = res["net_income"] == expected
+    non_active = sum(1 for a in assets if (a.get("status") or "active") != "active")
+    ok = ok and len(res["amort_assets"]) == non_active
+    return ok, res
 
 
 def inferhub_get(path, timeout=20):
@@ -168,6 +199,17 @@ def main():
     if n_nonmono:
         warns.append(f"earning_history non-monotonik {n_nonmono} baris (transisi withdrawn — artefak sync, bukan korupsi)")
         print(f"[WARN] Earning non-monotonik: {n_nonmono} baris (artefak sync withdrawn)")
+
+    try:
+        ok_par, res_par = parity_rule_engine()
+        checks.append(("FIN-PARITY rule engine identitas net income", ok_par,
+                       f"net income ${res_par['net_income']:.2f}"))
+        if not ok_par:
+            fails.append(checks[-1])
+        else:
+            print(f"[PASS] {checks[-1][0]}: {checks[-1][2]}")
+    except Exception as e:
+        fails.append(("FIN-PARITY rule engine", False, str(e)))
 
     # Report
     print()

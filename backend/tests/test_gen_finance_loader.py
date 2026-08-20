@@ -34,3 +34,16 @@ def test_gen_finance_tidak_hardcode_db_upstream(gen_finance_mod):
 
 def test_gen_finance_import_rule_engine(gen_finance_mod):
     assert gen_finance_mod.compute_finance is not None
+
+
+def test_fin_ops_dsn_tidak_ada_fallback():
+    src = open(os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "fin_ops.py"), encoding="utf-8").read()
+    assert "postgresql://gamesim" not in src
+    assert "upstream_" + "local" not in src
+    assert 'os.environ.get("UPSTREAM_DB")' in src
+
+
+def test_recon_finance_dsn_tidak_ada_fallback():
+    src = open(os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "recon_finance.py"), encoding="utf-8").read()
+    assert "postgresql://gamesim" not in src
+    assert "upstream_" + "local" not in src
