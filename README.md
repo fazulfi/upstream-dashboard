@@ -25,6 +25,22 @@ PostgreSQL is the durable source of truth for financial records, configuration, 
 - **Reliability operations:** Cycle, event, model, heartbeat, freshness, and aggregate views with REST recovery and a live SSE stream.
 - **Operational safety:** PostgreSQL persistence, bounded retention, explicit deployment gates, backup-before-deploy policy, and documented rollback procedures.
 
+## Product Specifications
+
+### Enterprise
+
+- **Single-tenant deployment** on dedicated infrastructure (VPS + managed static hosting) with full control over the runtime environment.
+- **Audit trail:** every pricing-control transition (ARM/DISARM) is persisted with operator, timestamp, and outcome; release evidence is captured per deployment.
+- **Release governance:** CI-only pipeline (no CD), protected `main` branch, PR-based review, manual deploy approval, backup-before-deploy, signed evidence artifacts, and documented rollback procedure.
+- **Credential hygiene:** session-token auth (no password in the client bundle), credential-history audit, ignored-artifact audit, and secrets referenced by name only.
+
+### SaaS
+
+- **Publisher-facing operations dashboard** served as a hosted web application (Vercel static + VPS backend), accessible via HTTPS with nginx TLS.
+- **Live operations stream:** fetch-based SSE with cursor replay, bounded backoff, and REST recovery path — publishers see near-real-time cycle/event data without page reloads.
+- **Session model:** password login issues a bearer session token (sessionStorage); centralized 401/403 handling returns users to login with an explicit message when a session expires.
+- **Multi-domain product surface:** fleet, market, pricing, finance, analytics, reliability, and account/billing modules under one authenticated shell.
+
 ## Architecture
 
 ```text
