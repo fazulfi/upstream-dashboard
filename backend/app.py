@@ -27,10 +27,12 @@ import hashlib
 from collections import defaultdict
 from functools import wraps
 from datetime import datetime, timezone
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import Flask, Response, g, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 import logic  # pure functions (auth, bucketing, sanitize) — unit-testable
+from mutation_guard import MutationGuardError, guard_mutation
+from financial_audit import audit_write
 
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD")
 if not DASHBOARD_PASSWORD or len(DASHBOARD_PASSWORD) < 12:
@@ -548,6 +550,38 @@ def _verify_token(token):
     return logic.verify_token(token, DASHBOARD_PASSWORD)
 
 
+def issue_token(operator_name="operator", role="operator"):
+    """Token operator 4-part: <expiry>.<name>.<role>.<hmac> (Phase 4 Q4)."""
+    return logic.issue_token_operator(operator_name, role, SESSION_TTL, DASHBOARD_PASSWORD)
+
+
+def _handle_login(body, resp):
+    """Login — verifikasi DASHBOARD_PASSWORD + simpan identity."""
+    pw = (body or {}).get("password", "")
+    if not hmac.compare_digest(pw, DASHBOARD_PASSWORD):
+        resp["status"] = 401
+        resp["body"] = {"error": "invalid password"}
+        return
+    name = (body or {}).get("operator_name") or "operator"
+    role = (body or {}).get("role") or "operator"
+    resp["status"] = 200
+    resp["body"] = {"token": issue_token(name, role), "operator_name": name, "role": role}
+
+
+def get_operator(token):
+    """Extract (name, role) dari token; default ('operator','operator')."""
+    try:
+        name, role = logic.verify_token_operator(token, DASHBOARD_PASSWORD)
+        return name, role
+    except Exception:
+        return "operator", "operator"
+
+
+def auth_token():
+    kind, token = _read_credentials()
+    return token if kind == "token" else ""
+
+
 def _read_credentials():
     """Balikan (kind, credential): token sesi (Bearer) atau password (X-Auth).
     HAPUS dukungan `?auth=` — password lewat query bocor ke access log."""
@@ -567,7 +601,19 @@ def require_auth(f):
         kind, cred = _read_credentials()
         if not cred:
             return jsonify({"error": "unauthorized"}), 401
-        ok = _verify_token(cred) if kind == "token" else hmac.compare_digest(cred, DASHBOARD_PASSWORD)
+        if kind == "token":
+            operator = None
+            ok = _verify_token(cred)
+            if not ok:
+                try:
+                    operator = logic.verify_token_operator(cred, DASHBOARD_PASSWORD)
+                except Exception:
+                    return jsonify({"error": "unauthorized"}), 401
+                ok = True
+            if operator:
+                g.operator_name, g.role = operator
+        else:
+            ok = hmac.compare_digest(cred, DASHBOARD_PASSWORD)
         if not ok:
             return jsonify({"error": "unauthorized"}), 401
         return f(*args, **kwargs)
@@ -601,10 +647,15 @@ def _rate_limit():
 def api_login():
     """Login: exchange password (body {password}) -> token sesi."""
     body = request.get_json(silent=True) or {}
-    pw = body.get("password")
-    if not pw or not hmac.compare_digest(pw, DASHBOARD_PASSWORD):
-        return jsonify({"error": "unauthorized"}), 401
-    return jsonify({"token": _issue_token(), "expires_in": SESSION_TTL})
+    resp = {}
+    _handle_login({
+        "password": body.get("password"),
+        "operator_name": body.get("operator_name"),
+        "role": body.get("role"),
+    }, resp)
+    if resp["status"] == 200:
+        return jsonify(resp["body"])
+    return jsonify(resp["body"]), 401
 
 
 def load_json(path, default=None):
@@ -870,6 +921,46 @@ def _poll_earnings_log(size=25):
     return {"rows": out, "count": int(d.get("total") or len(out)), "totalCostUsdc": float(d.get("totalCostUsdc") or 0)}
 
 
+def _sync_payouts_rows(rows, conn):
+    """Insert payouts; id kosong → skip + audit (P4-Q9, no UUID fallback).
+
+    KONTRAAK: `conn` OPSIONAL — bila None, helper membuat koneksi sendiri via
+    db_connect() (supaya unit test bisa memanggil `conn=None`).
+    Format baris MASUK mengikuti field API sync existing:
+    {id, amountUsdc, requestedAt, status, destination} — helper menormalisasi
+    ke kolom DB (amount_usdc, date).
+    """
+    skipped = 0
+    own_conn = conn is None
+    try:
+        if own_conn:
+            conn = db_connect()
+        with conn.cursor() as cur:
+            for w in rows:
+                wid = w.get("id")
+                if not wid:
+                    skipped += 1
+                    audit_write(conn, "payouts", None, "sync-payouts-skip", "system",
+                                "payout_sync", before=w, after=None)
+                    continue
+                # normalisasi: amountUsdc/requestedAt (API sync) OR amount_usdc/date (DB)
+                amt = w.get("amountUsdc", w.get("amount_usdc"))
+                dt = w.get("requestedAt", w.get("date"))
+                cur.execute("""
+                    INSERT INTO payouts (id, date, amount_usdc, status, destination, created_at)
+                    VALUES (%s, %s, %s, %s, %s, now())
+                    ON CONFLICT (id) DO UPDATE SET
+                      date=EXCLUDED.date, amount_usdc=EXCLUDED.amount_usdc,
+                      status=EXCLUDED.status, destination=EXCLUDED.destination
+                """, (wid, str(dt or "")[:10], float(amt or 0),
+                      w.get("status", "confirmed"), w.get("destination")))
+            conn.commit()
+    finally:
+        if own_conn:
+            conn.close()
+    return skipped
+
+
 def _incremental_db_sync():
     """Sync DB secara inkremental (realtime lanjutan dari full pull).
     Refresh providers + market + usage log terbaru — tanpa re-fetch semua asks.
@@ -924,19 +1015,7 @@ def _incremental_db_sync():
         # payouts: sinkron dari live withdrawals API -> tabel payouts (upsert, no manual)
         try:
             wd = inferhub_get("/publisher/withdrawals") or []
-            with db_connect() as conn, conn.cursor() as cur:
-                for w in wd:
-                    wid = w.get("id") or str(uuid.uuid4())
-                    amt = float(w.get("amountUsdc") or 0)
-                    wdate = (w.get("requestedAt") or w.get("completedAt") or "")[:10]
-                    status = w.get("status") or "confirmed"
-                    cur.execute("""
-                        INSERT INTO payouts (id, date, amount_usdc, status, destination, network, requested_at, completed_at, synced_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now())
-                        ON CONFLICT (id) DO UPDATE SET date=EXCLUDED.date, amount_usdc=EXCLUDED.amount_usdc,
-                          status=EXCLUDED.status, destination=EXCLUDED.destination, completed_at=EXCLUDED.completed_at
-                    """, (wid, wdate, amt, status, w.get("destination") or "", w.get("network") or "",
-                          w.get("requestedAt") or "", w.get("completedAt") or ""))
+            _sync_payouts_rows(wd, conn=None)
         except Exception:
             pass
     except Exception as e:
@@ -1681,6 +1760,196 @@ def api_pricing_config():
         return jsonify({})
 
 
+def _load_pricing_merged():
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT upstream, max_ask_pct, platform_fee_pct, publisher_share_pct
+            FROM pricing_config_upstream ORDER BY upstream
+        """)
+        upstream_rows = {r["upstream"]: r for r in cur.fetchall()}
+        cur.execute("SELECT id, max_ask_pct, platform_fee_pct, publisher_share_pct FROM pricing_config WHERE id=1")
+        pc = cur.fetchone() or {}
+        cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct, updated_at FROM auto_pricing_config ORDER BY upstream, model_id")
+        overrides = [dict(r) for r in cur.fetchall()]
+    orderbook = _orderbook_payload()["models"]
+    globals_cfg = {}
+    for mo in orderbook:
+        for u in mo.get("upstreams") or []:
+            up = u["slug"]
+            if up in upstream_rows:
+                row = upstream_rows[up]
+                globals_cfg[up] = {"max_ask_pct": row["max_ask_pct"],
+                                   "platform_fee_pct": row.get("platform_fee_pct"),
+                                   "publisher_share_pct": row.get("publisher_share_pct")}
+            else:
+                globals_cfg[up] = {"max_ask_pct": pc.get("max_ask_pct"),
+                                   "platform_fee_pct": pc.get("platform_fee_pct"),
+                                   "publisher_share_pct": pc.get("publisher_share_pct")}
+    return {"globals": globals_cfg, "overrides": overrides, "orderbook": orderbook}
+
+
+def _pricing_merged_view():
+    return _load_pricing_merged()
+
+
+@app.route("/api/pricing", methods=["GET"])
+def api_pricing():
+    return jsonify(_load_pricing_merged())
+
+
+@app.route("/api/pricing/global", methods=["PUT"])
+def api_pricing_global_put():
+    body = request.get_json(silent=True) or {}
+    upstream = (body.get("upstream") or "").strip()
+    if not upstream:
+        return jsonify({"error": "upstream required"}), 400
+    try:
+        max_ask_pct = float(body.get("max_ask_pct"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "max_ask_pct numeric required"}), 400
+    if max_ask_pct <= 0:
+        return jsonify({"error": "max_ask_pct harus > 0"}), 400
+    cfg = {"upstream": upstream, "max_ask_pct": max_ask_pct,
+           "platform_fee_pct": body.get("platform_fee_pct"),
+           "publisher_share_pct": body.get("publisher_share_pct")}
+
+    conn = db_connect()
+
+    def _exec():
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO pricing_config_upstream
+                    (upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, updated_at)
+                VALUES (%s, %s, %s, %s, now())
+                ON CONFLICT (upstream) DO UPDATE SET
+                  max_ask_pct=EXCLUDED.max_ask_pct,
+                  platform_fee_pct=EXCLUDED.platform_fee_pct,
+                  publisher_share_pct=EXCLUDED.publisher_share_pct,
+                  updated_at=now()
+            """, (cfg["upstream"], cfg["max_ask_pct"],
+                  cfg["platform_fee_pct"], cfg["publisher_share_pct"]))
+        return 200, {"ok": True, "config": cfg}
+
+    try:
+        name, role = get_operator(auth_token())
+        status, payload = guard_mutation(
+            request, conn, "pricing_config_upstream", "pricing-global-update", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body=body,
+            actor_role=role, required_roles=["admin"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
+
+
+@app.route("/api/finance/buy", methods=["POST"])
+def api_finance_buy():
+    body = request.get_json(silent=True) or {}
+
+    def _exec():
+        # upsert_asset membuka koneksi SENDIRI + commit sendiri (ledger_update.py:114
+        # `with conn() as c`); guard tetap menulis replay row pada koneksinya —
+        # commit terpisah TAPI atomic dari sisi operasi asset (audit asset ditulis
+        # upsert_asset sendiri via audit_write). Ini keputusan desain: operasi
+        # ledger nyata tidak boleh setengah jadi.
+        from ledger_update import upsert_asset
+        upsert_asset({"id": body["id"], "upstream": body["upstream"], "qty": int(body.get("qty", 1)),
+                      "cost_per": float(body["cost"]), "curr": body.get("curr", "USD"),
+                      "buy": body.get("buy", ""), "lifespan_d": int(body.get("lifespan", 30)),
+                      "status": "active", "label": body.get("label", "")})
+        return 200, {"ok": True, "id": body["id"]}
+
+    name, role = get_operator(auth_token())
+    try:
+        status, payload = guard_mutation(
+            request, db_connect(), "assets", "finance-buy", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", actor_role=role,
+            required_roles=["admin", "ops"], request_body=body, rollback_hook=None)
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify(payload), status
+
+
+@app.route("/api/finance/retire", methods=["POST"])
+def api_finance_retire():
+    """Retire asset: {id, label?}. Status asset -> 'retired'. Gated, admin/ops."""
+    body = request.get_json(silent=True) or {}
+    aid = (body.get("id") or "").strip()
+    if not aid:
+        return jsonify({"error": "id required"}), 400
+
+    def _exec():
+        # update_asset_status buka koneksi SENDIRI + commit sendiri (ledger_update.py:143);
+        # guard menulis replay row di koneksinya — desain: operasi ledger atomic.
+        from ledger_update import update_asset_status
+        update_asset_status(aid, "retired", body.get("label", "mati/expired"))
+        return 200, {"ok": True, "id": aid, "status": "retired"}
+
+    name, role = get_operator(auth_token())
+    conn = db_connect()
+    try:
+        status, payload = guard_mutation(
+            request, conn, "assets", "finance-retire", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body=body,
+            actor_role=role, required_roles=["admin", "ops"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
+
+
+@app.route("/api/finance/refund", methods=["POST"])
+def api_finance_refund():
+    """Catat refund: {id, upstream, qty?, amount_usdc, date?, label?}.
+    Insert row ke tabel `refunds`. Gated, admin/ops.
+    """
+    body = request.get_json(silent=True) or {}
+    rid = (body.get("id") or "").strip()
+    if not rid:
+        return jsonify({"error": "id required"}), 400
+    upstream = (body.get("upstream") or "").strip()
+    if not upstream:
+        return jsonify({"error": "upstream required"}), 400
+    try:
+        amount_usdc = float(body.get("amount_usdc", body.get("amountUsdc")))
+    except (TypeError, ValueError):
+        return jsonify({"error": "amount_usdc numeric required"}), 400
+
+    name, role = get_operator(auth_token())
+    conn = db_connect()
+
+    def _exec():
+        # tulis dalam SATU transaksi koneksi guard (tanpa commit) — guard yang commit
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                  upstream=EXCLUDED.upstream, qty=EXCLUDED.qty,
+                  amount_idr=EXCLUDED.amount_idr, amount_usdc=EXCLUDED.amount_usdc,
+                  label=EXCLUDED.label, date=EXCLUDED.date
+            """, (rid, upstream, int(body.get("qty") or 0), 0.0, amount_usdc,
+                  body.get("label"), (body.get("date") or "")[:10] or None, name))
+        return 200, {"ok": True, "id": rid, "upstream": upstream, "amount_usdc": amount_usdc}
+
+    try:
+        status, payload = guard_mutation(
+            request, conn, "refunds", "finance-refund", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body=body,
+            actor_role=role, required_roles=["admin", "ops"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
+
+
 @app.route("/api/keys", methods=["POST"])
 def api_keys_post():
     body = request.get_json(silent=True) or {}
@@ -1914,17 +2183,14 @@ def api_catalog():
     return jsonify(d)
 
 
-@app.route("/api/orderbook")
-def api_orderbook():
-    """Orderbook per model: agregat catalog.asksIn[] -> level harga + depth per upstream.
-    Harga termurah -> tertinggi (ladder). Juga min/max/spread/official.
-    dimaksud utk halaman Ask Price orderbook-style (klik model -> modal set manual).
+def _orderbook_payload():
+    """Refactor dari api_orderbook (app.py:1917-1997): model → upstreams → levels.
 
-    Asks-to-daemon parity (2026-08-16): slug upstream milik kita (satu publisher,
-    /publisher/providers enabled) di-EXCLUDE dari level kompetitor SEJATI — sama dgn
-    get_positions() di scripts/auto_pricing.py. min_ask/max_ask/spread dihitung dari
-    level slug BUKAN milik kita; tiap upstream diberi flag `is_ours`. Level per-upstream
-    (termasuk milik kita) tetap disajikan utk modal set-harga-manual."""
+    Sumber = cache/InferHub (catalog + providers + asks), BUKAN DB — parity
+    penuh dgn api_orderbook. Ladder per price (round 6), norm_mid (segmen
+    setelah '/' terakhir), is_ours via my_slugs, min/max/spread dari level
+    NON-ours, our_ask dari asks_map, sort by min_ask asc.
+    """
     cat = _cache.get("catalog")
     if not cat:
         cat = inferhub_get("/catalog")
@@ -1945,7 +2211,6 @@ def api_orderbook():
                 asks_map[x.get("upstreamCatalogModelId")] = x
 
     ups = cat if isinstance(cat, list) else (cat or {}).get("upstreams", []) if isinstance(cat, dict) else []
-    # model -> {label, model_id, official_in, upstreams:[{slug,label,levels:[{price,qty}],is_ours}], our_ask}
     models = {}
     for u in ups:
         slug = u.get("slug"); ulabel = u.get("label")
@@ -1958,16 +2223,12 @@ def api_orderbook():
             try: official = float(official)
             except (TypeError, ValueError): official = None
             asks_in = m.get("asksIn") or []
-            # bucket depth per distinct price
             cnt = {}
             for price in asks_in:
                 try: p = round(float(price), 6)
                 except (TypeError, ValueError): continue
                 cnt[p] = cnt.get(p, 0) + 1
             levels = [{"price": p, "qty": q} for p, q in sorted(cnt.items())]
-            # NORMALISASI KEY: model sama di banyak upstream sering pakai prefix berbeda
-            # (cline-pass/deepseek-v4-flash vs deepseek-v4-flash). Ambil segmen setelah '/' terakhir
-            # supaya 1 model = 1 kartu, semua upstream digabung di dalam.
             raw_mid = mid or ""
             norm_mid = raw_mid.split("/")[-1].strip().lower()
             if not norm_mid:
@@ -1981,9 +2242,8 @@ def api_orderbook():
             if our_a and mo["our_ask"] is None:
                 try: mo["our_ask"] = round(float(our_a.get("askInputPerMtok") or 0), 6)
                 except (TypeError, ValueError): pass
-            # expose upstreamCatalogModelId (cid) utk set-harga-manual dari frontend
-            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels, "active": u.get("activeProviders"), "cid": cid, "is_ours": is_ours})
-    # compute min/max/spread from GENUINE competitor levels (non-ours) + sort models
+            mo["upstreams"].append({"slug": slug, "label": ulabel, "levels": levels,
+                                    "active": u.get("activeProviders"), "cid": cid, "is_ours": is_ours})
     out = []
     for key, mo in models.items():
         genuine = [lv for u in mo["upstreams"] if not u.get("is_ours") for lv in u["levels"]]
@@ -1994,7 +2254,12 @@ def api_orderbook():
         mo["spread"] = round(mx - mn, 6) if mn is not None and mx is not None else None
         out.append(mo)
     out.sort(key=lambda x: (x["min_ask"] is None, x["min_ask"] if x["min_ask"] is not None else float("inf")))
-    return jsonify({"models": out, "count": len(out)})
+    return {"models": out, "count": len(out)}
+
+
+@app.route("/api/orderbook")
+def api_orderbook():
+    return jsonify(_orderbook_payload())
 
 
 @app.route("/api/usage/cache-stats")
@@ -2402,57 +2667,100 @@ def api_auto_pricing_config_put():
         return jsonify({"error": "upstream & model_id required"}), 400
     if trigger_pct <= 0:
         return jsonify({"error": "trigger_pct harus > 0"}), 400
-    # FIX (2026-08-15): normalisasi model_id — strip prefix upstream berulang
-    # (mis. "cline-pass/cline-pass/deepseek-v4-flash" -> "deepseek-v4-flash"),
-    # lalu simpan PREFIXED "upstream/model" (konsisten dgn config lama & lookup
-    # daemon `(slug, mid)` lalu `(slug, f"{slug}/{mid}")`). Cegah duplikat
-    # (bare + prefixed utk upstream yg sama) & config yg tidak kebaca daemon.
     parts = model_id.split("/")
     bare = parts[-1] if parts else model_id
     if not bare:
         return jsonify({"error": "model_id invalid"}), 400
     model_id = f"{upstream}/{bare}"
+    cfg_row = {"upstream": upstream, "model_id": model_id, "trigger_pct": trigger_pct}
+
+    conn = db_connect()
+
+    def _exec():
+        _save_auto_pricing_config(cfg_row, conn)
+        _sync_ap_config_file(conn)
+        return 200, {"ok": True, "config": cfg_row}
+
     try:
-        with db_connect() as conn, conn.cursor() as cur:
-            # keep rebound_pct existing (legacy) — hanya update trigger_pct
-            cur.execute("""
-                INSERT INTO auto_pricing_config (upstream, model_id, trigger_pct, rebound_pct, updated_at)
-                VALUES (%s, %s, %s, %s, now())
-                ON CONFLICT (upstream, model_id)
-                DO UPDATE SET trigger_pct=EXCLUDED.trigger_pct, updated_at=now()
-            """, (upstream, model_id, trigger_pct, trigger_pct))
-            conn.commit()
-        _sync_ap_config_file()
-        return jsonify({"ok": True, "upstream": upstream, "model_id": model_id, "trigger_pct": trigger_pct})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        name, role = get_operator(auth_token())
+        status, payload = guard_mutation(
+            request, conn, "auto_pricing_config", "config-update", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body=body,
+            actor_role=role, required_roles=["admin"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
 
 
 @app.route("/api/auto-pricing/config/<int:cid>", methods=["DELETE"])
 def api_auto_pricing_config_delete(cid):
     """Hapus config → kembali ke default. Saat ini config kosong = default."""
-    try:
-        with db_connect() as conn, conn.cursor() as cur:
+    conn = db_connect()
+
+    def _exec():
+        with conn.cursor() as cur:
             cur.execute("DELETE FROM auto_pricing_config WHERE id=%s", (cid,))
-            conn.commit()
-        _sync_ap_config_file()
-        return jsonify({"ok": True, "deleted": cid})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _sync_ap_config_file(conn)
+        return 200, {"ok": True, "deleted": cid}
 
-
-def _sync_ap_config_file():
-    """Sync auto_pricing_config DB -> JSON file (daemon baca file ini, tanpa psycopg)."""
     try:
-        with db_connect() as conn, conn.cursor() as cur:
+        name, role = get_operator(auth_token())
+        status, payload = guard_mutation(
+            request, conn, "auto_pricing_config", "config-delete", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body={"id": cid},
+            actor_role=role, required_roles=["admin"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
+
+
+def _sync_ap_config_file(conn=None):
+    """Sync auto_pricing_config DB -> JSON file (daemon baca file ini, tanpa psycopg).
+
+    - conn diberikan (jalur route/guard): baca row dalam TRANSAKSI PEMANGGIL
+      (READ COMMITTED tidak bisa melihat row uncommitted dari koneksi lain —
+      wajib pakai koneksi yang sama dengan upsert).
+    - conn=None (jalur main()/startup): buka koneksi sendiri.
+    - Tulis ATOMik: temp file + os.replace — file target TIDAK pernah setengah
+      jadi; raise menyebar ke pemanggil (fail-closed, TIDAK di-swallow).
+    """
+    own = conn is None
+    c = conn or db_connect()
+    try:
+        with c.cursor() as cur:
             cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct FROM auto_pricing_config")
             rows = cur.fetchall()
         path = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-config.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
             json.dump({"configs": rows, "updated_at": time.time()}, f, indent=2)
-    except Exception:
-        pass
+        os.replace(tmp, path)
+    finally:
+        if own:
+            c.close()
+
+
+def _save_auto_pricing_config(cfg_row, conn):
+    """Upsert satu config auto-pricing dalam transaksi koneksi pemanggil (P4-Q6)."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO auto_pricing_config (upstream, model_id, trigger_pct, rebound_pct, updated_at)
+            VALUES (%s, %s, %s, COALESCE(%s, 1.0), now())
+            ON CONFLICT (upstream, model_id) DO UPDATE SET
+              trigger_pct=EXCLUDED.trigger_pct,
+              rebound_pct=COALESCE(EXCLUDED.rebound_pct, auto_pricing_config.rebound_pct),
+              updated_at=now()
+        """, (cfg_row["upstream"], cfg_row["model_id"], cfg_row["trigger_pct"],
+              cfg_row.get("rebound_pct")))
+    return {"ok": True, "upstream": cfg_row["upstream"],
+            "model_id": cfg_row["model_id"], "trigger_pct": cfg_row["trigger_pct"]}
 
 
 @app.route("/health")
