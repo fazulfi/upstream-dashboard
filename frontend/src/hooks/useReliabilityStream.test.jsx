@@ -23,6 +23,17 @@ describe('reliability stream contract', () => {
     }));
   });
 
+  it('does not expire the session on a non-401/403 SSE response (reconnect path)', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false, body: null }));
+
+    const { result } = renderHook(() => useReliabilityStream());
+
+    await waitFor(() => expect(result.current.status).toBe('reconnecting'));
+    expect(getSessionToken()).toBe('stream-token');
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session-expired' }));
+  });
+
   it('allows reliability paths without allowing unrelated paths', () => {
     expect(isApiEnabled('/api/reliability/summary')).toBe(true);
     expect(isApiEnabled('/api/reliability/stream')).toBe(true);
