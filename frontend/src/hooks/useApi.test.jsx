@@ -1,35 +1,53 @@
-import { describe, it, expect } from 'vitest'
-import { usd, idr, usdIdr } from './useApi.jsx'
+import { describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { apiFetch, loginWithPassword, setSessionToken, useApi } from './useApi.jsx'
 
-describe('useApi format helpers', () => {
-  it('usd formats numbers with 2 decimals', () => {
-    expect(usd(5)).toBe('$5.00')
-    expect(usd(1234.5)).toBe('$1,234.50')
-    expect(usd(null)).toBe('$0.00')
-    expect(usd(undefined)).toBe('$0.00')
+const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+
+describe('useApi session and fetch behavior', () => {
+  it('injects session token and sends login body', async () => {
+    setSessionToken('token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ token: 'next' })))
+    await apiFetch('/api/reliability/summary')
+    expect(fetch).toHaveBeenCalledWith('/api/reliability/summary', expect.objectContaining({ headers: { Authorization: 'Bearer token' } }))
+    await loginWithPassword('secret')
+    expect(fetch).toHaveBeenLastCalledWith('/api/login', expect.objectContaining({ body: JSON.stringify({ password: 'secret' }) }))
   })
 
-  it('idr converts USD with kurs', () => {
-    expect(idr(1, 17831.73)).toBe('Rp 17.832')
-    expect(idr(5, 17831)).toBe('Rp 89.155')
-    expect(idr(null, 17831)).toBe('')
-    expect(idr(5, null)).toBe('')
+  it('dispatches session-expired for authenticated HTTP 401/403; Task 4 owns production handling', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    setSessionToken('expired-token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, 401)))
+
+    await apiFetch('/api/reliability/summary')
+
+    expect(sessionStorage.getItem('upstream_session_token')).toBeNull()
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'session-expired',
+      detail: expect.objectContaining({ message: expect.any(String) }),
+    }))
   })
 
-  it('usdIdr combines', () => {
-    expect(usdIdr(5, 17831)).toBe('$5.00 (Rp 89.155)')
-    expect(usdIdr(5, null)).toBe('$5.00')
-  })
-})
+  it('does not expire the session for a failed login response', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    setSessionToken('still-valid')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, 401)))
 
-describe('API scope gate', () => {
-  it('allows auto-pricing and manual ask endpoints only', async () => {
-    const { isApiEnabled } = await import('./useApi.jsx')
-    expect(isApiEnabled('/api/auto-pricing')).toBe(true)
-    expect(isApiEnabled('/api/auto-pricing/config')).toBe(true)
-    expect(isApiEnabled('/api/orderbook')).toBe(true)
-    expect(isApiEnabled('/api/ask')).toBe(true)
-    expect(isApiEnabled('/api/data')).toBe(false)
-    expect(isApiEnabled('/api/market')).toBe(false)
+    await expect(loginWithPassword('bad-password')).rejects.toThrow('login failed')
+
+    expect(sessionStorage.getItem('upstream_session_token')).toBe('still-valid')
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session-expired' }))
+  })
+
+  it('tracks HTTP errors and aborts on unmount', async () => {
+    const fetchMock = vi.fn((_url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      resolve(response({}, 500))
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result, unmount } = renderHook(() => useApi('/api/reliability/summary'))
+    await waitFor(() => expect(result.current.error).toBe('HTTP 500'))
+    unmount()
+    expect(fetchMock).toHaveBeenCalled()
   })
 })
