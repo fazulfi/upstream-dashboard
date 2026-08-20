@@ -91,9 +91,11 @@ initial delay is 1 second, each scheduled delay doubles, and the delay is capped
 at 30 seconds. The sequence is 1, 2, 4, 8, 16, 30, 30 seconds, and so on. A
 successful response resets the next delay to 1 second.
 
-HTTP 401 and 403 responses are handled as exactly `auth-required`. They do not
-schedule a reconnect, clear the session token, or log the user out. If there is
-no session token, the client reports `auth-required` and makes no request.
+For REST/API requests, centralized session-expiry handling clears the session
+and returns the user to login on HTTP 401 or 403. SSE HTTP 401 and 403 responses
+now escalate to that same session-expired flow rather than scheduling a
+reconnect. If there is no session token, the client reports `auth-required` and
+makes no request.
 
 On unmount, the client aborts the active fetch and clears the pending retry
 timer. Cleanup does not clear the session token or the saved cursor.
@@ -152,8 +154,9 @@ The route is `backend/app.py:2468`, in `api_reliability_stream`.
 - Never put session credentials or other secrets in a query string. Query
   values can appear in URLs and access logs. The stream uses the
   `Authorization` header instead.
-- Treat 401 and 403 as `auth-required`. The current client does not retry these
-  responses, clear the token, or log out the user.
+- Treat REST/API 401 and 403 responses as session expiry. SSE 401 and 403
+  responses escalate to the same session-expired flow; neither path retries
+  the unauthorized request.
 - Keep CORS restricted to the explicit `ALLOWED_ORIGINS` allowlist. The backend
   does not use wildcard origins for credentialed requests.
 - `DASHBOARD_PASSWORD` is a server side secret. This document names the

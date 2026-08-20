@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Phase 2 Production Hardening Decision Log
 
 **Status:** Decision record complete for planning (C1–C14 confirmed 2026-08-20). **Implementation authorization:** blocked pending separate approval. **Production authorization:** blocked.
@@ -17,17 +19,17 @@ This file is the authoritative Phase 2 decision record. Historical alternatives 
 
 - 141 commits on `main` @ `234a8bd` (PR #13 `fix-ledger-kurs-idr-usd`). Local == VPS == origin clean.
 - Frontend: React 19 + Vite 8 + React Router 7 (HashRouter), 18 routes, Vitest 3 (node env, no RTL/jsdom use yet), Oxlint. Tests: `src/**/*.test.{js,jsx}` — 5 files, unit/contract only; **0% page-level coverage** (no rendered LoginGate/Layout/Sidebar/App/Reliability tests).
-- SSE: backend-owned fetch-based `GET /api/reliability/stream` (backend/app.py:2468); client `frontend/src/hooks/useReliabilityStream.js` with Bearer header, `Last-Event-ID` cursor replay, 1s→30s backoff, 401/403 → `auth-required`. No `docs/architecture/sse-transport.md` yet.
-- Deploy: manual only; CI (`ci.yml`) = install/lint/vitest/build, **no CD**. VPS `root@82.25.62.204`, services as `gamesim`: `wwma-upstream-backend.service`, `wwma-auto-pricing.service`, `wwma-finance.service` + `.timer`. Backend Flask waitress `127.0.0.1:8124` behind nginx TLS :443 (`ops.budgezen.com`). Frontend Vercel `upstream-static.vercel.app`.
+- SSE: backend-owned fetch-based `GET /api/reliability/stream` (backend/app.py:2468); client `frontend/src/hooks/useReliabilityStream.js` with Bearer header, `Last-Event-ID` cursor replay, 1s→30s backoff, and 401/403 escalation to the centralized session-expired flow. No `docs/architecture/sse-transport.md` yet.
+- Deploy: manual only; CI (`ci.yml`) = install/lint/vitest/build, **no CD**. VPS `faiz-prod-01`, services as `gamesim`: `wwma-upstream-backend.service`, `wwma-auto-pricing.service`, `wwma-finance.service` + `.timer`. Backend Flask waitress `127.0.0.1:8124` behind nginx TLS :443 (`ops.budgezen.com`). Frontend Vercel `upstream-static.vercel.app`.
 - Backup: `scripts/backup_db.sh` — pg_dump gzip → `/home/gamesim/shared-memory/inferhub-business/backups`, 14d retention, offsite S3 is3.cloudhost.id (rclone, 30d remote retention), gated on `/run/wwma/env`. **Restore rehearsal: not evidenced.**
-- Credentials: **no active password value found in git history** (`git log -S '408Yim…'` = 0 hits); secret leak removed in commit `bdd22b9` ("remove secret leak", 2026-08-12); `DASHBOARD_PASSWORD` already rotated (old value 401). `.dashboard-password` ignored. No tracked `.env*` files.
+- Credentials: **no live credential values found in git history** (`git log -S '<rotated-value>'` = 0 hits; literal placeholder used by design); secret leak removed in commit `bdd22b9` ("remove secret leak", 2026-08-12); `.dashboard-password` ignored. No tracked `.env*` files.
 - `git filter-repo` **not installed** on this machine.
 - Finance: 67 assets (A-001..A-069), all IDR assets `kurs_idr_usd=17824.4344`, DB = source of truth, ledger.json = mirror. (Roadmap: reconciliation/rollback-evidence → Phase 3, not Phase 2.)
 
 ## Confirmed decisions
 
 | ID | Decision |
-|---|---|
+| --- | --- |
 | **C1, production freeze** | During Phase 2 planning, production remains unchanged: no code change, no VPS/Vercel deploy, no service restart, no pricing configuration change, no DB schema or production-data change, no arm/disarm change. No implementation work until the Phase 2 design is approved. |
 | **C2, decision-log authority** | This table is the authoritative Phase 2 record. Historical roadmap wording and alternatives are non-authoritative. Phase 2 remains planning-only until this record and the implementation plan receive separate approval. Approval/status is a gate record, not production authorization. |
 | **C3, deploy/release policy** | Deployment remains manual only; CI remains CI-only with no CD. A Phase 2 release requires green CI, approved PR, explicit manual deployment approval, backup before deploy, additive schema compatibility, systemd service sequencing, readiness/auth/SSE smoke checks, and rollback evidence — per Phase 1 B7. |
@@ -37,7 +39,7 @@ This file is the authoritative Phase 2 decision record. Historical alternatives 
 | **C7, session-expiry handling** | Add **centralized session-expiry handling** in the API layer: on 401/403 from a session-authenticated request, clear `upstream_session_token`, emit a session-expired event, and route to login with an explicit "session expired" message. Behavior must be covered by page-level tests (login/session-expiry path). |
 | **C8, SSE transport doc timing** | **Documentation only** — create `docs/architecture/sse-transport.md` during Phase 2; no runtime change to the SSE implementation. |
 | **C9, deployment evidence artifacts** | Phase 2 produces **one evidence artifact per release** following `artifacts/phase1/audit/deployment-evidence-template.md`: backup taken (file + checksum), additive schema check, systemd unit states, readiness/auth/SSE smoke results, source commit, operator signature. No continuous heartbeat window required beyond the release evidence. |
-| **C10, restore rehearsal** | Phase 2 includes a **restore rehearsal on the VPS**: restore the latest backup to a scratch DB, verify row counts / asset count = 67, then drop the scratch DB. Evidence documented in the release evidence artifacts. |
+| **C10, restore rehearsal** | Phase 2 includes a **restore rehearsal on the VPS**: restore the latest backup to a scratch DB, verify the owner-approved live baseline of 68 assets (A-001..A-070) plus the operational tables that exist, then drop the scratch DB. Reliability-table presence is not a rehearsal claim; backend `/api/reliability/*` behavior is proven by live smoke at deploy (T8c). Evidence is documented in the release evidence artifacts. |
 | **C11, credential purge** | **Skip history rewrite** in Phase 2. Record the audit result (no active password value in history; leak removed in `bdd22b9`; active password already rotated; filter-repo not installed) as Phase 2 evidence. Revisit only if a live credential is ever found in history; any future rewrite is a separately approved repo-maintenance operation with no force-push in ordinary feature work. |
 | **C12, ignored-artifacts audit** | Record the `repo-cleanup-report.md` audit result (no tracked env/cache/artifacts; `.gitignore` comprehensive) as Phase 2 evidence. Add ignore entries only if a fresh check finds a gap (none known at planning time). |
 | **C13, completion gate** | **No new observation window** if the Phase 2 release does not change daemon/backend behavior. Completion = green CI + approved PR + manual deploy approval + rollback evidence + all Phase 2 evidence artifacts signed. If a release does change daemon/backend behavior, the Phase 1 24-hour signed observation gate re-applies. |
@@ -46,7 +48,7 @@ This file is the authoritative Phase 2 decision record. Historical alternatives 
 ## Open-item resolutions (2026-08-20, owner-approved via question tool)
 
 | ID | Resolution |
-|---|---|
+| --- | --- |
 | **O1, session-expiry mechanism** | **CustomEvent + window listener.** API layer dispatches `window.dispatchEvent(new CustomEvent('session-expired'))` with the message in the payload; `LoginGate` listens via `useEffect` and shows an explicit "session expired" message. Smallest mechanism satisfying C7. |
 | **O2, PR separation** | **One complete PR** for T2–T7 (docs + page tests + session-expiry + evidence tooling + rehearsal evidence + hygiene evidence) to `main`. Single CI run, single review, single approval cycle. |
 | **O3, restore scratch path** | **Pre-flight first, then re-confirm.** T6 establishes the non-destructive scratch-DB path on the VPS, then stops for a fresh owner confirmation before any scratch DB is created or dropped. |
@@ -138,6 +140,11 @@ Phase 1 required a 24-hour signed observation gate. What does Phase 2 require be
 - Preserve pricing semantics and the existing pricing contract. No new circuit breaker, no auto-kill, no new fallback store, no event bus.
 - System architecture must remain minimal: reuse existing tables/auth/services; avoid new queues/workers/subsystems unless required by evidence. UI polish may expand independently.
 - No force-push in ordinary feature work. History rewrite, if ever approved, is a separate repo-maintenance operation.
+
+## Owner approval record
+
+- **2026-08-20 — owner-approved:** Question-tool option B, “Rehearsal ke baseline live (68 assets)”, approves the T6 live-baseline deviation of 68 assets (A-001..A-070) versus the plan's 67 assets (A-001..A-069), superseding the C10 verification target.
+- The T6 rehearsal found no `reliability_*` tables in any of the three databases (`postgres`, `csa_paper`, or `upstream`) via `psql`. The rehearsal verifies the backup contains the operational tables that do exist: `assets` = 68, `auto_pricing_ops` = 61532, `auto_pricing_api_log` = 29681, and `budgets` = 92. Backend `/api/reliability/*` behavior will be proven by live smoke at deploy (T8c).
 
 ## Gate status
 

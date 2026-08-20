@@ -189,7 +189,7 @@ Run `scripts/backup_db.sh` on the VPS (or confirm the latest backup is fresh) an
 
 - [ ] **Step 4: Verify row counts and asset inventory**
 
-Query the scratch DB: asset count = **67** (A-001..A-069), reliability tables present (auto_pricing_ops/state/api_log, reliability_cycles/events), spot-check a sample row. Compare against production counts (read-only).
+Query the scratch DB: verify the owner-approved live baseline of **68 assets** (A-001..A-070), plus the operational tables that exist (`auto_pricing_ops` = 61532, `auto_pricing_api_log` = 29681, `budgets` = 92). `reliability_*` tables were not found in any of the three databases (`postgres`, `csa_paper`, or `upstream`) via `psql`; do not claim they were verified. Backend `/api/reliability/*` behavior will be proven by live smoke at deploy (T8c). Compare against production counts (read-only). The 68-asset live-baseline target was owner-approved on 2026-08-20 via question-tool option B, “Rehearsal ke baseline live (68 assets)”, superseding the C10 67-asset target.
 
 - [ ] **Step 5: Drop scratch DB + record evidence**
 

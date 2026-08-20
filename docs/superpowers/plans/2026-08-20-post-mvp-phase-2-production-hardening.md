@@ -43,7 +43,7 @@ The authoritative record is `artifacts/phase2/audit/decision-log.md`. Summary:
 | **C6** | Test stack: Vitest jsdom + React Testing Library + jest-dom. |
 | **C7** | Centralized session-expiry in the API layer: 401/403 → clear `upstream_session_token` → session-expired event → login with explicit message. Tested. |
 | **C9** | One deployment evidence artifact per release (backup+checksum, schema additive check, systemd states, readiness/auth/SSE smoke, commit, operator signature). |
-| **C10** | Restore rehearsal on VPS: latest backup → scratch DB → verify 67 assets → drop scratch. Evidence documented. |
+| **C10** | Restore rehearsal on VPS: latest backup → scratch DB → verify the owner-approved live baseline of 68 assets (A-001..A-070) and the operational tables that exist → drop scratch. Reliability-table presence is not claimed; backend `/api/reliability/*` behavior is proven by live smoke at deploy (T8c). Evidence documented. |
 | **C11** | Skip credential history rewrite; record audit result as evidence (no active password in history; leak removed in `bdd22b9`; password rotated). |
 | **C12** | Record ignored-artifacts audit result as evidence (`.gitignore` comprehensive; no tracked env/cache). |
 | **C13** | No new observation window if release does not change daemon/backend behavior (Phase 2 is frontend+docs+evidence only → no window). |
@@ -56,10 +56,10 @@ Verified during planning (decision log §"Current production baseline"):
 - `main` @ `234a8bd` (141 commits), local == VPS == origin clean.
 - Frontend: React 19 + Vite 8 + React Router 7 (HashRouter), 18 routes, Vitest 3 (env `node`), 5 unit/contract test files, **0% page-level coverage**.
 - SSE: fetch-based, Bearer header, `Last-Event-ID` cursor replay, 1s→30s backoff, 401/403 → `auth-required` (hook `useReliabilityStream.js`); backend route `backend/app.py:2468`.
-- Deploy: manual; CI `ci.yml` = install/lint/vitest/build (no CD). VPS `root@82.25.62.204`, services as `gamesim` (`wwma-upstream-backend`, `wwma-auto-pricing`, `wwma-finance` + `.timer`); nginx :443 → waitress `127.0.0.1:8124` (`ops.budgezen.com`); Vercel `upstream-static.vercel.app`.
+- Deploy: manual; CI `ci.yml` = install/lint/vitest/build (no CD). VPS `faiz-prod-01`, services as `gamesim` (`wwma-upstream-backend`, `wwma-auto-pricing`, `wwma-finance` + `.timer`); nginx :443 → waitress `127.0.0.1:8124` (`ops.budgezen.com`); Vercel `upstream-static.vercel.app`.
 - Backup: `scripts/backup_db.sh` (14d local + 30d S3); **restore never rehearsed**.
 - Credentials: no active password value in history; leak removed `bdd22b9`; password rotated; `filter-repo` not installed; no tracked `.env*`.
-- Finance: 67 assets, DB = source of truth (Phase 3 concern).
+- Finance: 68 live-baseline assets (A-001..A-070), owner-approved for T6; DB = source of truth (Phase 3 concern).
 
 ## 5. Phase 2 Scope
 
