@@ -151,6 +151,26 @@ The daemon performs bounded cleanup at startup: operational `auto_pricing_ops`/`
 - `frontend/.env.production` — **harus kosong** (`VITE_DASHBOARD_PASSWORD=`). Jangan isi password!
   (Build Vercel membaca file ini & meng-inject ke bundle publik → C1 security.)
 
+### Finance scripts (Phase 3)
+
+Semua script finance (`gen_finance.py`, `fin_ops.py`, `recon_finance.py`, `ledger_update.py`)
+WAJIB dipanggil dengan env `UPSTREAM_DB` (production 6432). Tidak ada fallback hardcode.
+
+Secret disimpan di `/home/gamesim/.dashboard.env` (chmod 600, di luar repo) — JANGAN tulis
+DSN ber-password di shell history, unit file, atau command line.
+
+Contoh (source secret file, bukan inline):
+
+```bash
+cd /home/gamesim/dashboard && \
+set -a && . /home/gamesim/.dashboard.env && set +a && \
+/home/gamesim/.venv-dash/bin/python3 scripts/gen_finance.py
+```
+
+Systemd unit `wwma-finance.service` harus memiliki
+`EnvironmentFile=/home/gamesim/.dashboard.env` (tambahkan drop-in `.d` bila belum ada — jangan
+edit unit utama).
+
 ### Config auto-pricing (DB)
 ```sql
 SELECT upstream, model_id, trigger_pct FROM auto_pricing_config ORDER BY upstream;
