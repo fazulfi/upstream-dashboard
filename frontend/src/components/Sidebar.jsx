@@ -1,3 +1,4 @@
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../theme';
 import { LayoutDashboard, TrendingUp, Layers, BarChart3, Receipt, Wallet, Settings, Sun, KeyRound, QrCode, CandlestickChart, Boxes, Gauge, SlidersHorizontal, Activity, Workflow, ShieldCheck } from 'lucide-react';

@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './theme';
 import Layout from './components/Layout';
@@ -22,11 +22,11 @@ import AutoPricing from './pages/AutoPricing';
 import Budgets from './pages/Budgets';
 import Combos from './pages/Combos';
 
-export default function App() {
+export default function App({ appChildren } = {}) {
   return (
     <ThemeProvider>
       <ErrBoundary>
-        <HashRouter>
+        {appChildren || <HashRouter>
           <Routes>
             <Route element={<LoginGate><Layout /></LoginGate>}>
               <Route path="/" element={<Reliability />} />
@@ -49,13 +49,13 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>
-        </HashRouter>
+        </HashRouter>}
       </ErrBoundary>
     </ThemeProvider>
   );
 }
 
-class ErrBoundary extends Component {
+export class ErrBoundary extends Component {
   state = { err: null };
   static getDerivedStateFromError(err) { return { err }; }
   render() {
