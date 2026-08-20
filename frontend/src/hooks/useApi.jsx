@@ -36,7 +36,7 @@ function authHeaders(extra = {}) {
   return extra;
 }
 
-const FOCUSED_API_PREFIX = '/api/auto-pricing';
+const FOCUSED_API_PREFIXES = ['/api/auto-pricing', '/api/pricing'];
 const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
 const RELIABILITY_PREFIX = '/api/reliability';
 const SESSION_EXPIRED_MESSAGE = 'Sesi berakhir. Silakan masuk kembali.';
@@ -64,8 +64,7 @@ export function handleSessionExpiry(path, headers, response) {
 
 // Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
 export function isApiEnabled(path) {
-  return path === FOCUSED_API_PREFIX
-    || path.startsWith(`${FOCUSED_API_PREFIX}/`)
+  return FOCUSED_API_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
     || path === RELIABILITY_PREFIX
     || path.startsWith(`${RELIABILITY_PREFIX}/`)
     || MANUAL_ASK_PATHS.has(path);

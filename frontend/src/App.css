@@ -1,3 +1,20 @@
+.pricing-page .sub { color: var(--text3, #6f6f6f); font-size: 12px; }
+.pricing-section { overflow: hidden; }
+.pricing-global-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3, 12px); }
+.pricing-global { display: flex; flex-direction: column; gap: var(--space-2, 8px); padding: var(--space-3, 12px); border: 1px solid var(--border, #292929); border-radius: var(--radius-md, 8px); }
+.pricing-row-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2, 8px); margin-bottom: var(--space-1, 4px); }
+.pricing-field { display: flex; flex-direction: column; gap: var(--space-1, 4px); color: var(--text2, #a1a1a1); font-size: 11px; font-weight: 600; }
+.pricing-field input { width: 100%; }
+.pricing-override-form { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) auto; align-items: end; gap: var(--space-3, 12px); margin-bottom: var(--space-4, 16px); }
+.pricing-saving { color: var(--text3, #6f6f6f); font-size: 11px; }
+.pricing-error { color: var(--neg, #e5484d); border-color: var(--neg, #e5484d); }
+.table-scroll { overflow-x: auto; }
+.pricing-levels { display: flex; flex-wrap: wrap; gap: var(--space-1, 4px); min-width: 220px; }
+.pricing-level { display: inline-flex; padding: 3px 6px; border: 1px solid var(--border, #292929); border-radius: var(--radius-sm, 4px); color: var(--text2, #a1a1a1); font-size: 11px; white-space: nowrap; }
+.pricing-level.ours { color: var(--pos, #30a46c); border-color: var(--pos, #30a46c); background: var(--pos-soft, rgba(48,164,108,0.12)); }
+@media (max-width: 900px) { .pricing-override-form { grid-template-columns: repeat(2, minmax(120px, 1fr)); } }
+@media (max-width: 520px) { .pricing-override-form { grid-template-columns: 1fr; } }
+
 /* ============================================================
    Upstream Dashboard — App-level styles
    Design-system classes for the app shell, navigation, and
