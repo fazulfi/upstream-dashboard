@@ -15,15 +15,23 @@ net income workbook == net income dashboard:
 """
 import json
 import os
-import subprocess
 import sys
 from datetime import date
+
+import psycopg
 from openpyxl import Workbook, load_workbook
+
+# Rule engine bersama — satu-satunya sumber formula.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
+from finance_rules import compute_finance  # noqa: E402
 
 BASE = "/home/gamesim/shared-memory/inferhub-business/finance"
 LEDGER = os.path.join(BASE, "ledger.json")
 WB = os.path.join(BASE, "keuangan.xlsx")
 ENV_FILE = os.path.expanduser("~/.hermes-suisui/.env")
+DB_DSN = os.environ.get("UPSTREAM_DB")
+if not DB_DSN:
+    raise SystemExit("UPSTREAM_DB env wajib diisi (DB production). Refuse to run.")
 
 
 def load_forex_key():
@@ -45,48 +53,41 @@ FOREX_KEY = load_forex_key()
 
 
 def load_ledger():
-    """Baca dari PostgreSQL (single source of truth) — bentuk dict yg sama dgn ledger.json.
-    assets, payouts, refunds, impairments diambil langsung dari DB."""
-    def q(sql):
-        r = subprocess.run(["psql", "-d", "upstream", "-t", "-A", "-F", "\t", "-c", sql],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            raise RuntimeError(r.stderr)
-        if not r.stdout.strip():
-            return []
-        return [line.split("\t") for line in r.stdout.strip().split("\n")]
+    """Baca seluruh ledger langsung dari PostgreSQL via UPSTREAM_DB."""
+    with psycopg.connect(DB_DSN) as conn, conn.cursor() as cur:
+        cur.execute("SELECT COALESCE(v, '') FROM ledger_meta WHERE k='kurs_idr_usd'")
+        r = cur.fetchone()
+        meta_kurs = float(r[0]) if r and r[0] else 17801.17
 
-    assets = []
-    for rid, up, qty, cost, curr, buy, life, status, label in q(
-            "SELECT id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label FROM assets ORDER BY id"):
-        assets.append({
-            "id": rid, "upstream": up, "qty": int(float(qty)),
-            "cost_per": float(cost), "curr": curr,
-            "buy": (buy or "")[:10], "lifespan_d": int(float(life or 30)),
-            "status": status, "label": label or "",
-        })
+        cur.execute("SELECT id, upstream, qty, cost_per, curr, buy, lifespan_d, status, label, kurs_idr_usd FROM assets ORDER BY id")
+        assets = [{"id": rid, "upstream": up, "qty": int(float(qty)), "cost_per": float(cost),
+                   "curr": curr, "buy": (buy or "")[:10], "lifespan_d": int(float(life or 30)),
+                   "status": status, "label": label or "", "kurs_idr_usd": float(kurs_a) if kurs_a is not None else None}
+                  for rid, up, qty, cost, curr, buy, life, status, label, kurs_a in cur.fetchall()]
 
-    payouts = []
-    for pid, amt, st, d in q("SELECT id, amount_usdc, status, date FROM payouts ORDER BY date"):
-        payouts.append({"id": pid, "amount_usdc": float(amt or 0), "status": st or "confirmed", "date": str(d)[:10]})
+        cur.execute("SELECT id, amount_usdc, status, date FROM payouts ORDER BY date")
+        payouts = [{"id": pid, "amount_usdc": float(amt or 0), "status": st or "confirmed", "date": str(d)[:10]}
+                   for pid, amt, st, d in cur.fetchall()]
 
-    refunds = []
-    for rid, up, qty, aidr, ausd, lab, d in q(
-            "SELECT id, upstream, qty, amount_idr, amount_usdc, label, date FROM refunds ORDER BY date"):
-        refunds.append({"id": rid, "upstream": up, "qty": int(float(qty or 0)),
-                        "amount_idr": float(aidr or 0), "amount_usdc": float(ausd or 0),
-                        "label": lab or "", "date": str(d)[:10]})
+        cur.execute("SELECT id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd FROM refunds ORDER BY date")
+        refunds = [{"id": rid, "upstream": up, "qty": int(float(qty or 0)), "amount_idr": float(aidr or 0),
+                    "amount_usdc": float(ausd or 0), "label": lab or "", "date": str(d)[:10],
+                    "kurs_idr_usd": float(kurs_r) if kurs_r is not None else None}
+                   for rid, up, qty, aidr, ausd, lab, d, kurs_r in cur.fetchall()]
 
-    impairments = []
-    for iid, up, qty, loss, lab, d in q(
-            "SELECT id, upstream, qty, loss, label, date FROM impairments ORDER BY date"):
-        impairments.append({"id": iid, "upstream": up, "qty": int(float(qty or 0)),
-                            "loss": float(loss or 0), "label": lab or "", "date": str(d)[:10]})
+        cur.execute("SELECT id, upstream, qty, loss, label, date FROM impairments ORDER BY date")
+        impairments = [{"id": iid, "upstream": up, "qty": int(float(qty or 0)), "loss": float(loss or 0),
+                        "label": lab or "", "date": str(d)[:10]}
+                       for iid, up, qty, loss, lab, d in cur.fetchall()]
+
+        cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
+        providers = [{"upstream_slug": slug, "n": int(n)} for slug, n in cur.fetchall()]
 
     return {
         "meta": {"name": "WWMA Publishing — Ledger", "as_of": str(date.today()),
-                 "kurs_idr_usd": 17798.25, "kurs_updated": str(date.today())},
+                 "kurs_idr_usd": meta_kurs, "kurs_updated": str(date.today())},
         "assets": assets, "payouts": payouts, "refunds": refunds, "impairments": impairments,
+        "providers": providers,
     }
 
 
@@ -130,59 +131,24 @@ def main():
     kurs = fetch_live_kurs()          # selalu tarik kurs realtime, update meta
     today = L["meta"]["as_of"]
 
-    # ── Hitung net income — logika SAMA dgn backend/app.py db_read_finance ──
-    # payout (confirmed saja)
-    total_payout = sum(p.get("amount_usdc", p.get("usd", 0))
-                       for p in L["payouts"] if p.get("status", "confirmed") == "confirmed")
-    n_payout = sum(1 for p in L["payouts"] if p.get("status", "confirmed") == "confirmed")
-
-    # Aset -> cost_usd per asset (seperti db_read_finance: IDR dibagi kurs)
-    asset_list = []
-    total_capital_usd = 0.0
-    total_akun = 0
-    for a in L["assets"]:
-        cost_per = a["cost_per"]
-        qty = a["qty"]
-        curr = (a.get("curr") or "USD").strip().upper()
-        cost_usd = cost_per * qty / kurs if curr == "IDR" else cost_per * qty
-        total_capital_usd += cost_usd
-        total_akun += qty
-        asset_list.append({**a, "cost_usd": round(cost_usd, 4)})
-    total_akun_aktif = sum(a["qty"] for a in asset_list if (a.get("status") or "active") == "active")
-
-    # Amortisasi = hanya aset status != 'active', FULL cost (bukan pro-rata)
-    amort_assets = [a for a in asset_list if a["status"] != "active"]
-    total_amort_usd = round(sum(a["cost_usd"] for a in amort_assets), 4)
-
-    # Impairment: seed (upstream startswith 'upstream-') di-zero-kan (DATA-HILANG),
-    # loss_usd = loss/kurs jika loss > 100, minus 100 -> pakai raw.
-    total_imp_loss_usd = 0.0
-    impaired_rows = []
-    for im in L["impairments"]:
-        _up = im.get("upstream") or ""
-        seed = _up.startswith("upstream-")
-        loss = 0.0 if seed else im["loss"]
-        loss_usd = loss / kurs if loss > 100 else loss
-        total_imp_loss_usd += loss_usd
-        impaired_rows.append({**im, "loss_usd": round(loss_usd, 2),
-                              "label": (im.get("label") or "") + (" [DATA-HILANG]" if seed else ""),
-                              "seed_residue": seed})
-    total_imp_loss_usd = round(total_imp_loss_usd, 2)
-
-    # Refund = uang kembali (income) — kurangi beban rugi bersih (tdk ditambah)
-    total_refund_usd = 0.0
-    refund_rows = []
-    for rd in L["refunds"]:
-        aidr = rd["amount_idr"]
-        ausd = rd["amount_usdc"]
-        v = ausd if ausd > 0 else (aidr / kurs if aidr > 100 else aidr)
-        total_refund_usd += v
-        refund_rows.append({**rd, "refund_usd": round(v, 4)})
-    total_refund_usd = round(total_refund_usd, 2)
-
-    opex = 0.10
-    net_income = round(total_payout + total_refund_usd - total_amort_usd
-                       - total_imp_loss_usd - opex, 2)
+    res = compute_finance(
+        assets=L["assets"], payouts=L["payouts"], refunds=L["refunds"],
+        impairments=L["impairments"], kurs_meta=kurs, providers=L["providers"],
+    )
+    total_payout = res["total_payout"]
+    n_payout = res["n_payout"]
+    total_amort_usd = res["amort_usd"]
+    amort_assets = res["amort_assets"]
+    total_imp_loss_usd = res["total_imp_loss_usd"]
+    impaired_rows = res["impairments"]
+    total_refund_usd = res["total_refund_usd"]
+    refund_rows = res["refunds"]
+    opex = res["opex"]
+    net_income = res["net_income"]
+    asset_list = res["assets"]
+    total_capital_usd = res["total_capital_usd"]
+    total_akun = res["total_asset_qty"]
+    total_akun_aktif = res["aktif"]
 
     # ---- Simpan ringkasan ke JSON (untuk ref script lain / debug) ----
     summary = {
