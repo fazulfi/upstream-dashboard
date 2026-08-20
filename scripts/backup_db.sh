@@ -11,7 +11,8 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/home/gamesim/shared-memory/inferhub-business/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
-DB_DSN="${UPSTREAM_DB:-postgresql://gamesim:upstream_local@127.0.0.1:5432/upstream}"
+DB_DSN="${UPSTREAM_DB}"
+if [ -z "$DB_DSN" ]; then echo "ERROR: UPSTREAM_DB env wajib diisi" >&2; exit 1; fi
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUTFILE="${BACKUP_DIR}/inferhub-${STAMP}.sql.gz"
 

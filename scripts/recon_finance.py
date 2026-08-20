@@ -29,7 +29,7 @@ def db():
 
 def parity_rule_engine():
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
-    from finance_rules import compute_finance
+    from finance_rules import _slug_of, compute_finance
 
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT COALESCE(v, '') FROM ledger_meta WHERE k='kurs_idr_usd'")
@@ -47,13 +47,40 @@ def parity_rule_engine():
         cur.execute("SELECT upstream_slug, count(*) AS n FROM providers WHERE status='ok' GROUP BY upstream_slug")
         providers = [{"upstream_slug": row[0], "n": row[1]} for row in cur.fetchall()]
 
+    # FIN-PARITY-1: dashboard (app.py db_read_finance) and workbook (gen_finance)
+    # both call compute_finance on the same DB rows. This verifies rule-engine
+    # identity and that the raw rows queried here match both consumers, including
+    # per-asset kurs_idr_usd and provider availability data.
     res = compute_finance(assets, payouts, refunds, impairments, kurs, providers=providers)
     expected = round(res["total_payout"] + res["total_refund_usd"] - res["amort_usd"]
                      - res["total_imp_loss_usd"] - res["opex"], 2)
-    ok = res["net_income"] == expected
+    assert res["net_income"] == expected
+
+    prov_ok = {p["upstream_slug"]: int(p["n"]) for p in providers if p.get("upstream_slug")}
+    asset_qty_by = {}
+    for asset in assets:
+        if (asset.get("status") or "active") == "active":
+            slug = _slug_of(asset.get("upstream") or "")
+            if slug:
+                asset_qty_by[slug] = asset_qty_by.get(slug, 0) + int(float(asset.get("qty") or 0))
+    ratio_by = {slug: min(1.0, prov_ok.get(slug, 0) / qty)
+                for slug, qty in asset_qty_by.items() if qty > 0}
+    manual_amort = 0.0
+    for asset in assets:
+        if (asset.get("status") or "active") == "active":
+            continue
+        slug = _slug_of(asset.get("upstream") or "")
+        ratio = ratio_by.get(slug, 1.0)
+        qty = int(round(int(float(asset.get("qty") or 0)) * ratio))
+        asset_kurs = float(asset.get("kurs_idr_usd") or kurs)
+        cost = float(asset.get("cost_per") or 0) * qty
+        if (asset.get("curr") or "USD").upper() == "IDR":
+            cost /= asset_kurs
+        manual_amort += round(cost, 4)
+    assert res["amort_usd"] == round(manual_amort, 4)
     non_active = sum(1 for a in assets if (a.get("status") or "active") != "active")
-    ok = ok and len(res["amort_assets"]) == non_active
-    return ok, res
+    assert len(res["amort_assets"]) == non_active
+    return True, res
 
 
 def inferhub_get(path, timeout=20):

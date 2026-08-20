@@ -70,7 +70,7 @@ def fetch_live_kurs():
         return None
 
 
-def update_meta_kurs(conn, cur, kurs):
+def update_meta_kurs(conn, cur, kurs, actor):
     """Simpan kurs terbaru ke ledger_meta (agar report lain ikut realtime)."""
     try:
         cur.execute(
@@ -78,6 +78,8 @@ def update_meta_kurs(conn, cur, kurs):
             "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
             (str(round(kurs, 4)),),
         )
+        audit_write(conn, "ledger_meta", "kurs_idr_usd", "update-kurs", actor, "fin_ops.buy",
+                    before=None, after={"kurs_idr_usd": kurs})
         cur.execute(
             "INSERT INTO ledger_meta (k, v) VALUES ('kurs_updated', %s) "
             "ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v",
@@ -159,6 +161,8 @@ def cmd_buy(a):
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s)",
                 (aid, up, qty, cost, curr, buy, lifespan, label, kurs if curr == "IDR" else None, a.actor),
             )
+            if kurs is not None:
+                update_meta_kurs(conn, cur, kurs, a.actor)
             audit_write(conn, "assets", aid, "add-asset", a.actor, "fin_ops.buy",
                         before=None, after={"id": aid, "upstream": up, "qty": qty,
                                              "cost_per": cost, "curr": curr, "buy": buy,
@@ -230,6 +234,8 @@ def cmd_refund(a):
                 )
             if cur.fetchone():
                 print(f"✗ Refund duplikat terdeteksi: {up} {d} sudah tercatat. Abort.")
+                return
+            rid = str(uuid.uuid4())
             cur.execute(
                 "INSERT INTO refunds (id, upstream, qty, amount_idr, amount_usdc, label, date, kurs_idr_usd, created_by) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",

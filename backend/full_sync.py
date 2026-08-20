@@ -7,12 +7,16 @@ Usage:
   python full_sync.py            # sync semua
   python full_sync.py --once     # 1 pass, exit
 """
+import getpass
 import json
 import os
 import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from financial_audit import audit_write
 
 import psycopg
 from psycopg.rows import dict_row
@@ -25,6 +29,12 @@ if not DB_DSN:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import finance_share  # noqa: E402
 PUBLISHER_SHARE = finance_share.publisher_share_pct()
+
+
+def audit_actor():
+    return os.environ.get("FIN_OPS_ACTOR") or getpass.getuser()
+
+
 def load_key():
     if "INFERHUB_API_KEY" in os.environ:
         return os.environ["INFERHUB_API_KEY"]
@@ -133,6 +143,27 @@ def sync_asks(prov):
                     print(f"   ...{i+1}/{len(prov)} providers, {asks_total} asks ({time.time()-t0:.0f}s)")
         c.commit()
     print(f"   asks total: {asks_total} dalam {time.time()-t0:.0f}s")
+
+
+def sync_payouts():
+    print("[3/6] Sync payouts...")
+    withdrawals = inferhub_get("/publisher/withdrawals") or []
+    rows = [w for w in withdrawals if (w.get("status") or "confirmed") == "confirmed"]
+    with db() as c, c.cursor() as cur:
+        for payout in rows:
+            cur.execute("""
+                INSERT INTO payouts (id, date, amount_usdc, status, synced_at)
+                VALUES (%s,%s,%s,'confirmed',now())
+                ON CONFLICT (id) DO UPDATE SET date=EXCLUDED.date,
+                    amount_usdc=EXCLUDED.amount_usdc, status=EXCLUDED.status,
+                    synced_at=EXCLUDED.synced_at
+            """, (payout.get("id"), (payout.get("date") or payout.get("createdAt") or "")[:10],
+                  float(payout.get("amountUsdc") or 0)))
+        audit_write(c, "payouts", "full-sync", "sync-payouts", audit_actor(),
+                    "full_sync.payouts", before=None, after={"count": len(rows)})
+        c.commit()
+    print(f"   payouts: {len(rows)}")
+    return rows
 
 
 def sync_usage_logs():
@@ -353,6 +384,7 @@ def main():
     t0 = time.time()
     prov = sync_providers()
     sync_asks(prov)
+    sync_payouts()
     sync_usage_logs()
     sync_market()
     sync_catalog()

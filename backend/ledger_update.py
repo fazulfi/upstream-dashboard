@@ -111,9 +111,11 @@ def _actor(args):
     return getattr(args, "actor", None) or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser()
 
 
-def upsert_asset(a, kurs=None):
+def upsert_asset(a, kurs=None, actor=None):
     with conn() as c:
         with c.cursor() as cur:
+            cur.execute("SELECT id, upstream, qty, cost_per, curr, status, label FROM assets WHERE id=%s", (a["id"],))
+            prior = cur.fetchone()
             if a.get("curr") == "IDR":
                 a_kurs = a.get("kurs_idr_usd") or kurs
             else:
@@ -129,8 +131,8 @@ def upsert_asset(a, kurs=None):
             """, (a["id"], a.get("upstream"), int(a.get("qty") or 0), float(a.get("cost_per") or 0),
                   a.get("curr", "USD"), str(a.get("buy") or "")[:10], int(a.get("lifespan_d") or 30),
                   a.get("status", "active"), a.get("label"), a_kurs))
-        audit_write(c, "assets", a["id"], "upsert-asset", os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
-                    "ledger_update.upsert_asset", before=None,
+        audit_write(c, "assets", a["id"], "upsert-asset", actor or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
+                    "ledger_update.upsert_asset", before=dict(prior) if prior else None,
                     after={"id": a["id"], "upstream": a.get("upstream"), "qty": a.get("qty"),
                            "cost_per": a.get("cost_per"), "curr": a.get("curr"),
                            "buy": str(a.get("buy") or "")[:10], "lifespan_d": a.get("lifespan_d"),
@@ -138,7 +140,7 @@ def upsert_asset(a, kurs=None):
         c.commit()
 
 
-def update_asset_status(aid, status, label=None):
+def update_asset_status(aid, status, label=None, actor=None):
     with conn() as c:
         with c.cursor() as cur:
             cur.execute("SELECT status FROM assets WHERE id=%s", (aid,))
@@ -148,7 +150,7 @@ def update_asset_status(aid, status, label=None):
                 return
             old_status = row["status"]
             cur.execute("UPDATE assets SET status=%s, label=COALESCE(%s,label) WHERE id=%s", (status, label, aid))
-        audit_write(c, "assets", aid, f"set-{status}", os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
+        audit_write(c, "assets", aid, f"set-{status}", actor or os.environ.get("FIN_OPS_ACTOR") or getpass.getuser(),
                     "ledger_update.update_asset_status", before={"status": old_status},
                     after={"status": status, "label": label})
         print(f"  [OK] {aid} -> {status}")
@@ -191,22 +193,22 @@ def main():
         kurs = fetch_live_kurs() if args.curr == "IDR" else None
         upsert_asset({"id": args.id, "upstream": args.upstream, "qty": args.qty, "cost_per": args.cost,
                       "curr": args.curr, "buy": args.buy, "lifespan_d": args.lifespan,
-                      "status": "active", "label": args.label}, kurs)
+                      "status": "active", "label": args.label}, kurs, actor=_actor(args))
         print(f"  [OK] asset {args.id} ditambahkan ke DB")
         sync_db_to_file()
     elif args.cmd == "retire-asset":
-        update_asset_status(args.id, "retired", args.label)
+        update_asset_status(args.id, "retired", args.label, actor=_actor(args))
         sync_db_to_file()
     elif args.cmd == "add-payout":
         add_payout(args.date, args.usd, args.note)  # raise SystemExit dgn pesan jelas
         sync_db_to_file()
     elif args.cmd == "reactivate-asset":
-        update_asset_status(args.id, "active")
+        update_asset_status(args.id, "active", actor=_actor(args))
         sync_db_to_file()
     elif args.cmd == "sync-from-file":
         led = load_file()
         for a in led.get("assets", []) or []:
-            upsert_asset(a)
+            upsert_asset(a, actor=_actor(args))
         print(f"  [OK] ledger.json diimpor ke DB: {len(led.get('assets',[]))} assets")
     elif args.cmd == "sync-to-file":
         sync_db_to_file()
