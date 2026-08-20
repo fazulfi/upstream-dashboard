@@ -37,4 +37,4 @@ Owner-approved on 2026-08-20 via question tool: option B, “Rehearsal ke baseli
 
 ## Operator signature
 
-Operator: ____ (owner to sign) Date: ____
+Operator: faizz (owner) — 2026-08-20
