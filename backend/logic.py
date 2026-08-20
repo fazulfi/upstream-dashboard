@@ -38,6 +38,39 @@ def verify_token(token, password, now=None):
     return hmac.compare_digest(sig, sign_session(exp, password))
 
 
+def issue_token_operator(name, role, ttl, password, now=None):
+    """Terbitkan token operator 4-part: '<expiry>.<name>.<role>.<hmac>'."""
+    now = int(now if now is not None else time.time())
+    exp = now + int(ttl)
+    payload = f"{exp}.{name}.{role}"
+    signature = hmac.new(
+        password.encode(),
+        f"upstream-session:{payload}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def verify_token_operator(token, password, now=None):
+    """Validasi token operator dan kembalikan (name, role)."""
+    try:
+        exp_s, name, role, signature = token.split(".")
+        exp = int(exp_s)
+    except Exception as exc:
+        raise ValueError("invalid operator token") from exc
+    if exp < int(now if now is not None else time.time()):
+        raise ValueError("expired operator token")
+    payload = f"{exp}.{name}.{role}"
+    expected = hmac.new(
+        password.encode(),
+        f"upstream-session:{payload}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise ValueError("invalid operator token")
+    return name, role
+
+
 def constant_time_eq(a, b):
     """Bandingkan dua string constant-time (utk password/token)."""
     return hmac.compare_digest(str(a or ""), str(b or ""))

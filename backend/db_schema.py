@@ -330,3 +330,33 @@ def ensure_schema(cur):
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_fin_audit_entity ON financial_audit(entity, entity_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_fin_audit_created ON financial_audit(created_at DESC)")
+
+    # ── Phase 4 C3: replay + operator identity ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS mutation_replay (
+            key TEXT PRIMARY KEY,
+            route TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            response_json JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS operator_session (
+            token_hash TEXT PRIMARY KEY,
+            operator_name TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'operator',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expires_at TIMESTAMPTZ NOT NULL
+        )
+    """)
+    # ── Phase 4 Q2c/Q11: global per-upstream pricing (additive) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS pricing_config_upstream (
+            upstream TEXT PRIMARY KEY,
+            max_ask_pct DOUBLE PRECISION NOT NULL,
+            platform_fee_pct DOUBLE PRECISION,
+            publisher_share_pct INT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)

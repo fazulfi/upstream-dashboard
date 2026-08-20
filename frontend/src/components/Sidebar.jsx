@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../theme';
-import { Settings, Sun, Activity, MessageSquare, Zap } from 'lucide-react';
+import { Settings, Sun, Activity, MessageSquare, CircleDollarSign } from 'lucide-react';
 
 const SECTIONS = [
   { label: 'Overview', items: [
@@ -9,7 +9,7 @@ const SECTIONS = [
   ] },
   { label: 'Publisher', items: [
     { to: '/asks', label: 'Ask Price', Icon: MessageSquare },
-    { to: '/auto-pricing', label: 'Auto-Pricing', Icon: Zap },
+    { to: '/auto-pricing', label: 'Pricing', Icon: CircleDollarSign },
   ]},
   { label: 'System', items: [ { to: '/settings', label: 'Settings', Icon: Settings } ] },
 ];

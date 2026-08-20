@@ -6,7 +6,13 @@ import LoginGate from './components/LoginGate';
 import Reliability from './pages/Reliability';
 import Settings from './pages/Settings';
 import Asks from './pages/Asks';
-import AutoPricing from './pages/AutoPricing';
+import PricingPage from './components/PricingPage';
+import { useApi } from './hooks/useApi';
+
+function PricingRoute() {
+  const { data, loading, error, reload } = useApi('/api/pricing', 30000);
+  return <PricingPage globals={data?.globals} overrides={data?.overrides} orderbook={data?.orderbook} loading={loading} error={error} onChanged={reload} />;
+}
 
 export default function App({ appChildren } = {}) {
   return (
@@ -17,7 +23,7 @@ export default function App({ appChildren } = {}) {
             <Route element={<LoginGate><Layout /></LoginGate>}>
               <Route path="/" element={<Reliability />} />
               <Route path="/asks" element={<Asks />} />
-              <Route path="/auto-pricing" element={<AutoPricing />} />
+              <Route path="/auto-pricing" element={<PricingRoute />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>

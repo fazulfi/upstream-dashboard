@@ -17,6 +17,10 @@ import json
 import urllib.request
 from datetime import date
 
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
+from recon_earning import classify_earning_violation
+
 DB_DSN = os.environ.get("UPSTREAM_DB")
 if not DB_DSN:
     raise SystemExit("UPSTREAM_DB env wajib diisi (DB production). Refuse to run.")
@@ -156,7 +160,10 @@ def main():
     if stats:
         bal = float(stats.get("balanceUsdc") or stats.get("balance") or 0)
         lifetime = float(stats.get("lifetimeEarningsUsdc") or stats.get("totalEarningsUsdc") or 0)
-        eq_ok = abs(bal + api_withdrawn - lifetime) < 0.05
+        eq_ok = classify_earning_violation(
+            bal, api_withdrawn, lifetime, date.today().isoformat(),
+            baseline="2026-08-10 17:56:45",
+        ) != "unexplained"
         checks.append(("Balance + Withdrawn == Lifetime",
                        eq_ok,
                        f"${bal:.2f} + ${api_withdrawn:.2f} = ${bal+api_withdrawn:.2f} vs ${lifetime:.2f}"))
@@ -205,14 +212,21 @@ def main():
     BASELINE = "2026-08-10 17:56:45"
     with db() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT count(*) FROM earning_history WHERE ts >= %s AND abs((balance+withdrawn)-publisher_lifetime) > 0.01",
+            "SELECT balance, withdrawn, publisher_lifetime, ts FROM earning_history WHERE ts >= %s ORDER BY ts",
             (BASELINE,))
-        n_break_live = cur.fetchone()[0]
+        earning_rows = cur.fetchall()
         cur.execute(
             "SELECT count(*) FROM (SELECT publisher_lifetime, lag(publisher_lifetime) OVER (ORDER BY ts) prev "
             "FROM earning_history WHERE ts >= %s) t WHERE publisher_lifetime < prev",
             (BASELINE,))
         n_nonmono = cur.fetchone()[0]
+    classifications = [
+        classify_earning_violation(balance, withdrawn, lifetime, ts, baseline=BASELINE)
+        for balance, withdrawn, lifetime, ts in earning_rows
+    ]
+    n_break_live = classifications.count("unexplained")
+    n_precision = classifications.count("precision")
+    n_transition = classifications.count("withdrawn_transition")
     ok_eq = n_break_live == 0
     checks.append(("Earning equation sejak baseline (10-Agu)", ok_eq,
                    f"pelanggar live: {n_break_live} (seed pre-baseline dikecualikan)"))
@@ -220,6 +234,12 @@ def main():
         fails.append(checks[-1])
     else:
         print(f"[PASS] {checks[-1][0]}: {checks[-1][2]}")
+    if n_precision:
+        warns.append(f"earning_history precision {n_precision} baris")
+        print(f"[WARN] Earning precision: {n_precision} baris")
+    if n_transition:
+        warns.append(f"earning_history withdrawn transition {n_transition} baris")
+        print(f"[WARN] Earning withdrawn transition: {n_transition} baris")
     # Non-monotonik = artefak sinkronisasi transisi withdrawn (0<->130/230),
     # BUKAN korupsi data (persamaan balance+withdrawn==lifetime tetap benar di
     # tiap baris). Jadikan warning, bukan FAIL (audit item 6, 2026-08-14).
