@@ -38,6 +38,9 @@ jobs:
           pytest tests/test_finance_rules.py tests/test_financial_audit.py tests/test_recon_checks.py \
             --cov=finance_rules --cov=financial_audit \
             --cov-report=term-missing --cov-fail-under=80 -q
+      - name: App coverage gate (Phase 4 Q12b)
+        run: |
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -q
 
   frontend:
     runs-on: ubuntu-latest
