@@ -314,3 +314,19 @@ def ensure_schema(cur):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_reliability_aggregates_bucket ON reliability_aggregates(bucket_start DESC)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS financial_audit (
+            id BIGSERIAL PRIMARY KEY,
+            entity TEXT NOT NULL,
+            entity_id TEXT,
+            action TEXT NOT NULL,
+            actor TEXT,
+            source TEXT NOT NULL,
+            before JSONB,
+            after JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_fin_audit_entity ON financial_audit(entity, entity_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_fin_audit_created ON financial_audit(created_at DESC)")
