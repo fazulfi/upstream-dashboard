@@ -7,7 +7,7 @@
 2. ✅ Operator identity+role session (bukan dashboard-api hardcoded) — token 4-part `expiry.name.role.hmac`, verify_token_operator, get_operator, role matrix (finance admin/ops, config pricing admin, pricing global admin)
 3. ✅ Fail-closed config (publish gagal → rollback + 500) — satu transaksi guard, atomic file write via os.replace
 4. ✅ Payout UUID fallback dihapus (skip+audit) — _sync_payouts_rows skip id kosong + audit 'sync-payouts-skip'
-5. ✅ Pricing merged view + orderbook (global per-upstream + overrides + orderbook via `_orderbook_payload` — parity dgn `/api/orderbook`)
+5. ✅ Pricing merged view + orderbook (global per-upstream + **global_trigger_pct (PR #23)** + overrides + orderbook via `_orderbook_payload`; **Set manual ask actionable di PricingPage; /asks page dihapus — satu halaman Pricing terpadu per P4-Q11; role admin server-side — client role diabaikan (PR #23)**)
 6. ✅ Finance dashboard actions gated (buy/retire/refund via guard) — contracts executable, MutationGuardError 403/400 handling
 7. ✅ Recon earning classifier (unexplained=0 gate ACTIVE dan PASS di production — 192 seed-curve artifacts diklasifikasikan sebagai `seed` (bukan unexplained), recon exit 0; PR #21 fix + re-run verified)
 8. ✅ app.py coverage ≥80 (CI gate, full-suite `--cov-fail-under=80` — 80% tercapai, 1764/344) — deviasi CI gate dari 2-file ke full-suite (Oracle-approved, honor intent)
