@@ -227,9 +227,10 @@ def main():
     n_break_live = classifications.count("unexplained")
     n_precision = classifications.count("precision")
     n_transition = classifications.count("withdrawn_transition")
+    n_seed = classifications.count("seed")
     ok_eq = n_break_live == 0
     checks.append(("Earning equation sejak baseline (10-Agu)", ok_eq,
-                   f"pelanggar live: {n_break_live} (seed pre-baseline dikecualikan)"))
+                   f"unexplained: {n_break_live} (pre-baseline & seed artifact dikecualikan)"))
     if not ok_eq:
         fails.append(checks[-1])
     else:
@@ -240,6 +241,9 @@ def main():
     if n_transition:
         warns.append(f"earning_history withdrawn transition {n_transition} baris")
         print(f"[WARN] Earning withdrawn transition: {n_transition} baris")
+    if n_seed:
+        warns.append(f"earning_history seed artifact {n_seed} baris (kurva seed sintetis db_seed — bukan pelanggaran nyata)")
+        print(f"[WARN] Earning seed artifact: {n_seed} baris (kurva seed sintetis, bukan pelanggaran nyata)")
     # Non-monotonik = artefak sinkronisasi transisi withdrawn (0<->130/230),
     # BUKAN korupsi data (persamaan balance+withdrawn==lifetime tetap benar di
     # tiap baris). Jadikan warning, bukan FAIL (audit item 6, 2026-08-14).
