@@ -13,11 +13,14 @@ function defaultBand(upstream, mid) {
 export default function AutoPricing() {
   const { data, loading, reload } = useApi('/api/auto-pricing', 15000);
   const { data: cfgData, reload: reloadCfg } = useApi('/api/auto-pricing/config', 15000);
+  const { data: globalsData, reload: reloadGlobals } = useApi('/api/pricing', 15000);
   const [arming, setArming] = useState(false);
   const [note, setNote] = useState('');
   const [prov, setProv] = useState('');           // upstream terpilih (tab)
   const [saving, setSaving] = useState(null);      // {upstream, model_id} yg sedang save
   const [form, setForm] = useState({});            // key `${upstream}|${model_id}` -> {trigger}
+  const [globalForm, setGlobalForm] = useState({});
+  const [savingGlobal, setSavingGlobal] = useState(null);
 
   const cycles = useMemo(() => {
     const c = data?.cycles || [];
@@ -112,6 +115,45 @@ export default function AutoPricing() {
     } catch (e) { setNote('Error: ' + e.message); } finally { setSaving(null); }
   };
 
+  const saveGlobalTrigger = async upstream => {
+    const globals = globalsData?.globals || {};
+    const cfg = { ...(globals[upstream] || {}), ...(globalForm[upstream] ? { global_trigger_pct: globalForm[upstream] } : {}) };
+    if (!(Number(cfg.max_ask_pct) > 0)) {
+      setNote(`Error: ${upstream} max_ask_pct belum tersedia — simpan via halaman Pricing dulu`);
+      return;
+    }
+    const trigger = cfg.global_trigger_pct !== undefined && cfg.global_trigger_pct !== ''
+      ? Number(cfg.global_trigger_pct)
+      : null;
+    if (trigger !== null && !(trigger > 0)) {
+      setNote(`Error: trigger global (${trigger}) harus > 0`);
+      return;
+    }
+    setSavingGlobal(upstream); setNote('');
+    try {
+      const r = await apiFetch('/api/pricing/global', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          upstream,
+          max_ask_pct: Number(cfg.max_ask_pct),
+          platform_fee_pct: cfg.platform_fee_pct ?? null,
+          publisher_share_pct: cfg.publisher_share_pct ?? null,
+          global_trigger_pct: trigger,
+        }),
+      });
+      const d = await r.json();
+      if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
+      else {
+        setNote(trigger === null
+          ? `✓ ${upstream} trigger global dihapus (default per model dipakai)`
+          : `✓ ${upstream} trigger global → ${trigger}%`);
+        setGlobalForm(prev => { const n = { ...prev }; delete n[upstream]; return n; });
+        setTimeout(reloadGlobals, 300);
+      }
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSavingGlobal(null); }
+  };
+
   return (
     <div className="page">
       <div className="kpis">
@@ -136,6 +178,31 @@ export default function AutoPricing() {
         </div>
         {note && <div className="batch-note">{note}</div>}
       </div>
+
+      <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head"><div><h2>Trigger global · per provider</h2>
+          <div className="sub">default trigger% utk semua model provider ini — per-model override tetap menang. Kosongkan utk pakai default 10%.</div>
+        </div></div>
+        <div className="pricing-global-grid">
+          {(globalsData?.globals ? Object.keys(globalsData.globals).sort() : []).map(upstream => {
+            const cfg = { ...(globalsData.globals[upstream] || {}), ...(globalForm[upstream] !== undefined ? { global_trigger_pct: globalForm[upstream] } : {}) };
+            return (
+              <div className="pricing-global" key={upstream}>
+                <div className="pricing-row-head"><strong>{upstream}</strong>
+                  <button className="btn btn-sm btn-primary" onClick={() => saveGlobalTrigger(upstream)} disabled={savingGlobal === upstream}>
+                    {savingGlobal === upstream ? '…' : 'Simpan'}
+                  </button>
+                </div>
+                <label className="pricing-field"><span>global_trigger_pct (%)</span>
+                  <input type="number" step="0.0001" min="0" placeholder="10 (default)" value={cfg.global_trigger_pct ?? ''}
+                    onChange={e => setGlobalForm(prev => ({ ...prev, [upstream]: e.target.value }))} />
+                </label>
+              </div>
+            );
+          })}
+          {!(globalsData?.globals && Object.keys(globalsData.globals).length) && <div className="dt-empty">Belum ada konfigurasi upstream.</div>}
+        </div>
+      </section>
 
       {/* Tab per provider */}
       <div className="ap-tabs">

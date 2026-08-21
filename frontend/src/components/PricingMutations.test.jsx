@@ -18,6 +18,7 @@ const pricingData = {
   log: 'cycle complete',
 }
 const configData = { configs: [{ id: 7, upstream: 'provider-a', model_id: 'model-a', trigger_pct: 12 }] }
+const globalsData = { globals: { 'provider-a': { max_ask_pct: 0.05, global_trigger_pct: 15 } } }
 
 function response(body, ok = true, status = 200) {
   return { ok, status, json: vi.fn().mockResolvedValue(body) }
@@ -29,7 +30,9 @@ describe('PricingMutations', () => {
     api.apiFetch.mockResolvedValue(response({ ok: true, armed: true }))
     api.useApi.mockImplementation((path) => path === '/api/auto-pricing'
       ? { data: pricingData, loading: false, reload: vi.fn() }
-      : { data: configData, loading: false, reload: vi.fn() })
+      : path === '/api/pricing'
+        ? { data: globalsData, loading: false, reload: vi.fn() }
+        : { data: configData, loading: false, reload: vi.fn() })
   })
 
   it('updates a pricing config and sends an Idempotency-Key header', async () => {
@@ -64,6 +67,19 @@ describe('PricingMutations', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Update' }))
     expect(await screen.findByText('Error: network down')).toBeInTheDocument()
+  })
+
+  it('saves global trigger per provider from the Auto Pricing page', async () => {
+    render(<AutoPricing />)
+    const simpanButtons = await screen.findAllByRole('button', { name: 'Simpan' })
+    fireEvent.click(simpanButtons[0])
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalledWith('/api/pricing/global', expect.objectContaining({ method: 'PUT' })))
+    const [, options] = api.apiFetch.mock.calls.at(-1)
+    const body = JSON.parse(options.body)
+    expect(body.upstream).toBe('provider-a')
+    expect(body.global_trigger_pct).toBe(15)
+    expect(body.max_ask_pct).toBe(0.05)
   })
 })
 
