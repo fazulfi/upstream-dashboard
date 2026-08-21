@@ -26,3 +26,22 @@ def test_unexplained_fail():
 def test_pre_baseline_excluded():
     assert classify_earning_violation(50.0, 30.0, 130.0, "2026-08-09 00:00:00",
                                       baseline="2026-08-10 17:56:45") == "ok"
+
+
+def test_seed_artifact_classified():
+    # Kurva seed sintetis (db_seed): baris per-jam, balance fixed > lifetime, withdrawn=0
+    assert classify_earning_violation(99.3171, 0.0, 81.5703, "2026-08-10 18:00:00",
+                                      baseline="2026-08-10 17:56:45") == "seed"
+
+
+def test_seed_artifact_late_row_classified():
+    # Baris seed terakhir (delta mengecil ke 0.08) tetap seed — bukan unexplained
+    assert classify_earning_violation(99.3171, 0.0, 99.2346, "2026-08-18 17:00:00",
+                                      baseline="2026-08-10 17:56:45") == "seed"
+
+
+def test_subminute_same_values_still_unexplained():
+    # Baris live (sub-menit) dengan balance>lifetime & delta>0.05 TETAP unexplained:
+    # bukan artefak seed (seed selalu per-jam).
+    assert classify_earning_violation(99.3171, 0.0, 81.5703, "2026-08-11 12:34:56",
+                                      baseline="2026-08-10 17:56:45") == "unexplained"
