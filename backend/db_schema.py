@@ -379,10 +379,14 @@ def ensure_schema(cur):
         """)
     # Seed hanya meng-INSERT row yang belum ada (ON CONFLICT DO NOTHING). TIDAK ada
     # UPDATE berkala — supaya toggle manual user di dashboard tidak pernah di-revert.
+    # Insert 5 upstream scope = TRUE + 6 non-scope = FALSE: menjamin SEMUA 11 row ada,
+    # sehingga default scope persis 5 walau sebagian upstream belum pernah di-PUT global.
     cur.execute("""
         INSERT INTO pricing_config_upstream (upstream, max_ask_pct, auto_pricing_enabled, updated_at)
         SELECT u.upstream, 0.5, u.enabled, now()
         FROM (VALUES
+            ('codebuddy', TRUE), ('cline-pass', TRUE), ('codebuddy-cn', TRUE),
+            ('commandcode', TRUE), ('opencode-go', TRUE),
             ('claude-code', FALSE), ('codex', FALSE), ('qwencloud-alibaba', FALSE),
             ('siliconflow', FALSE), ('xiaomi-mimo', FALSE), ('z-ai', FALSE)
         ) AS u(upstream, enabled)
