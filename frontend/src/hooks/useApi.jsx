@@ -74,7 +74,15 @@ export async function apiFetch(path, options = {}) {
   if (!isApiEnabled(path)) {
     throw new Error('API scope aktif: hanya Auto Pricing yang diizinkan');
   }
+  const method = (options.method || 'GET').toUpperCase();
   const headers = authHeaders({ ...(options.headers || {}) });
+  // Mutasi wajib punya Idempotency-Key (guard backend). Auto-attach kalau caller
+  // belum kirim — mencegah 400 "Idempotency-Key header wajib" di UI manapun.
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && !headers['Idempotency-Key']) {
+    headers['Idempotency-Key'] = globalThis.crypto?.randomUUID
+      ? globalThis.crypto.randomUUID()
+      : `auto-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
   const url = path.startsWith('/api/') ? `${API}${path}` : path;
   const response = await fetch(url, { ...options, headers });
   handleSessionExpiry(path, headers, response);

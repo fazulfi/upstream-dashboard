@@ -14,6 +14,13 @@ describe('useApi session and fetch behavior', () => {
     expect(fetch).toHaveBeenLastCalledWith('/api/login', expect.objectContaining({ body: JSON.stringify({ password: 'secret' }) }))
   })
 
+  it('auto-attaches an Idempotency-Key on mutating requests when absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ ok: true })))
+    await apiFetch('/api/auto-pricing/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    const [, opts] = fetch.mock.calls[0]
+    expect(opts.headers['Idempotency-Key']).toBeTruthy()
+  })
+
   it('dispatches session-expired for authenticated HTTP 401/403; Task 4 owns production handling', async () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
     setSessionToken('expired-token')
