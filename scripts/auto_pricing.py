@@ -41,6 +41,9 @@ except Exception:
 
 BASE = "https://inferhub.dev/api"
 DEFAULT_CONFIG_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-config.json")
+
+# K-002/K-016: scope default = 5 upstream eksplisit. Bisa diubah via DB/toggle dashboard.
+DEFAULT_UPSTREAMS = {"codebuddy", "cline-pass", "codebuddy-cn", "commandcode", "opencode-go"}
 INTERVAL = 30  # detik
 LOG_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing.log")
 STATE_FILE = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-state.json")
@@ -152,6 +155,8 @@ def _load_config_db():
                 rows = cur.fetchall()
                 cur.execute("SELECT upstream, global_trigger_pct FROM pricing_config_upstream WHERE global_trigger_pct IS NOT NULL")
                 grows = cur.fetchall()
+                cur.execute("SELECT upstream, auto_pricing_enabled FROM pricing_config_upstream")
+                all_rows = cur.fetchall()
         out = {}
         globals_map = {}
         for upstream, model_id, trigger_pct, rebound_pct in rows:
@@ -161,7 +166,11 @@ def _load_config_db():
             }
         for upstream, gtp in grows:
             globals_map[upstream] = float(gtp)
-        return out, globals_map
+        scope = {up for up, enabled in all_rows if enabled}
+        # None = tabel kosong (fresh install, belum ada konfigurasi scope sama sekali) —
+        # load_config fallback ke DEFAULT_UPSTREAMS. set() = ada row tapi SEMUA
+        # disabled (admin sengaja matikan semua) — scope kosong dihormati (fail-closed).
+        return out, globals_map, (None if not all_rows else scope)
     except Exception:
         return None
 
@@ -173,7 +182,13 @@ def load_config():
     C6 — source of truth = DB PostgreSQL, fallback file JSON lama, lalu default."""
     d = _load_config_db()
     if d:
-        return d  # DB punya data → source of truth
+        cfg, gmap, upstreams = d
+        # None = fresh install (tabel scope kosong) -> fallback default 5.
+        # set() = konfigurasi eksplisit (termasuk kosong) -> dihormati (fail-closed:
+        # admin matikan semua provider = TIDAK ada yang diproses, bukan kembali ke default).
+        if upstreams is None:
+            upstreams = DEFAULT_UPSTREAMS
+        return cfg, gmap, upstreams
     # DB error / kosong → fallback file JSON (tetap kompatibel)
     try:
         with open(DEFAULT_CONFIG_FILE) as f:
@@ -185,9 +200,15 @@ def load_config():
         globals_map = {}
         for g in (dj.get("globals") or []):
             globals_map[g.get("upstream")] = float(g.get("global_trigger_pct"))
-        return out, globals_map
+        # Kunci "upstreams" ada (termasuk [] = admin matikan semua) -> dihormati.
+        # Kunci tidak ada (file lama) -> fallback default 5.
+        if "upstreams" in dj:
+            upstreams = set(dj["upstreams"] or [])
+        else:
+            upstreams = DEFAULT_UPSTREAMS
+        return out, globals_map, upstreams
     except Exception:
-        return {}, {}
+        return {}, {}, DEFAULT_UPSTREAMS
 
 
 def _db_execute(sql, params=None):
@@ -916,13 +937,10 @@ def run_cycle(dry_run=False):
             persistence_warning = True
         persist_heartbeat(cycle_id, status="skipped", models=0)
         return 0
-    config, globals_map = load_config()
+    config, globals_map, upstreams = load_config()
     hold = load_hold_state()
 
-    scope = set(["codebuddy", "cline-pass", "codebuddy-cn"])
-    for (u, _m) in config.keys():
-        if u:
-            scope.add(u)
+    scope = set(upstreams)
     # filter scope ke upstream yg ADA di catalog & enabled-nya
     scope = {s for s in scope if s in catalog}
 

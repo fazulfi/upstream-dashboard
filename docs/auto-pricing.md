@@ -106,20 +106,42 @@ membawa dua harga kompetitor yang BERBEDA:
 | Sumber | Peran |
 |---|---|
 | **DB `auto_pricing_config`** | **Source of truth** — dibaca daemon tiap cycle (`_load_config_db`) |
+| **DB `pricing_config_upstream.auto_pricing_enabled`** | **Source of truth scope** — upstream mana yang diproses (Phase 5, K-013/K-016) |
 | File `~/.hermes-suisui/logs/auto-pricing-config.json` | Turunan legacy; hanya fallback kalau DB gagal |
-| Default kode (`band_for`) | Fallback terakhir — **seragam 10% semua upstream** (bukan per-upstream) |
+| Default kode (`band_for`, `DEFAULT_UPSTREAMS`) | Fallback terakhir — seragam 10% semua upstream (bukan per-upstream) |
 
 Prioritas: **DB > file JSON > default kode (10%)**.
 
 Tabel config:
 
-| Upstream | trigger_pct | Catatan |
-|---|---|---|
-| codebuddy | 10 | semua 14 model |
-| codebuddy-cn | 10 | semua 8 model |
-| cline-pass | 10 (flash) / 20 (lain) | 10 model |
+| Upstream | trigger_pct | auto_pricing_enabled | Catatan |
+|---|---|---|---|
+| codebuddy | 10 (default) | ✅ | semua 14 model |
+| codebuddy-cn | 10 (default) | ✅ | semua 8 model |
+| cline-pass | 10 (flash) / 20 (lain) | ✅ | 10 model |
+| commandcode | 10 (default) | ✅ | Phase 5 — 12 model |
+| opencode-go | 10 (default) | ✅ | Phase 5 — 19 model |
+| claude-code, codex, qwencloud-alibaba, siliconflow, xiaomi-mimo, z-ai | — | ❌ | non-scope (default off, bisa di-toggle) |
 
 > `rebound_pct` kolom legacy — TIDAK dipakai (REBOUND dihapus). Dipertahankan utk kompatibilitas.
+
+### 2a. Scope auto-pricing (Phase 5)
+
+- **Kolom:** `pricing_config_upstream.auto_pricing_enabled BOOLEAN NOT NULL DEFAULT TRUE`.
+- **Seed satu-kali** di `db_schema.ensure_schema`: 6 upstream non-scope (claude-code, codex,
+  qwencloud-alibaba, siliconflow, xiaomi-mimo, z-ai) di-INSERT dengan `FALSE` + `ON CONFLICT
+  DO NOTHING`, sehingga default scope = persis 5 upstream. Seed TIDAK pernah menimpa toggle
+  manual user (tidak ada UPDATE berkala).
+- **Daemon:** `run_cycle` baca scope dari `load_config()` (3-tuple: configs, globals, upstreams);
+  hanya upstream yang `auto_pricing_enabled=TRUE` yang masuk `scope` (lalu difilter ke katalog).
+- **Fail-closed:** kalau SEMUA upstream di-disable via dashboard, scope = kosong dan dihormati
+  (daemon TIDAK memproses apa pun — tidak kembali ke default 5). Fallback ke 5 default hanya
+  terjadi saat fresh install (tabel `pricing_config_upstream` belum punya row sama sekali).
+- **Dashboard:** toggle "on/off" per upstream di halaman Auto Pricing (panel
+  "Trigger global & scope · per provider") → `PUT /api/auto-pricing/scope`
+  (guard: admin + Idempotency-Key + audit `scope-update`).
+- **Sync:** `_sync_ap_config_file()` menulis key `upstreams` ke file JSON — daemon fallback
+  membaca daftar ini bila DB tak tersedia.
 
 ---
 
@@ -127,10 +149,12 @@ Tabel config:
 
 ### 3a. Provider baru (akun upstream baru)
 1. Tambah provider di InferHub dashboard (atau API `/publisher/providers`).
-2. **Tidak perlu ubah apa pun di auto-pricing** — daemon otomatis menghitung
-   `provider_ok_kita` dari `/publisher/providers` tiap cycle (semua enabled dihitung,
-   termasuk invalid — keduanya menerbitkan ask).
+2. **Aktifkan scope-nya** — halaman Auto Pricing → panel "Trigger global & scope · per provider"
+   → toggle upstream baru ke ON (atau `PUT /api/auto-pricing/scope` dengan `{upstream, enabled:true}`).
+   Tanpa ini, daemon TIDAK memproses upstream baru (Phase 5 K-002/K-013).
 3. Verifikasi: `curl .../api/fleet-health` → provider baru muncul, `enabled=true`.
+4. Cycle berikutnya: tab upstream baru muncul di halaman Auto Pricing, model diproses
+   dengan trigger global (default 10%) atau per-model override.
 
 ### 3b. Model baru di upstream yang sudah ada (PENTING)
 Model baru **TIDAK punya config di DB** → daemon pakai **default 10%**.
@@ -147,10 +171,9 @@ PGPASSWORD=upstream_local psql -h 127.0.0.1 -U gamesim -d upstream -c \
 Daemon baca DB tiap cycle — **tidak perlu restart** untuk config baru.
 
 ### 3c. Upstream baru (mis. 'groq')
-1. Tambah slug ke `scope` di `run_cycle` (scripts/auto_pricing.py):
-   ```python
-   scope = set(["codebuddy", "cline-pass", "codebuddy-cn"])  # tambah "groq"
-   ```
+1. Aktifkan scope-nya lewat dashboard (halaman Auto Pricing → panel "Trigger global & scope" →
+   toggle ON) atau `PUT /api/auto-pricing/scope` `{upstream:"groq", enabled:true}` — daemon
+   otomatis memprosesnya cycle berikutnya (TIDAK perlu edit kode; daftar upstream bukan hardcode).
 2. Cek mapping prefix market di `get_market_min` (tambah prefix kalau beda):
    ```python
    slug = {"cb": "codebuddy", "cp": "cline-pass", "cbcn": "codebuddy-cn"}.get(pc)
@@ -233,8 +256,9 @@ di `docs/PRODUCTION-LOCK.md`; health check & journal di `docs/OPS-RUNBOOK.md`.
 
 - Service produksi menjalankan daemon dengan **`--interval 60`** detik (unit
   `deploy/wwma-auto-pricing.service`); default kode `INTERVAL = 30` ditimpa oleh service.
-- Setiap cycle memproses **38 model** dalam scope (default `codebuddy`, `cline-pass`,
-  `codebuddy-cn`, ditambah upstream dari config DB yang ada di catalog). Aksi per model:
+- Setiap cycle memproses model dalam scope default 5 upstream (`codebuddy`, `cline-pass`,
+  `codebuddy-cn`, `commandcode`, `opencode-go`), plus upstream dari config DB yang ada di
+  catalog. Aksi per model:
   **`undercut`** (turun), **`resume`** (naik jemput), **`hold`**/**`stable`** (diam), **`error`**
   (gagal). Semua model yang diproses — termasuk HOLD — dicatat.
 - Tiap cycle membuat `cycle_id` UUID baru dan `event_id` UUID baru (idempotency key).

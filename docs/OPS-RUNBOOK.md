@@ -177,6 +177,21 @@ SELECT upstream, model_id, trigger_pct FROM auto_pricing_config ORDER BY upstrea
 ```
 Band aktif: codebuddy 10%, codebuddy-cn 10%, cline-pass flash 10%/lain 20%.
 
+### Scope auto-pricing per upstream (Phase 5, K-014/K-016)
+```sql
+SELECT upstream, max_ask_pct, auto_pricing_enabled, updated_at
+FROM pricing_config_upstream ORDER BY upstream;
+```
+`auto_pricing_enabled` adalah **source of truth** scope (default scope = persis 5: codebuddy,
+cline-pass, codebuddy-cn, commandcode, opencode-go; 6 lainnya — claude-code, codex,
+qwencloud-alibaba, siliconflow, xiaomi-mimo, z-ai — di-seed `FALSE`). Toggle manual di halaman
+Auto Pricing (PUT `/api/auto-pricing/scope`) menulis kolom ini via guard + audit.
+
+File **`~/.hermes-suisui/logs/auto-pricing-config.json`** adalah turunan (derived) yang di-sync
+dari DB oleh `_sync_ap_config_file` (setiap mutasi via route/guard; atomik temp+`os.replace`).
+**Jangan pernah edit file ini manual** — daemon membaca scope dari file ini saat DB tidak
+tersedia; isi file selalu di-regenerate dari DB oleh backend.
+
 ---
 
 ## 5. Troubleshooting
@@ -303,6 +318,24 @@ Alur incident: **DISARM kalau ragu → catat di event/audit history → diagnosi
 5. Verifikasi: `/health` 200 · auto-pricing log cycle sukses · `cat auto-pricing-arm` · summary heartbeat & DB fresh
 6. Frontend (bila ada perubahan): `vercel deploy --prod --yes --token "$VERCEL_TOKEN" --cwd /home/gamesim/dashboard/frontend` ⚠️ dari `frontend/`, BUKAN root (lihat §5 troubleshooting).
 
+### Migrasi scope Phase 5 (sekali, saat kolom `auto_pricing_enabled` pertama kali muncul)
+
+Restart backend menjalankan `ensure_schema` → menambah kolom + seed. **Wajib diverifikasi**:
+
+```sql
+-- scope setelah migrasi: persis 5 upstream enabled (K-016), 6 non-scope FALSE
+SELECT upstream, auto_pricing_enabled FROM pricing_config_upstream ORDER BY auto_pricing_enabled DESC, upstream;
+```
+
+Harapan: `codebuddy, codebuddy-cn, cline-pass, commandcode, opencode-go` = `TRUE`; 6 lainnya =
+`FALSE`. Kalau 6 non-scope masih `TRUE` (kolom pernah ada / migrasi tidak jalan), set manual:
+```sql
+UPDATE pricing_config_upstream SET auto_pricing_enabled=FALSE, updated_at=now()
+WHERE upstream IN ('claude-code','codex','qwencloud-alibaba','siliconflow','xiaomi-mimo','z-ai');
+```
+> Kolom pernah di-UPDATE sekali hanya saat kolom baru (belum ada toggle manual). Setelahnya
+> insert-only — toggle manual user tidak pernah di-revert oleh `ensure_schema`.
+
 ---
 
 ## 7. Checklist Tambah Provider Baru
@@ -310,7 +343,9 @@ Alur incident: **DISARM kalau ragu → catat di event/audit history → diagnosi
 Lihat `docs/auto-pricing.md` §3 — singkatnya:
 1. Tambah provider di InferHub → otomatis terhitung, no code change.
 2. Model baru → config DB (band 10% default / override per model).
-3. Upstream baru → scope + prefix mapping + config DB + restart.
+3. Upstream baru → scope + prefix mapping + config DB + restart. Upstream baru masuk scope
+   auto-pricing dengan toggle di halaman Auto Pricing (`pricing_config_upstream.auto_pricing_enabled`,
+   default `TRUE` saat row dibuat via PUT scope/global).
 
 ---
 

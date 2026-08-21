@@ -12,6 +12,9 @@ class RecordingCursor:
     def execute(self, sql, params=None):
         self.statements.append(" ".join(sql.split()))
 
+    def fetchone(self):
+        return None
+
 
 def test_reliability_schema_is_additive_and_idempotent_contract():
     cur = RecordingCursor()

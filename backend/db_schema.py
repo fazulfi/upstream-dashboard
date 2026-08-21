@@ -362,3 +362,29 @@ def ensure_schema(cur):
         )
     """)
     cur.execute("ALTER TABLE pricing_config_upstream ADD COLUMN IF NOT EXISTS global_trigger_pct DOUBLE PRECISION")
+    # ── Phase 5: scope auto-pricing per upstream (additive). K-016: default TRUE,
+    # seed 6 upstream non-scope = FALSE supaya default scope = persis 5 (K-002). ──
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name='pricing_config_upstream' AND column_name='auto_pricing_enabled'")
+    col_existed = cur.fetchone() is not None
+    cur.execute("ALTER TABLE pricing_config_upstream ADD COLUMN IF NOT EXISTS auto_pricing_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+    # Migrasi satu-kali: HANYA saat kolom baru ditambahkan (prod punya row utk 11
+    # upstream dari Phase 4; DEFAULT TRUE akan meng-enable semuanya). Saat itu belum
+    # ada toggle manual, jadi aman mematikan 6 non-scope. Run berikutnya tidak pernah
+    # UPDATE — supaya toggle manual user di dashboard tidak pernah di-revert.
+    if not col_existed:
+        cur.execute("""
+            UPDATE pricing_config_upstream SET auto_pricing_enabled=FALSE, updated_at=now()
+            WHERE upstream IN ('claude-code', 'codex', 'qwencloud-alibaba',
+                               'siliconflow', 'xiaomi-mimo', 'z-ai')
+        """)
+    # Seed hanya meng-INSERT row yang belum ada (ON CONFLICT DO NOTHING). TIDAK ada
+    # UPDATE berkala — supaya toggle manual user di dashboard tidak pernah di-revert.
+    cur.execute("""
+        INSERT INTO pricing_config_upstream (upstream, max_ask_pct, auto_pricing_enabled, updated_at)
+        SELECT u.upstream, 0.5, u.enabled, now()
+        FROM (VALUES
+            ('claude-code', FALSE), ('codex', FALSE), ('qwencloud-alibaba', FALSE),
+            ('siliconflow', FALSE), ('xiaomi-mimo', FALSE), ('z-ai', FALSE)
+        ) AS u(upstream, enabled)
+        ON CONFLICT (upstream) DO NOTHING
+    """)
