@@ -3,7 +3,6 @@ globalThis.React = React
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import AutoPricing from '../pages/AutoPricing'
-import Asks from '../pages/Asks'
 import PricingPage from './PricingPage'
 
 const api = vi.hoisted(() => ({
@@ -19,12 +18,6 @@ const pricingData = {
   log: 'cycle complete',
 }
 const configData = { configs: [{ id: 7, upstream: 'provider-a', model_id: 'model-a', trigger_pct: 12 }] }
-const orderbookData = {
-  models: [{
-    label: 'Model A', official_in: 1, min_ask: 0.8, max_ask: 1.2, spread: 0.4,
-    upstreams: [{ slug: 'provider-a', label: 'Provider A', is_ours: false, upstream_catalog_model_id: 'catalog-a', levels: [{ price: 0.8, qty: 3 }] }],
-  }],
-}
 
 function response(body, ok = true, status = 200) {
   return { ok, status, json: vi.fn().mockResolvedValue(body) }
@@ -86,22 +79,5 @@ describe('Pricing configuration page', () => {
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalledWith('/api/pricing/global', expect.objectContaining({ method: 'PUT' })))
     const [, options] = api.apiFetch.mock.calls.at(-1)
     expect(options.headers['Idempotency-Key']).toEqual(expect.any(String))
-  })
-})
-
-describe('Orderbook view', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    api.useApi.mockReturnValue({ data: orderbookData, loading: false, reload: vi.fn() })
-    api.apiFetch.mockResolvedValue(response({ ok: true }))
-  })
-
-  it('renders model orderbook levels and opens the model detail view', async () => {
-    render(<Asks />)
-    expect(await screen.findByText('Model A')).toBeInTheDocument()
-    expect(screen.getAllByText('$0.8000').length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole('button', { name: /Model A/ }))
-    expect(screen.getByRole('heading', { name: 'Orderbook — Model A' })).toBeInTheDocument()
-    expect(screen.getByText('Provider A')).toBeInTheDocument()
   })
 })

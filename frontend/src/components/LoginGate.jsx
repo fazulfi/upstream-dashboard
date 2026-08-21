@@ -8,6 +8,7 @@ import { loginWithPassword, getSessionToken, setSessionToken } from '../hooks/us
  */
 export default function LoginGate({ children }) {
   const [pw, setPw] = useState('');
+  const [operatorName, setOperatorName] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [authed, setAuthed] = useState(() => !!getSessionToken());
@@ -30,7 +31,8 @@ export default function LoginGate({ children }) {
     if (!pw) return;
     setBusy(true); setMsg('');
     try {
-      await loginWithPassword(pw);
+      const name = operatorName.trim();
+      await (name ? loginWithPassword(pw, name) : loginWithPassword(pw));
       setAuthed(true);
       window.location.hash = '#/';
     } catch (err) {
@@ -58,6 +60,10 @@ export default function LoginGate({ children }) {
         </p>
         <input
           type="password" value={pw} onChange={e => setPw(e.target.value)} autoFocus placeholder="Dashboard password"
+          className="login-input"
+        />
+        <input
+          type="text" value={operatorName} onChange={e => setOperatorName(e.target.value)} placeholder="Operator name (opsional, untuk audit)"
           className="login-input"
         />
         {msg && <div className="login-err" role="alert">{msg}</div>}

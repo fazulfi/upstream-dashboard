@@ -140,10 +140,9 @@ if not DB_DSN:
 
 
 def _load_config_db():
-    """Baca config dari tabel PostgreSQL auto_pricing_config
-    (id, upstream, model_id, trigger_pct, rebound_pct, updated_at).
-    return {(upstream, model_id): {trigger_pct, rebound_pct}};
-    None kalau DB error / tak tersedia, {} kalau tabel kosong."""
+    """Baca config dari tabel PostgreSQL auto_pricing_config + global trigger upstream.
+    return ({ (upstream, model_id): {trigger_pct, rebound_pct} }, { upstream: global_trigger_pct })
+    None kalau DB error / tak tersedia."""
     if not psycopg:
         return None
     try:
@@ -151,23 +150,27 @@ def _load_config_db():
             with conn.cursor() as cur:
                 cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct FROM auto_pricing_config")
                 rows = cur.fetchall()
-        if not rows:
-            return {}
+                cur.execute("SELECT upstream, global_trigger_pct FROM pricing_config_upstream WHERE global_trigger_pct IS NOT NULL")
+                grows = cur.fetchall()
         out = {}
+        globals_map = {}
         for upstream, model_id, trigger_pct, rebound_pct in rows:
             out[(upstream, model_id)] = {
                 "trigger_pct": float(trigger_pct or 0),
                 "rebound_pct": float(rebound_pct or 0),
             }
-        return out
+        for upstream, gtp in grows:
+            globals_map[upstream] = float(gtp)
+        return out, globals_map
     except Exception:
         return None
 
 
 def load_config():
-    """Baca config per upstream×model. return {(upstream, model_id): {trigger_pct, rebound_pct}}.
-    C6 — source of truth = DB PostgreSQL (auto_pricing_config), fallback ke file JSON lama
-    (DEFAULT_CONFIG_FILE), lalu default band (band_for). Prioritas: DB > file > default."""
+    """Baca config per upstream×model + global trigger upstream.
+    Prioritas trigger: override eksplisit (auto_pricing_config) > global upstream
+    (pricing_config_upstream.global_trigger_pct) > default band (band_for).
+    C6 — source of truth = DB PostgreSQL, fallback file JSON lama, lalu default."""
     d = _load_config_db()
     if d:
         return d  # DB punya data → source of truth
@@ -179,9 +182,12 @@ def load_config():
         for c in (dj.get("configs") or []):
             k = (c.get("upstream"), c.get("model_id"))
             out[k] = {"trigger_pct": float(c.get("trigger_pct")), "rebound_pct": float(c.get("rebound_pct"))}
-        return out
+        globals_map = {}
+        for g in (dj.get("globals") or []):
+            globals_map[g.get("upstream")] = float(g.get("global_trigger_pct"))
+        return out, globals_map
     except Exception:
-        return {}
+        return {}, {}
 
 
 def _db_execute(sql, params=None):
@@ -373,13 +379,13 @@ def _db_retention(days=30):
     return _db_reliability_maintenance()
 
 
-def band_for(slug, mid, conf):
-    """trigger_pct per model — SATU-SATUNYA sumber: config DB (auto_pricing_config).
-    REBOUND DIHAPUS (nilai rebound_pct hanya kompatibilitas config lama, tak dipakai).
-    Fallback default 10% utk SEMUA upstream — seragam, tidak ada beda per-upstream
-    di kode (perbedaan band murni dari DB config, bukan dari percabangan kode)."""
+def band_for(slug, mid, conf, globals_map=None):
+    """trigger_pct per model — prioritas: override eksplisit > global upstream > default 10%.
+    REBOUND DIHAPUS (nilai rebound_pct hanya kompatibilitas config lama, tak dipakai)."""
     if conf:
         return conf["trigger_pct"] / 100.0, conf["rebound_pct"] / 100.0
+    if globals_map and slug in globals_map:
+        return globals_map[slug] / 100.0, 0.10
     return 0.10, 0.10  # default seragam semua upstream (DB menang kalau ada config)
 def _atomic_write(path, obj):
     """Write JSON secara atomic: tulis ke path.tmp lalu os.replace."""
@@ -910,7 +916,7 @@ def run_cycle(dry_run=False):
             persistence_warning = True
         persist_heartbeat(cycle_id, status="skipped", models=0)
         return 0
-    config = load_config()
+    config, globals_map = load_config()
     hold = load_hold_state()
 
     scope = set(["codebuddy", "cline-pass", "codebuddy-cn"])
@@ -958,7 +964,7 @@ def run_cycle(dry_run=False):
             conf = config.get((slug, mid))
             if conf is None:
                 conf = config.get((slug, f"{slug}/{mid}"))
-            t_pct, _r_pct = band_for(slug, mid, conf)   # trigger% (rebound dihapus v2)
+            t_pct, _r_pct = band_for(slug, mid, conf, globals_map)   # trigger% (rebound dihapus v2)
             hk = f"{slug}|{mid}"
             prev = hold.get(hk, {})
             prev_ts = prev.get("ts", 0)

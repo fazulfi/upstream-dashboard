@@ -540,7 +540,7 @@ class TestRunCycleRegression(unittest.TestCase):
                 captured["cycles"] = obj.get("cycles", [])
 
         with mock.patch.object(ap, "get_catalog", return_value=catalog), \
-             mock.patch.object(ap, "load_config", return_value={}), \
+             mock.patch.object(ap, "load_config", return_value=({}, {})), \
              mock.patch.object(ap, "load_hold_state", return_value={}), \
              mock.patch.object(ap, "get_market_min", return_value=market), \
              mock.patch.object(ap, "get_asks_enabled",

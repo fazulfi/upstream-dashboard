@@ -6,7 +6,6 @@ import { useApi } from '../hooks/useApi';
 const TITLES = {
   '': { crumb: 'Reliability / Overview', title: 'Reliability' },
   '/': { crumb: 'Reliability / Overview', title: 'Reliability' },
-  '/asks': { crumb: 'Ask Price / Manual', title: 'Ask Price' },
   '/auto-pricing': { crumb: 'Publisher / Pricing', title: 'Pricing' },
   '/settings': { crumb: 'System / Settings', title: 'Settings' },
 };

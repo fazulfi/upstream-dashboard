@@ -5,7 +5,6 @@ import Layout from './components/Layout';
 import LoginGate from './components/LoginGate';
 import Reliability from './pages/Reliability';
 import Settings from './pages/Settings';
-import Asks from './pages/Asks';
 import PricingPage from './components/PricingPage';
 import { useApi } from './hooks/useApi';
 
@@ -22,7 +21,6 @@ export default function App({ appChildren } = {}) {
           <Routes>
             <Route element={<LoginGate><Layout /></LoginGate>}>
               <Route path="/" element={<Reliability />} />
-              <Route path="/asks" element={<Asks />} />
               <Route path="/auto-pricing" element={<PricingRoute />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

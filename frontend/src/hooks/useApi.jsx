@@ -17,11 +17,11 @@ export function setSessionToken(tok) {
 // produksi — password itu bocor ke bundle publik. Pakai /api/login + token.
 const AUTH = import.meta.env.VITE_DASHBOARD_PASSWORD || '';
 
-async function loginWithPassword(password) {
+async function loginWithPassword(password, operatorName) {
   const r = await fetch(`${API}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(operatorName ? { password, operator_name: operatorName } : { password }),
   });
   if (!r.ok) throw new Error('login failed');
   const d = await r.json();
