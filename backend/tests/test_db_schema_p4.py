@@ -60,3 +60,19 @@ def test_ensure_schema_kolom_sudah_ada_tidak_update():
     ensure_schema(cur)
     updates = [s for s, _ in cur.executed if s.strip().upper().startswith("UPDATE")]
     assert updates == []
+
+
+def test_ensure_schema_seed_semua_11_upstream_scope():
+    """Seed harus meng-INSERT SEMUA 11 upstream (5 scope TRUE + 6 non-scope FALSE) —
+    fix deploy: prod hanya punya 7 row (codebuddy + 6 non-scope); tanpa row utk
+    cline-pass/codebuddy-cn/commandcode/opencode-go mereka TIDAK masuk scope (K-005 gagal)."""
+    cur = FakeCur(col_exists=True)
+    ensure_schema(cur)
+    inserts = [s for s, _ in cur.executed if s.strip().upper().startswith("INSERT")]
+    assert len(inserts) == 1
+    seed = inserts[0]
+    for up in ("codebuddy", "cline-pass", "codebuddy-cn", "commandcode", "opencode-go",
+               "claude-code", "codex", "qwencloud-alibaba", "siliconflow", "xiaomi-mimo", "z-ai"):
+        assert up in seed
+    assert "('codebuddy', TRUE)" in seed
+    assert "('claude-code', FALSE)" in seed
