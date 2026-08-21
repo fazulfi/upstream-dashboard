@@ -32,8 +32,31 @@ def test_pricing_global_put_lewat_guard(auth_client, monkeypatch):
     r = auth_client.put(
         "/api/pricing/global",
         json={"upstream": "clinepass", "max_ask_pct": 0.05,
-              "platform_fee_pct": 0.1, "publisher_share_pct": 80},
+              "platform_fee_pct": 0.1, "publisher_share_pct": 80,
+              "global_trigger_pct": 15},
         headers={"Idempotency-Key": "pg-1"})
     assert r.status_code == 200
     assert called["action"] == "pricing-global-update"
     assert called["required_roles"] == ["admin"]
+
+
+def test_pricing_global_put_terima_global_trigger_pct(auth_client, monkeypatch):
+    """global_trigger_pct diteruskan ke guard _exec (config global per provider)."""
+    seen = {}
+
+    def fake_guard(req, conn, entity, action, executor, **kw):
+        status, payload = executor()
+        seen["exec_status"] = status
+        seen["payload"] = payload
+        return status, payload
+
+    monkeypatch.setattr(app_module, "guard_mutation", fake_guard)
+    monkeypatch.setattr(app_module, "_sync_ap_config_file", lambda conn=None: None)
+    r = auth_client.put(
+        "/api/pricing/global",
+        json={"upstream": "clinepass", "max_ask_pct": 0.05,
+              "platform_fee_pct": 0.1, "publisher_share_pct": 80,
+              "global_trigger_pct": 15},
+        headers={"Idempotency-Key": "pg-2"})
+    assert r.status_code == 200
+    assert seen["payload"]["config"]["global_trigger_pct"] == 15

@@ -357,6 +357,8 @@ def ensure_schema(cur):
             max_ask_pct DOUBLE PRECISION NOT NULL,
             platform_fee_pct DOUBLE PRECISION,
             publisher_share_pct INT,
+            global_trigger_pct DOUBLE PRECISION,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
+    cur.execute("ALTER TABLE pricing_config_upstream ADD COLUMN IF NOT EXISTS global_trigger_pct DOUBLE PRECISION")

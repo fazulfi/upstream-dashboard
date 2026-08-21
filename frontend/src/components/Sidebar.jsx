@@ -1,14 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../theme';
-import { Settings, Sun, Activity, MessageSquare, CircleDollarSign } from 'lucide-react';
+import { Settings, Sun, Activity, CircleDollarSign } from 'lucide-react';
 
 const SECTIONS = [
   { label: 'Overview', items: [
     { to: '/', label: 'Reliability', Icon: Activity, end: true },
   ] },
   { label: 'Publisher', items: [
-    { to: '/asks', label: 'Ask Price', Icon: MessageSquare },
     { to: '/auto-pricing', label: 'Pricing', Icon: CircleDollarSign },
   ]},
   { label: 'System', items: [ { to: '/settings', label: 'Settings', Icon: Settings } ] },

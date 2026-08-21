@@ -556,14 +556,20 @@ def issue_token(operator_name="operator", role="operator"):
 
 
 def _handle_login(body, resp):
-    """Login — verifikasi DASHBOARD_PASSWORD + simpan identity."""
+    """Login — verifikasi DASHBOARD_PASSWORD; role=admin server-side (P4 owner decision).
+
+    Role TIDAK pernah diambil dari body klien (anti privilege-escalation):
+    single shared password → role admin untuk semua sesi yang berhasil login.
+    operator_name hanya label audit (identity), bukan kredensial.
+    """
     pw = (body or {}).get("password", "")
     if not hmac.compare_digest(pw, DASHBOARD_PASSWORD):
         resp["status"] = 401
         resp["body"] = {"error": "invalid password"}
         return
-    name = (body or {}).get("operator_name") or "operator"
-    role = (body or {}).get("role") or "operator"
+    raw_name = (body or {}).get("operator_name") or "operator"
+    name = str(raw_name).strip()[:64] or "operator"
+    role = "admin"
     resp["status"] = 200
     resp["body"] = {"token": issue_token(name, role), "operator_name": name, "role": role}
 
@@ -1763,7 +1769,7 @@ def api_pricing_config():
 def _load_pricing_merged():
     with db_connect() as conn, conn.cursor() as cur:
         cur.execute("""
-            SELECT upstream, max_ask_pct, platform_fee_pct, publisher_share_pct
+            SELECT upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, global_trigger_pct
             FROM pricing_config_upstream ORDER BY upstream
         """)
         upstream_rows = {r["upstream"]: r for r in cur.fetchall()}
@@ -1780,7 +1786,8 @@ def _load_pricing_merged():
                 row = upstream_rows[up]
                 globals_cfg[up] = {"max_ask_pct": row["max_ask_pct"],
                                    "platform_fee_pct": row.get("platform_fee_pct"),
-                                   "publisher_share_pct": row.get("publisher_share_pct")}
+                                   "publisher_share_pct": row.get("publisher_share_pct"),
+                                   "global_trigger_pct": row.get("global_trigger_pct")}
             else:
                 globals_cfg[up] = {"max_ask_pct": pc.get("max_ask_pct"),
                                    "platform_fee_pct": pc.get("platform_fee_pct"),
@@ -1809,9 +1816,18 @@ def api_pricing_global_put():
         return jsonify({"error": "max_ask_pct numeric required"}), 400
     if max_ask_pct <= 0:
         return jsonify({"error": "max_ask_pct harus > 0"}), 400
+    gt = body.get("global_trigger_pct")
+    if gt is not None:
+        try:
+            gt = float(gt)
+        except (TypeError, ValueError):
+            return jsonify({"error": "global_trigger_pct numeric required"}), 400
+        if gt <= 0:
+            return jsonify({"error": "global_trigger_pct harus > 0"}), 400
     cfg = {"upstream": upstream, "max_ask_pct": max_ask_pct,
            "platform_fee_pct": body.get("platform_fee_pct"),
-           "publisher_share_pct": body.get("publisher_share_pct")}
+           "publisher_share_pct": body.get("publisher_share_pct"),
+           "global_trigger_pct": gt}
 
     conn = db_connect()
 
@@ -1819,15 +1835,17 @@ def api_pricing_global_put():
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO pricing_config_upstream
-                    (upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, updated_at)
-                VALUES (%s, %s, %s, %s, now())
+                    (upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, global_trigger_pct, updated_at)
+                VALUES (%s, %s, %s, %s, %s, now())
                 ON CONFLICT (upstream) DO UPDATE SET
                   max_ask_pct=EXCLUDED.max_ask_pct,
                   platform_fee_pct=EXCLUDED.platform_fee_pct,
                   publisher_share_pct=EXCLUDED.publisher_share_pct,
+                  global_trigger_pct=EXCLUDED.global_trigger_pct,
                   updated_at=now()
             """, (cfg["upstream"], cfg["max_ask_pct"],
-                  cfg["platform_fee_pct"], cfg["publisher_share_pct"]))
+                  cfg["platform_fee_pct"], cfg["publisher_share_pct"], cfg["global_trigger_pct"]))
+        _sync_ap_config_file(conn)
         return 200, {"ok": True, "config": cfg}
 
     try:
@@ -2736,11 +2754,13 @@ def _sync_ap_config_file(conn=None):
         with c.cursor() as cur:
             cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct FROM auto_pricing_config")
             rows = cur.fetchall()
+            cur.execute("SELECT upstream, global_trigger_pct FROM pricing_config_upstream WHERE global_trigger_pct IS NOT NULL")
+            globals_rows = cur.fetchall()
         path = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-config.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w") as f:
-            json.dump({"configs": rows, "updated_at": time.time()}, f, indent=2)
+            json.dump({"configs": rows, "globals": globals_rows, "updated_at": time.time()}, f, indent=2)
         os.replace(tmp, path)
     finally:
         if own:

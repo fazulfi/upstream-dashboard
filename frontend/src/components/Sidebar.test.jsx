@@ -7,9 +7,9 @@ import { ThemeProvider } from '../theme'
 
 describe('Sidebar', () => {
   it('renders navigation and marks the current route active', () => {
-    render(<ThemeProvider><MemoryRouter initialEntries={['/asks']}><Sidebar /></MemoryRouter></ThemeProvider>)
+    render(<ThemeProvider><MemoryRouter initialEntries={['/auto-pricing']}><Sidebar /></MemoryRouter></ThemeProvider>)
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Ask Price/ })).toHaveClass('active')
+    expect(screen.getByRole('link', { name: /Pricing/ })).toHaveClass('active')
     expect(screen.getByRole('link', { name: /Reliability/ })).toBeInTheDocument()
   })
 
