@@ -17,10 +17,12 @@
 12. ✅ PR CI tanpa CD (#19), deploy VPS+Vercel, evidence
 
 ## Verifikasi produksi (live)
-- Backend MainPID 680666, active; schema memory.mutation_replay/operator_session/pricing_config_upstream EXIST; assets=70 intact
-- Pricing merged + finance + reliability smoke 200; login token 4-part works
+- Backend MainPID 1128285 (ac3baf2), active; schema memory.mutation_replay/operator_session/pricing_config_upstream EXIST (global_trigger_pct column live); assets=70 intact
+- Pricing merged + finance + reliability smoke 200; login token 4-part works (role admin server-side, client role ignored — PR #23)
 - Offsite marker `offsite skipped 2026-08-21T01:21:24Z`
 - Recon: ✓ REKONSILIASI LULUS (unexplained=0; seed artifact 192 = kurva seed sintetis db_seed, WARN bukan FAIL; precision 5920; withdrawn transition 2983) — PR #21
+- Set trigger global per provider (global_trigger_pct) + Set manual ask → 200 (was 403) — PR #23
+- Idempotency-Key auto-attach pada semua mutasi frontend (PR #25); production frontend = project Vercel `upstream-static` (index-ClbEur01.js, /asks removed) — verified
 
 ## Known pre-existing debt (diteruskan, didokumentasikan)
 - Offsite /run/wwma/env tidak ada di VPS — marker skip; rclone offsite belum aktif
