@@ -9,7 +9,8 @@ describe('Sidebar', () => {
   it('renders navigation and marks the current route active', () => {
     render(<ThemeProvider><MemoryRouter initialEntries={['/auto-pricing']}><Sidebar /></MemoryRouter></ThemeProvider>)
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Pricing/ })).toHaveClass('active')
+    expect(screen.getByRole('link', { name: /Auto Pricing/ })).toHaveClass('active')
+    expect(screen.getByRole('link', { name: 'Pricing' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Reliability/ })).toBeInTheDocument()
   })
 
