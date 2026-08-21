@@ -1769,7 +1769,7 @@ def api_pricing_config():
 def _load_pricing_merged():
     with db_connect() as conn, conn.cursor() as cur:
         cur.execute("""
-            SELECT upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, global_trigger_pct
+            SELECT upstream, max_ask_pct, platform_fee_pct, publisher_share_pct, global_trigger_pct, auto_pricing_enabled
             FROM pricing_config_upstream ORDER BY upstream
         """)
         upstream_rows = {r["upstream"]: r for r in cur.fetchall()}
@@ -1787,11 +1787,13 @@ def _load_pricing_merged():
                 globals_cfg[up] = {"max_ask_pct": row["max_ask_pct"],
                                    "platform_fee_pct": row.get("platform_fee_pct"),
                                    "publisher_share_pct": row.get("publisher_share_pct"),
-                                   "global_trigger_pct": row.get("global_trigger_pct")}
+                                   "global_trigger_pct": row.get("global_trigger_pct"),
+                                   "auto_pricing_enabled": row.get("auto_pricing_enabled", True)}
             else:
                 globals_cfg[up] = {"max_ask_pct": pc.get("max_ask_pct"),
                                    "platform_fee_pct": pc.get("platform_fee_pct"),
-                                   "publisher_share_pct": pc.get("publisher_share_pct")}
+                                   "publisher_share_pct": pc.get("publisher_share_pct"),
+                                   "auto_pricing_enabled": True}
     return {"globals": globals_cfg, "overrides": overrides, "orderbook": orderbook}
 
 
@@ -2738,6 +2740,49 @@ def api_auto_pricing_config_delete(cid):
     return jsonify(payload), status
 
 
+@app.route("/api/auto-pricing/scope", methods=["PUT"])
+def api_auto_pricing_scope_put():
+    """Set/unset upstream dari scope auto-pricing. Body: {upstream, enabled: bool}.
+    Phase 5 K-014: toggle per upstream di halaman Auto Pricing."""
+    body = request.get_json(silent=True) or {}
+    upstream = (body.get("upstream") or "").strip()
+    if not upstream:
+        return jsonify({"error": "upstream required"}), 400
+    if not isinstance(body.get("enabled"), bool):
+        return jsonify({"error": "enabled boolean required"}), 400
+    enabled = body["enabled"]
+    cat = _cache.get("catalog")
+    if cat is not None:
+        known = {u.get("slug") for u in (cat if isinstance(cat, list) else (cat or {}).get("upstreams", []))}
+        if known and upstream not in known:
+            return jsonify({"error": f"unknown upstream: {upstream}"}), 400
+
+    conn = db_connect()
+
+    def _exec():
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO pricing_config_upstream (upstream, max_ask_pct, auto_pricing_enabled, updated_at)
+                VALUES (%s, 0.5, %s, now())
+                ON CONFLICT (upstream) DO UPDATE SET auto_pricing_enabled=EXCLUDED.auto_pricing_enabled, updated_at=now()
+            """, (upstream, enabled))
+        _sync_ap_config_file(conn)
+        return 200, {"ok": True, "upstream": upstream, "enabled": enabled}
+
+    try:
+        name, role = get_operator(auth_token())
+        status, payload = guard_mutation(
+            request, conn, "pricing_config_upstream", "scope-update", _exec,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            actor=name, source="dashboard", request_body=body,
+            actor_role=role, required_roles=["admin"])
+    except MutationGuardError as e:
+        return jsonify({"error": e.message}), e.status_code
+    finally:
+        conn.close()
+    return jsonify(payload), status
+
+
 def _sync_ap_config_file(conn=None):
     """Sync auto_pricing_config DB -> JSON file (daemon baca file ini, tanpa psycopg).
 
@@ -2756,11 +2801,13 @@ def _sync_ap_config_file(conn=None):
             rows = cur.fetchall()
             cur.execute("SELECT upstream, global_trigger_pct FROM pricing_config_upstream WHERE global_trigger_pct IS NOT NULL")
             globals_rows = cur.fetchall()
+            cur.execute("SELECT upstream FROM pricing_config_upstream WHERE auto_pricing_enabled = TRUE")
+            scope_rows = cur.fetchall()
         path = os.path.expanduser("~/.hermes-suisui/logs/auto-pricing-config.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w") as f:
-            json.dump({"configs": rows, "globals": globals_rows, "updated_at": time.time()}, f, indent=2)
+            json.dump({"configs": rows, "globals": globals_rows, "upstreams": [r["upstream"] for r in scope_rows], "updated_at": time.time()}, f, indent=2)
         os.replace(tmp, path)
     finally:
         if own:

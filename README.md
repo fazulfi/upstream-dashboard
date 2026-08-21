@@ -19,7 +19,7 @@ PostgreSQL is the durable source of truth for financial records, configuration, 
 
 - **Fleet operations:** Provider health, usage windows, rechecks, enablement, and upstream state.
 - **Market operations:** Model catalog, provider-scoped orderbooks, price ladders, depth, minimums, maximums, spreads, and combos.
-- **Pricing controls:** Manual ask management and an auto-pricing daemon with provider-scoped decisions, ARM/DISARM control, PID locking, and persisted audit history.
+- **Pricing controls:** Manual ask management and an auto-pricing daemon with provider-scoped decisions, ARM/DISARM control, PID locking, and persisted audit history. Per-provider scope control (enable/disable auto-pricing per upstream from the dashboard) and per-provider global trigger bands, with per-model overrides. Supported providers include codebuddy, codebuddy-cn, cline-pass, commandcode, and opencode-go.
 - **Financial operations:** Earnings, P&L, amortization, impairment, refunds, payouts, settlements, top-ups, and finance workbook regeneration.
 - **Analytics:** Earnings trends, model and provider breakdowns, ranking, and range-based publisher analytics.
 - **Reliability operations:** Cycle, event, model, heartbeat, freshness, and aggregate views with REST recovery and a live SSE stream.
@@ -60,7 +60,7 @@ Vercel static hosting ── rewrite ──> nginx TLS ──> Flask + waitress 
 
 - **Frontend:** React 19, Vite 8, React Router 7 with `HashRouter`, Recharts, and TanStack Table. It is deployed as a static Vercel project.
 - **Backend:** Flask served by waitress on the VPS behind nginx TLS. It exposes authenticated REST APIs and the reliability stream.
-- **Auto-pricing:** `scripts/auto_pricing.py` runs as `wwma-auto-pricing.service`, polls on the production 60-second interval, and records operations, API activity, state, and reliability events.
+- **Auto-pricing:** `scripts/auto_pricing.py` runs as `wwma-auto-pricing.service`, polls on the production 60-second interval, and records operations, API activity, state, and reliability events. The processed upstream set is configurable: PostgreSQL `pricing_config_upstream.auto_pricing_enabled` is the source of truth, synced to the daemon's JSON config file, with a dashboard toggle per provider (default scope: codebuddy, codebuddy-cn, cline-pass, commandcode, opencode-go).
 - **Finance service:** `wwma-finance.service` and its timer regenerate finance outputs on the documented schedule.
 - **Database:** PostgreSQL is the source of truth for finance, provider and model operations, pricing configuration, auto-pricing state, and reliability history.
 - **Reliability transport:** The frontend uses fetch-based SSE so it can send a Bearer token. `Last-Event-ID` enables cursor replay; the REST endpoints remain the recovery and history path. See [SSE transport](docs/architecture/sse-transport.md).

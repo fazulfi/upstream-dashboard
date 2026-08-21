@@ -18,7 +18,7 @@ const pricingData = {
   log: 'cycle complete',
 }
 const configData = { configs: [{ id: 7, upstream: 'provider-a', model_id: 'model-a', trigger_pct: 12 }] }
-const globalsData = { globals: { 'provider-a': { max_ask_pct: 0.05, global_trigger_pct: 15 } } }
+const globalsData = { globals: { 'provider-a': { max_ask_pct: 0.05, global_trigger_pct: 15, auto_pricing_enabled: true } } }
 
 function response(body, ok = true, status = 200) {
   return { ok, status, json: vi.fn().mockResolvedValue(body) }
@@ -80,6 +80,17 @@ describe('PricingMutations', () => {
     expect(body.upstream).toBe('provider-a')
     expect(body.global_trigger_pct).toBe(15)
     expect(body.max_ask_pct).toBe(0.05)
+  })
+
+  it('toggles auto-pricing scope per provider', async () => {
+    render(<AutoPricing />)
+    const toggle = await screen.findByRole('checkbox')
+    expect(toggle.checked).toBe(true)
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalledWith('/api/auto-pricing/scope', expect.objectContaining({ method: 'PUT' })))
+    const [, options] = api.apiFetch.mock.calls.at(-1)
+    expect(JSON.parse(options.body)).toEqual({ upstream: 'provider-a', enabled: false })
   })
 })
 

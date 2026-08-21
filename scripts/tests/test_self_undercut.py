@@ -11,6 +11,81 @@ class TestDaemonReliability(unittest.TestCase):
         self.assertEqual(uuid.UUID(ap.new_cycle_id()).version, 4)
         self.assertEqual(uuid.UUID(ap.new_event_id()).version, 4)
 
+    def test_load_config_falls_back_to_default_scope_when_db_empty(self):
+        # K-013/K-016: DB scope None (fresh install, tabel kosong) -> fallback DEFAULT_UPSTREAMS (5).
+        with mock.patch.object(ap, "_load_config_db", return_value=({}, {}, None)), \
+             mock.patch.object(ap, "DEFAULT_CONFIG_FILE", "/nonexistent/empty.json"):
+            cfg, gmap, upstreams = ap.load_config()
+        self.assertEqual(upstreams, ap.DEFAULT_UPSTREAMS)
+        self.assertEqual(len(upstreams), 5)
+
+    def test_load_config_respects_empty_scope_when_all_disabled(self):
+        # Fail-closed: admin disable SEMUA provider (set kosong) -> scope TETAP kosong,
+        # BUKAN kembali ke DEFAULT_UPSTREAMS (jangan resurrect provider yang dimatikan).
+        with mock.patch.object(ap, "_load_config_db", return_value=({}, {}, set())), \
+             mock.patch.object(ap, "DEFAULT_CONFIG_FILE", "/nonexistent/empty.json"):
+            cfg, gmap, upstreams = ap.load_config()
+        self.assertEqual(upstreams, set())
+
+    def test_load_config_file_fallback_respects_empty_scope(self):
+        # Fail-closed di jalur file: key "upstreams": [] eksplisit -> scope kosong,
+        # BUKAN fallback default 5 (DB down + admin matikan semua = tetap tidak diproses).
+        fake_file = "{}"
+        with mock.patch.object(ap, "_load_config_db", return_value=None), \
+             mock.patch.object(ap, "DEFAULT_CONFIG_FILE", fake_file), \
+             mock.patch("builtins.open", mock.mock_open(read_data='{"upstreams": []}')):
+            cfg, gmap, upstreams = ap.load_config()
+        self.assertEqual(upstreams, set())
+
+    def test_load_config_file_fallback_defaults_when_key_missing(self):
+        # File lama tanpa key "upstreams" -> fallback default 5 (kompatibilitas).
+        with mock.patch.object(ap, "_load_config_db", return_value=None), \
+             mock.patch.object(ap, "DEFAULT_CONFIG_FILE", "/x/legacy.json"), \
+             mock.patch("builtins.open", mock.mock_open(read_data='{"configs": [], "globals": []}')):
+            cfg, gmap, upstreams = ap.load_config()
+        self.assertEqual(upstreams, ap.DEFAULT_UPSTREAMS)
+
+    def test_load_config_db_scope_from_enabled_rows(self):
+        # Scope = upstream dengan auto_pricing_enabled TRUE dari DB.
+        class FakeCur:
+            def __init__(self):
+                self.results = [
+                    [],  # auto_pricing_config
+                    [],  # global_trigger_pct
+                    [("commandcode", True), ("opencode-go", True), ("z-ai", False)],  # all rows
+                ]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def execute(self, sql, params=None):
+                pass
+
+            def fetchall(self):
+                return self.results.pop(0)
+
+        class FakeConn:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def cursor(self):
+                return FakeCur()
+
+        class FakePsycopg:
+            @staticmethod
+            def connect(*a, **kw):
+                return FakeConn()
+
+        with mock.patch.object(ap, "psycopg", FakePsycopg):
+            out, gmap, upstreams = ap._load_config_db()
+        self.assertEqual(upstreams, {"commandcode", "opencode-go"})
+
     def test_delayed_data_is_independent(self):
         self.assertFalse(ap.orderbook_is_delayed(100, now=219))
         self.assertTrue(ap.orderbook_is_delayed(100, now=220))
@@ -540,7 +615,7 @@ class TestRunCycleRegression(unittest.TestCase):
                 captured["cycles"] = obj.get("cycles", [])
 
         with mock.patch.object(ap, "get_catalog", return_value=catalog), \
-             mock.patch.object(ap, "load_config", return_value=({}, {})), \
+             mock.patch.object(ap, "load_config", return_value=({}, {}, ap.DEFAULT_UPSTREAMS)), \
              mock.patch.object(ap, "load_hold_state", return_value={}), \
              mock.patch.object(ap, "get_market_min", return_value=market), \
              mock.patch.object(ap, "get_asks_enabled",

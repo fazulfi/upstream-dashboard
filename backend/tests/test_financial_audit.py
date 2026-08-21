@@ -18,6 +18,9 @@ class FakeCur:
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
 
+    def fetchone(self):
+        return None
+
 
 class FakeConn:
     def __init__(self):

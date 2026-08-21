@@ -516,6 +516,9 @@
 .ap-tab:hover { color: var(--text, #ededed); background: transparent; }
 .ap-tab.active { color: var(--text, #ededed); border-bottom-color: var(--accent, #0080ff); }
 .ap-in { display: flex; flex-direction: column; gap: 14px; }
+.ap-scope-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.ap-scope-toggle input { accent-color: var(--accent, #0080ff); width: 15px; height: 15px; cursor: pointer; }
+.ap-scope-toggle span { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text3, #6f6f6f); letter-spacing: 0.4px; }
 .secret-box {
   font-family: var(--font-mono); background: var(--layer, #000); border: 1px solid var(--border, #292929);
   border-radius: var(--radius, 4px); padding: 8px 10px; font-size: 12px; word-break: break-all;

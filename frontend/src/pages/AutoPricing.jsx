@@ -154,6 +154,25 @@ export default function AutoPricing() {
     } catch (e) { setNote('Error: ' + e.message); } finally { setSavingGlobal(null); }
   };
 
+  const toggleScope = async (upstream, enabled) => {
+    setSavingGlobal(upstream); setNote('');
+    try {
+      const r = await apiFetch('/api/auto-pricing/scope', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upstream, enabled }),
+      });
+      const d = await r.json();
+      if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
+      else {
+        setNote(enabled
+          ? `✓ ${upstream} masuk scope auto-pricing (cycle berikutnya diproses)`
+          : `✓ ${upstream} dikeluarkan dari scope — TIDAK diproses cycle berikutnya`);
+        setTimeout(reloadGlobals, 300);
+      }
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSavingGlobal(null); }
+  };
+
   return (
     <div className="page">
       <div className="kpis">
@@ -180,8 +199,8 @@ export default function AutoPricing() {
       </div>
 
       <section className="panel" style={{ marginBottom: 16 }}>
-        <div className="panel-head"><div><h2>Trigger global · per provider</h2>
-          <div className="sub">default trigger% utk semua model provider ini — per-model override tetap menang. Kosongkan utk pakai default 10%.</div>
+        <div className="panel-head"><div><h2>Trigger global & scope · per provider</h2>
+          <div className="sub">default trigger% utk semua model provider ini — per-model override tetap menang. Kosongkan utk pakai default 10% · matikan utk keluarkan provider dari auto-pricing.</div>
         </div></div>
         <div className="pricing-global-grid">
           {(globalsData?.globals ? Object.keys(globalsData.globals).sort() : []).map(upstream => {
@@ -189,6 +208,11 @@ export default function AutoPricing() {
             return (
               <div className="pricing-global" key={upstream}>
                 <div className="pricing-row-head"><strong>{upstream}</strong>
+                  <label className="ap-scope-toggle" title={cfg.auto_pricing_enabled === false ? 'nonaktif — tidak diproses' : 'aktif — diproses tiap cycle'}>
+                    <input type="checkbox" checked={cfg.auto_pricing_enabled !== false} disabled={savingGlobal === upstream}
+                      onChange={e => toggleScope(upstream, e.target.checked)} />
+                    <span>{cfg.auto_pricing_enabled === false ? 'off' : 'on'}</span>
+                  </label>
                   <button className="btn btn-sm btn-primary" onClick={() => saveGlobalTrigger(upstream)} disabled={savingGlobal === upstream}>
                     {savingGlobal === upstream ? '…' : 'Simpan'}
                   </button>
