@@ -53,7 +53,6 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
         body: JSON.stringify({
           upstream,
           ...fieldNames.reduce((out, field) => ({ ...out, [field]: numberValue(cfg[field]) }), {}),
-          global_trigger_pct: numberValue(cfg.global_trigger_pct),
         }),
       });
       const data = await response.json();
@@ -146,14 +145,14 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
       {message && <div className={message.startsWith('Error') ? 'batch-note pricing-error' : 'batch-note'} role="status">{message}</div>}
 
       <section className="panel pricing-section">
-        <div className="panel-head"><div><h3>Global per Upstream</h3><div className="sub">Caps, revenue shares, and the default trigger band applied to every model of this upstream.</div></div></div>
+        <div className="panel-head"><div><h3>Global per Upstream</h3><div className="sub">Caps and revenue shares per upstream — trigger global kini di halaman Auto Pricing.</div></div></div>
         <div className="pricing-global-grid">
           {upstreamNames.map(upstream => {
             const cfg = { ...globals[upstream], ...(globalForms[upstream] || {}) };
             const key = actionKey('global', upstream);
             return <div className="pricing-global" key={upstream}>
               <div className="pricing-row-head"><strong>{upstream}</strong><button className="btn btn-sm btn-primary" onClick={() => saveGlobal(upstream)} disabled={busy?.startsWith('global-')}>Simpan</button></div>
-              {[...fieldNames, 'global_trigger_pct'].map(field => <label className="pricing-field" key={field}><span>{field}</span><input type="number" step="0.0001" value={cfg[field] ?? ''} onChange={event => updateGlobalForm(upstream, field, event.target.value)} /></label>)}
+              {fieldNames.map(field => <label className="pricing-field" key={field}><span>{field}</span><input type="number" step="0.0001" value={cfg[field] ?? ''} onChange={event => updateGlobalForm(upstream, field, event.target.value)} /></label>)}
               {busy === key && <span className="pricing-saving">Menyimpan…</span>}
             </div>;
           })}

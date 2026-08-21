@@ -15,13 +15,14 @@ describe('PricingPage', () => {
     expect(screen.getAllByText(/ask/i).length).toBeGreaterThan(0);
   });
 
-  it('renders global_trigger_pct field (config global per provider)', () => {
+  it('renders global per upstream without trigger field (trigger ada di Auto Pricing)', () => {
     render(<PricingPage
       globals={{ clinepass: { max_ask_pct: 0.05, global_trigger_pct: 15 } }}
       overrides={[]}
       orderbook={[]}
     />);
-    expect(screen.getAllByText(/global_trigger_pct/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/max_ask_pct/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/global_trigger_pct/i)).not.toBeInTheDocument();
   });
 
   it('shows Set manual ask action on orderbook rows', () => {
