@@ -71,3 +71,50 @@ Soften the ambient mesh gradient in `Layout.jsx` or `index.css` so it provides a
 - [ ] Light Mode cards are visually translucent (opacity <= 0.25) but maintain WCAG AA text contrast for all primary text elements.
 - [ ] Nested inputs/buttons use solid translucent overlays without additional `backdrop-filter` rules.
 
+## 2026-08-23T11:25:21Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Step 9 — Assemble and Validate (Ready for launch — awaiting user approval)
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: A small focused team
+
+The user wants to perfect the "iOS 26" / VisionOS Light Mode Glass UI. The current implementation uses a flat `rgba()` fill which looks too milky, flat, and plastic. We need to implement an ultra-glossy, highly refractive liquid glass material for `.ios-glass-card` using a multi-stop directional linear gradient and precise specular 3D edge shadowing.
+
+Working directory: c:\Users\faizz\upstream-dashboard\frontend
+Integrity mode: development
+
+This is a single self-contained fix; keep it small and focused.
+
+## Requirements
+
+### R1. Implement Authentic VisionOS 3D Glossy Light Glass Background
+Revise `index.css` and `theme.jsx` to use an ultra-glossy Light Mode glass. Replace the flat `rgba()` background for `.theme-light` `--card-bg` and `.ios-glass-card` with the following physical glass sheen gradient:
+```css
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(255, 255, 255, 0.30) 40%,
+    rgba(255, 255, 255, 0.15) 70%,
+    rgba(255, 255, 255, 0.40) 100%
+  );
+```
+
+### R2. Implement Authentic Specular Edge & Refractive Filters
+Update the `.theme-light` shadows and filters to include authentic Apple specular rims and refractive optical filters:
+- **Shadow/Highlight**: Combine `inset 0 1px 1px 0 rgba(255, 255, 255, 0.85)` (top specular), `inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04)` (bottom Fresnel), `0 4px 16px -2px rgba(0, 0, 0, 0.06)` (contact shadow), and `0 16px 36px -4px rgba(0, 0, 0, 0.10)` (deep elevation).
+- **Border**: `1px solid rgba(255, 255, 255, 0.45)`
+- **Filters**: Update `.ios-glass-card` filter to `blur(28px) saturate(190%) brightness(105%)`.
+
+### R3. Maintain Test Integrity
+The visual overhaul must not break any existing React component logic or structure.
+
+## Acceptance Criteria
+
+### Verification
+- [ ] `npm run build` completes successfully.
+- [ ] `npx vitest run` passes all 65 existing tests (no component logic broken).
+- [ ] Light Mode cards visibly feature a multi-stop directional `linear-gradient` background.
+- [ ] Light Mode cards utilize the `brightness(105%)` optical modifier on their `backdrop-filter`.
+
+
