@@ -31,21 +31,20 @@ export default function Layout() {
   };
 
   return (
-    <div className="layout min-h-screen bg-zinc-950 text-zinc-100 flex">
-      {/* Sidebar navigation */}
+    <div className="layout min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+      {/* Mobile Drawer */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main content wrapper */}
-      <div className="main flex-1 flex flex-col min-w-0 lg:pl-64">
-        <Topbar
-          onOpenSearch={() => setSearchOpen(true)}
-          onToggleSidebar={toggleSidebar}
-        />
+      {/* Topbar Header */}
+      <Topbar
+        onOpenSearch={() => setSearchOpen(true)}
+        onToggleSidebar={toggleSidebar}
+      />
 
-        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
-          <Outlet context={{ data }} />
-        </main>
-      </div>
+      {/* Main Content Workspace (Full Width) */}
+      <main className="main flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <Outlet context={{ data }} />
+      </main>
 
       {/* Global Command Palette */}
       <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />

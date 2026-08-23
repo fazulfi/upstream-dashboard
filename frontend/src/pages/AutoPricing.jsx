@@ -22,6 +22,7 @@ import { fmtCompetitorPrice } from '../lib/fmt';
 import KpiCard from '../components/KpiCard';
 import Badge from '../components/Badge';
 import { useToast } from '../components/Toast';
+import ModelDetailDrawer from '../components/ModelDetailDrawer';
 
 function defaultBand(upstream, mid) {
   return { trigger: 10 }; // uniform 10%
@@ -39,6 +40,7 @@ export default function AutoPricing() {
   const [globalForm, setGlobalForm] = useState({});
   const [savingGlobal, setSavingGlobal] = useState(null);
   const [searchModel, setSearchModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState(null);
   const { success, error: toastError, warn } = useToast();
 
   const cycles = useMemo(() => {
@@ -527,7 +529,8 @@ export default function AutoPricing() {
                   return (
                     <tr
                       key={i}
-                      className={`hover:bg-zinc-800/30 transition-colors ${
+                      onClick={() => setSelectedModel(c)}
+                      className={`hover:bg-zinc-800/40 transition-colors cursor-pointer ${
                         !synced && c.target ? 'row-dirty bg-amber-500/5' : ''
                       }`}
                     >
@@ -629,6 +632,14 @@ export default function AutoPricing() {
           {data?.log || '—'}
         </pre>
       </section>
+
+      {/* Slide-out Inspector Drawer */}
+      <ModelDetailDrawer
+        model={selectedModel}
+        isOpen={Boolean(selectedModel)}
+        onClose={() => setSelectedModel(null)}
+        onUpdated={reload}
+      />
     </motion.div>
   );
 }

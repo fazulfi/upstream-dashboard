@@ -25,6 +25,7 @@ import { reliabilityApi, unwrap } from '../lib/reliabilityApi';
 import { useReliabilityStream } from '../hooks/useReliabilityStream';
 import KpiCard from '../components/KpiCard';
 import Badge from '../components/Badge';
+import ModelDetailDrawer from '../components/ModelDetailDrawer';
 
 const value = (obj, ...keys) => keys.reduce((found, key) => found ?? obj?.[key], undefined);
 
@@ -106,6 +107,7 @@ export default function Reliability() {
   const [events, setEvents] = useState([]);
   const [filter, setFilter] = useState({ provider: '', action: '', severity: '', search: '' });
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'undercut' | 'leader' | 'hold'
+  const [selectedModel, setSelectedModel] = useState(null);
   const [transition, setTransition] = useState(null);
   const [recoveryError, setRecoveryError] = useState(null);
 
@@ -427,7 +429,11 @@ export default function Reliability() {
                   const provColor = PROVIDER_COLORS[model.slug] || 'bg-zinc-800 text-zinc-300 border-zinc-700';
 
                   return (
-                    <tr key={`${model.slug}-${model.model_id}`} className="hover:bg-zinc-800/30 transition-colors">
+                    <tr
+                      key={`${model.slug}-${model.model_id}`}
+                      onClick={() => setSelectedModel(model)}
+                      className="hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                    >
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border font-sans ${provColor}`}>
                           {model.slug || '—'}
@@ -611,6 +617,14 @@ export default function Reliability() {
           Transition outcome is unknown. Verify daemon state before retrying.
         </div>
       )}
+
+      {/* Slide-out Inspector Drawer */}
+      <ModelDetailDrawer
+        model={selectedModel}
+        isOpen={Boolean(selectedModel)}
+        onClose={() => setSelectedModel(null)}
+        onUpdated={recover}
+      />
     </div>
   );
 }
