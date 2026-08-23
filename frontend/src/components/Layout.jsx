@@ -1,45 +1,54 @@
-import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import Topbar from './Topbar';
+import CommandPalette from './CommandPalette';
 import { useApi } from '../hooks/useApi';
 
-const TITLES = {
-  '': { crumb: 'Reliability / Overview', title: 'Reliability' },
-  '/': { crumb: 'Reliability / Overview', title: 'Reliability' },
-  '/auto-pricing': { crumb: 'Publisher / Auto Pricing', title: 'Auto Pricing' },
-  '/pricing': { crumb: 'Publisher / Pricing', title: 'Pricing' },
-  '/settings': { crumb: 'System / Settings', title: 'Settings' },
-};
-
 export default function Layout() {
-  const loc = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { data } = useApi('/api/data', 15000);
-  const t = TITLES[loc.pathname] || TITLES['/'];
-  const bal = data?.balances || {};
 
-  const toggleMenu = () => document.querySelector('.sidebar')?.classList.toggle('open');
+  // Global keyboard shortcut: Ctrl+K or Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarOpen((prev) => !prev);
+    const sidebarEl = document.querySelector('.sidebar');
+    if (sidebarEl) {
+      sidebarEl.classList.toggle('open');
+    }
+  };
 
   return (
-    <div className="layout">
-      <Sidebar account={data?.account} onToggle={toggleMenu} />
-      <div className="main">
-        <header className="topbar">
-          <button className="menu-btn" onClick={toggleMenu} aria-label="Menu">☰</button>
-          <div className="topbar-title">
-            <div className="crumbs"><b>{t.crumb.split('/')[0]}</b> / {t.crumb.split('/')[1]}</div>
-            <h1>{t.title}</h1>
-          </div>
-          {bal.publisher_earnings != null && (
-            <span className="top-earn tnum">
-              <span className="t-label">Balance</span>
-              ${Number(bal.publisher_earnings).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          )}
-          <span className="live-pill"><i />Live</span>
-          <span className="updated tnum">{data?.refreshed ? `updated ${data.refreshed}` : ''}</span>
-        </header>
-        <Outlet context={{ data }} />
+    <div className="layout min-h-screen bg-zinc-950 text-zinc-100 flex">
+      {/* Sidebar navigation */}
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Main content wrapper */}
+      <div className="main flex-1 flex flex-col min-w-0 lg:pl-64">
+        <Topbar
+          onOpenSearch={() => setSearchOpen(true)}
+          onToggleSidebar={toggleSidebar}
+        />
+
+        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
+          <Outlet context={{ data }} />
+        </main>
       </div>
+
+      {/* Global Command Palette */}
+      <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

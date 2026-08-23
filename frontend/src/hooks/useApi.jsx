@@ -12,6 +12,9 @@ export function getSessionToken() {
 export function setSessionToken(tok) {
   try { if (tok) sessionStorage.setItem(TOKEN_KEY, tok); else sessionStorage.removeItem(TOKEN_KEY); } catch { /* noop */ }
 }
+export function clearSessionToken() {
+  setSessionToken('');
+}
 
 // DEPRECATED: X-Auth password dari env. JANGAN set VITE_DASHBOARD_PASSWORD di
 // produksi — password itu bocor ke bundle publik. Pakai /api/login + token.
