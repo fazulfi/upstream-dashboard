@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
   Settings as SettingsIcon,
   KeyRound,
@@ -12,6 +13,7 @@ import {
   AlertTriangle,
   Lock,
   LogOut,
+  Cpu,
 } from 'lucide-react';
 import { usd, loginWithPassword, getSessionToken, clearSessionToken, useApi } from '../hooks/useApi';
 import FinanceStatus from '../components/FinanceStatus';
@@ -49,7 +51,7 @@ export default function Settings() {
     setBusy(true);
     try {
       await loginWithPassword(pw);
-      success('Authentication successful — 24h session token issued.');
+      success('Authentication successful — 24h session token active.');
       setPw('');
       setTimeout(() => window.location.reload(), 600);
     } catch (err) {
@@ -65,23 +67,43 @@ export default function Settings() {
     setTimeout(() => window.location.reload(), 400);
   };
 
+  const items = [
+    { label: 'Account', value: data?.account?.displayName || '—', sub: data?.account?.email || 'publisher@upstream.internal' },
+    { label: 'Publisher role', value: 'publisher + consumer', sub: 'InferHub' },
+    { label: 'Publisher earnings (USDC)', value: usd(bal.publisher_earnings), sub: 'live' },
+    { label: 'Fiat pending', value: usd(bal.fiat_pendings), sub: 'settlement' },
+    { label: 'Active fleet', value: `${data?.fleet_summary?.ok_total || 0} / ${data?.fleet_summary?.total || 0}`, sub: 'ok / total providers' },
+    { label: 'Data refresh', value: '15s frontend · 60s daemon', sub: `frontend poll interval · source ${data?.ts || ''}` },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-800/80">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-              Platform Configuration
-            </span>
-            <span className="text-xs text-zinc-500 font-mono">System & Node Diagnostics</span>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="page space-y-6 max-w-7xl mx-auto"
+    >
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 p-6 shadow-xl backdrop-blur-xl">
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                <SettingsIcon size={11} className="text-indigo-400" />
+                Platform Configuration · Node Security
+              </span>
+              <span className="text-xs text-zinc-500 font-mono hidden sm:inline">
+                System Diagnostics
+              </span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight">
+              Settings & Security Gate
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl">
+              Operator session authentication, node infrastructure topology, and decision-grade finance verification.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight">
-            System Settings & Security Gate
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
-            Operator authentication, node architecture diagnostics, and decision-grade finance verification.
-          </p>
         </div>
       </div>
 
@@ -89,164 +111,152 @@ export default function Settings() {
         {/* Left Column (2 cols): System Overview & Bento Grid */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account & Fleet Panel */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
+            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-zinc-100">Deployment & Fleet Summary</h3>
-                <p className="text-xs text-zinc-400">Connected InferHub node and balance state</p>
+                <h2 className="text-sm font-bold text-zinc-100">System · Account</h2>
+                <div className="sub text-xs text-zinc-400 mt-0.5">About this deployment</div>
               </div>
               <Badge kind="ok" dot>
-                Online
+                Connected
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Node Identity</div>
-                <div className="font-bold text-zinc-200 mt-1">{data?.account?.displayName || 'InferHub Publisher'}</div>
-                <div className="text-[11px] text-zinc-500">{data?.account?.email || 'publisher@upstream.internal'}</div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Publisher Earnings</div>
-                <div className="font-mono font-bold text-emerald-400 text-sm mt-1">
-                  {usd(bal.publisher_earnings)} USDC
+            <div className="settings-list grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {items.map((it, i) => (
+                <div
+                  className="setting-row p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 flex flex-col justify-between hover:border-zinc-700 transition-colors shadow-sm"
+                  key={i}
+                >
+                  <div>
+                    <div className="setting-label text-[10px] font-mono font-bold uppercase text-zinc-400 tracking-wider">
+                      {it.label}
+                    </div>
+                    <div className="setting-sub text-[11px] text-zinc-500 mt-0.5">{it.sub}</div>
+                  </div>
+                  <div className="setting-value tnum font-mono font-bold text-zinc-100 text-sm mt-2">
+                    {it.value}
+                  </div>
                 </div>
-                <div className="text-[11px] text-zinc-500">Live balance</div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Active Provider Fleet</div>
-                <div className="font-mono font-bold text-zinc-200 mt-1">
-                  {data?.fleet_summary?.ok_total || 0} / {data?.fleet_summary?.total || 0} OK
-                </div>
-                <div className="text-[11px] text-zinc-500">Healthy provider connections</div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Data Poll Cadence</div>
-                <div className="font-mono font-bold text-zinc-200 mt-1">15s SWR · 60s Daemon</div>
-                <div className="text-[11px] text-zinc-500">Realtime SSE fallback</div>
-              </div>
+              ))}
             </div>
-          </div>
+          </section>
 
           {/* Architecture Topology */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
+            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-zinc-100">Hybrid Architecture Topology</h3>
-                <p className="text-xs text-zinc-400">Production multi-tier deployment spec</p>
+                <h2 className="text-sm font-bold text-zinc-100">Architecture</h2>
+                <div className="sub text-xs text-zinc-400 mt-0.5">hybrid deployment</div>
               </div>
               <Server size={16} className="text-sky-400" />
             </div>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
+            <div className="settings-list space-y-2.5 text-xs">
+              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
                 <div className="flex items-center gap-3">
                   <Globe size={16} className="text-sky-400" />
                   <div>
-                    <div className="font-semibold text-zinc-200">Frontend Web Surface</div>
-                    <div className="text-[11px] text-zinc-500">React 19 · Vite · Tailwind v4 · Vercel Edge</div>
+                    <div className="setting-label font-bold text-zinc-200">Frontend</div>
+                    <div className="setting-sub text-[11px] text-zinc-500">React · Vite · Vercel edge</div>
                   </div>
                 </div>
-                <Badge kind="ok">Hosted</Badge>
+                <div className="setting-value font-mono font-bold text-emerald-400">hosted</div>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
+              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
                 <div className="flex items-center gap-3">
                   <Server size={16} className="text-indigo-400" />
                   <div>
-                    <div className="font-semibold text-zinc-200">Backend API & Control Plane</div>
-                    <div className="text-[11px] text-zinc-500">Flask · Waitress · Nginx TLS · VPS (82.25.62.204)</div>
+                    <div className="setting-label font-bold text-zinc-200">Backend API</div>
+                    <div className="setting-sub text-[11px] text-zinc-500">Flask · waitress · nginx TLS</div>
                   </div>
                 </div>
-                <Badge kind="ok">Operational</Badge>
+                <div className="setting-value tnum font-mono font-bold text-sky-400">ops.budgezen.com</div>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
+              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
                 <div className="flex items-center gap-3">
                   <Database size={16} className="text-emerald-400" />
                   <div>
-                    <div className="font-semibold text-zinc-200">PostgreSQL Primary Ledger</div>
-                    <div className="text-[11px] text-zinc-500">Authoritative Schema (`memory.*`)</div>
+                    <div className="setting-label font-bold text-zinc-200">Real-time source</div>
+                    <div className="setting-sub text-[11px] text-zinc-500">InferHub daemon · every 60s · backend REST/SSE</div>
                   </div>
                 </div>
-                <Badge kind="ok">Synced</Badge>
+                <div className="setting-value font-mono font-bold text-emerald-400">active</div>
               </div>
             </div>
-          </div>
+          </section>
         </div>
 
         {/* Right Column (1 col): Security Session & Diagnostics */}
         <div className="space-y-6">
           {/* Session Token Card */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
+            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <Lock size={15} className="text-sky-400" />
-                <h3 className="text-sm font-bold text-zinc-100">Operator Session</h3>
+                <Lock size={16} className="text-sky-400" />
+                <h2 className="text-sm font-bold text-zinc-100">Session</h2>
               </div>
-              <Badge kind={hasToken ? 'ok' : 'warn'} dot>
-                {hasToken ? 'Active (24h)' : 'Unauthenticated'}
-              </Badge>
+              <div className="setting-value font-mono text-xs font-bold text-zinc-300">
+                {hasToken ? 'token aktif' : 'belum login'}
+              </div>
             </div>
 
-            <p className="text-xs text-zinc-400">
-              Session tokens enable mutation endpoints (Arm/Disarm, Overrides, Payout sync) without storing raw passwords in browser storage.
-            </p>
+            <div className="sub text-xs text-zinc-400 leading-relaxed">
+              login sekali — token sesi (24h), password tidak disimpan di browser
+            </div>
 
             {hasToken ? (
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center gap-2">
+              <div className="space-y-3 pt-1">
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center gap-2.5">
                   <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
-                  <span>Valid session token loaded in browser memory.</span>
+                  <span>Token aktif dalam sessionStorage.</span>
                 </div>
                 <button
                   onClick={doLogout}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
                   <LogOut size={14} />
-                  <span>Clear Session Token</span>
+                  <span>Hapus Token Sesi</span>
                 </button>
               </div>
             ) : (
-              <form onSubmit={doLogin} className="space-y-3">
+              <form onSubmit={doLogin} className="space-y-3 pt-1">
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-zinc-400">Dashboard Password</label>
                   <input
                     type="password"
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
-                    placeholder="Enter operator password"
-                    className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-sky-500"
+                    placeholder="Dashboard password"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200 outline-none focus:border-sky-500 font-mono"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={busy || !pw}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs shadow-sm disabled:opacity-50 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-sky-500/10 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   <KeyRound size={14} />
-                  <span>{busy ? 'Authenticating…' : 'Authenticate Session'}</span>
+                  <span>{busy ? 'Login…' : 'Login'}</span>
                 </button>
               </form>
             )}
-          </div>
+          </section>
 
           {/* Decision-Grade Finance Status */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
+            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-zinc-100">Finance Verification</h3>
-                <p className="text-xs text-zinc-400">Rule engine verification status</p>
+                <h2 className="text-sm font-bold text-zinc-100">Finance</h2>
+                <div className="sub text-xs text-zinc-400 mt-0.5">decision-grade metrics</div>
               </div>
               <ShieldCheck size={16} className="text-emerald-400" />
             </div>
             <FinanceStatus metrics={financeMetrics} variance={financeData?.variance ?? ''} />
-          </div>
+          </section>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
