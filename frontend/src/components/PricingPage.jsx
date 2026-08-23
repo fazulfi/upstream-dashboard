@@ -268,7 +268,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             return (
               <div
                 key={upstream}
-                className="pricing-global p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
+                className="pricing-global p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors"
               >
                 <div className="pricing-row-head flex items-center justify-between">
                   <strong className="text-sm font-bold text-zinc-900 dark:text-white">{upstream}</strong>
@@ -292,7 +292,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                         step="0.0001"
                         value={cfg[field] ?? ''}
                         onChange={(e) => updateGlobalForm(upstream, field, e.target.value)}
-                        className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500 shadow-inner"
+                        className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono text-[var(--text-title)] outline-none focus:border-sky-500 shadow-inner"
                       />
                     </label>
                   ))}
@@ -325,7 +325,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                 step={field.endsWith('_pct') ? '0.0001' : undefined}
                 value={overrideForm[field]}
                 onChange={(e) => setOverrideForm((prev) => ({ ...prev, [field]: e.target.value }))}
-                className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-zinc-900 dark:text-white outline-none focus:border-sky-500 font-mono shadow-inner"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3.5 py-2 text-xs sm:text-sm text-[var(--text-title)] outline-none focus:border-sky-500 font-mono shadow-inner"
               />
             </label>
           ))}
@@ -342,7 +342,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
 
         <div className="table-scroll overflow-x-auto border border-black/10 dark:border-white/10 rounded-2xl">
           <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-            <thead className="bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+            <thead className="bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
               <tr>
                 <th className="px-5 py-3.5">Upstream / model</th>
                 <th className="px-5 py-3.5 text-center">trigger_pct</th>
@@ -403,14 +403,14 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
               placeholder="Search model..."
               value={searchOrderbook}
               onChange={(e) => setSearchOrderbook(e.target.value)}
-              className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
             />
           </div>
         </div>
 
         <div className="table-scroll overflow-x-auto max-h-[500px]">
           <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
               <tr>
                 <th className="px-5 py-3.5">Model</th>
                 <th className="px-5 py-3.5 text-right">Min ask</th>
@@ -495,7 +495,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   type="text"
                   value={askForm.upstream}
                   onChange={(e) => setAskForm((prev) => ({ ...prev, upstream: e.target.value }))}
-                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-2 text-[var(--text-title)] font-mono outline-none focus:border-sky-500"
                 />
               </label>
 
@@ -510,7 +510,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   onChange={(e) =>
                     setAskForm((prev) => ({ ...prev, ask_input_per_mtok: e.target.value }))
                   }
-                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none focus:border-sky-500"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-2 text-[var(--text-title)] font-mono outline-none focus:border-sky-500"
                 />
               </label>
 
@@ -525,7 +525,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   onChange={(e) =>
                     setAskForm((prev) => ({ ...prev, ask_output_per_mtok: e.target.value }))
                   }
-                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none focus:border-sky-500"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-2 text-[var(--text-title)] font-mono outline-none focus:border-sky-500"
                 />
               </label>
             </div>

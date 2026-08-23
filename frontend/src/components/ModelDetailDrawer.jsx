@@ -135,7 +135,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Price Economics Breakdown */}
-            <div className="ios-glass-card p-5 space-y-4">
+            <div className="rounded-2xl p-5 space-y-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
               <div className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                 Market Economics
               </div>
@@ -171,8 +171,8 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
               )}
             </div>
 
-            {/* Quick Action 1: Set Manual Ask */}
-            <form onSubmit={handleSaveAsk} className="ios-glass-card p-5 space-y-3.5">
+            {/* Quick Action 1: Set Direct Manual Ask */}
+            <form onSubmit={handleSaveAsk} className="rounded-2xl p-5 space-y-3.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Set Direct Manual Ask
@@ -187,7 +187,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
                   placeholder={ourPrice ? `$${ourPrice.toFixed(4)}` : 'e.g. 0.0800'}
                   value={askInput}
                   onChange={(e) => setAskInput(e.target.value)}
-                  className="flex-1 bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500 shadow-inner"
+                  className="flex-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3.5 py-2 text-xs sm:text-sm font-mono text-[var(--text-title)] outline-none focus:border-sky-500 shadow-inner"
                 />
                 <button
                   type="submit"
@@ -200,7 +200,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
             </form>
 
             {/* Quick Action 2: Trigger Percentage Tuning */}
-            <form onSubmit={handleSaveTrigger} className="ios-glass-card p-5 space-y-3.5">
+            <form onSubmit={handleSaveTrigger} className="rounded-2xl p-5 space-y-3.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Auto-Pricing Trigger (%)
@@ -215,7 +215,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
                   placeholder="10 (default)"
                   value={triggerInput}
                   onChange={(e) => setTriggerInput(e.target.value)}
-                  className="flex-1 bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500 shadow-inner"
+                  className="flex-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3.5 py-2 text-xs sm:text-sm font-mono text-[var(--text-title)] outline-none focus:border-sky-500 shadow-inner"
                 />
                 <button
                   type="submit"
@@ -228,7 +228,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
             </form>
 
             {/* Model Metadata List */}
-            <div className="ios-glass-card p-5 space-y-3 text-xs sm:text-sm font-mono">
+            <div className="rounded-2xl p-5 space-y-3 text-xs sm:text-sm font-mono border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
               <div className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
                 Telemetry Specs
               </div>

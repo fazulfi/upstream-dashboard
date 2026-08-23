@@ -78,7 +78,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
         </div>
 
         {/* Center: Desktop Segmented Navigation Tabs (Apple Segmented Style) */}
-        <nav aria-label="Topbar Tabs" className="hidden lg:flex items-center gap-1.5 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl border border-black/10 dark:border-white/10 backdrop-blur-xl">
+        <nav aria-label="Topbar Tabs" className="hidden lg:flex items-center gap-1.5 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl border border-black/10 dark:border-white/10">
           {NAV_ITEMS.map((item) => {
             const Icon = item.Icon;
             return (
@@ -114,7 +114,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           {/* Command Palette Trigger */}
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
           >
             <Search size={14} />
             <span className="hidden md:inline">Quick search…</span>
@@ -128,7 +128,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
+            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>

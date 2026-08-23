@@ -115,7 +115,7 @@ export default function Settings() {
             <div className="settings-list grid grid-cols-1 sm:grid-cols-2 gap-4">
               {items.map((it, i) => (
                 <div
-                  className="setting-row p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
+                  className="setting-row p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors"
                   key={i}
                 >
                   <div>
@@ -143,7 +143,7 @@ export default function Settings() {
             </div>
 
             <div className="settings-list space-y-3 text-xs sm:text-sm">
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/80 dark:bg-black/40 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
                   <Globe size={18} className="text-sky-500" />
                   <div>
@@ -156,7 +156,7 @@ export default function Settings() {
                 </span>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/80 dark:bg-black/40 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
                   <Server size={18} className="text-indigo-500" />
                   <div>
@@ -167,7 +167,7 @@ export default function Settings() {
                 <div className="setting-value tnum font-mono font-bold text-sky-600 dark:text-sky-400">ops.budgezen.com</div>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/80 dark:bg-black/40 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
                   <Database size={18} className="text-emerald-500" />
                   <div>
@@ -229,7 +229,7 @@ export default function Settings() {
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
                     placeholder="Dashboard password"
-                    className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-zinc-900 dark:text-white outline-none focus:border-sky-500 font-mono shadow-inner"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3.5 py-2 text-xs sm:text-sm text-[var(--text-title)] outline-none focus:border-sky-500 font-mono shadow-inner"
                   />
                 </div>
                 <button

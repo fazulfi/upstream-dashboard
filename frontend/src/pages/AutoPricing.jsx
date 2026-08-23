@@ -359,7 +359,7 @@ export default function AutoPricing() {
 
         {/* Selected Provider Quick Control Strip (Compact & Zero Blocking!) */}
         {prov && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/80 dark:bg-black/40 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -443,7 +443,7 @@ export default function AutoPricing() {
         {/* Target Price Table */}
         <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
           <table className="w-full text-left text-sm border-collapse font-mono">
-            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] font-sans text-xs uppercase tracking-wider border-b border-black/10 dark:border-white/10 backdrop-blur-xl">
+            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] font-sans text-xs uppercase tracking-wider border-b border-black/10 dark:border-white/10">
               <tr>
                 <th className="px-5 py-3.5">Model ID</th>
                 <th className="px-5 py-3.5 text-right">Ask Saat Ini</th>
@@ -585,7 +585,7 @@ export default function AutoPricing() {
             <span>Copy Log</span>
           </button>
         </div>
-        <pre className="p-4 text-xs font-mono text-slate-800 dark:text-slate-200 bg-white/40 dark:bg-black/60 overflow-x-auto max-h-52 leading-relaxed">
+        <pre className="p-4 text-xs font-mono text-[var(--text-body)] bg-black/5 dark:bg-black/40 overflow-x-auto max-h-52 leading-relaxed">
           {data?.log || '—'}
         </pre>
       </section>

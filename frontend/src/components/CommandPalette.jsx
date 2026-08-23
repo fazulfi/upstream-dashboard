@@ -120,8 +120,8 @@ export default function CommandPalette({ isOpen, onClose }) {
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-xl rounded-2xl border border-black/10 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950 p-2 shadow-2xl backdrop-blur-3xl overflow-hidden font-sans">
-        <div className="flex items-center px-3 py-2.5 border-b border-black/10 dark:border-zinc-800/80 gap-3">
+      <div className="relative w-full max-w-xl rounded-2xl border border-black/10 dark:border-white/10 ios-glass-card p-2 shadow-2xl overflow-hidden font-sans">
+        <div className="flex items-center px-3 py-2.5 border-b border-black/10 dark:border-white/10 gap-3">
           <Search size={18} className="text-zinc-400 shrink-0" />
           <input
             type="text"
@@ -178,7 +178,7 @@ export default function CommandPalette({ isOpen, onClose }) {
           )}
         </div>
 
-        <div className="px-3 py-2 border-t border-black/10 dark:border-zinc-800/80 bg-slate-100/80 dark:bg-zinc-900/40 flex items-center justify-between text-[11px] text-zinc-500">
+        <div className="px-3 py-2 border-t border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex items-center justify-between text-[11px] text-zinc-500">
           <div className="flex items-center gap-2">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>

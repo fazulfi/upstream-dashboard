@@ -40,12 +40,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
       )}
 
       <aside
-        className={`sidebar fixed top-0 bottom-0 left-0 z-50 w-72 bg-white/95 dark:bg-zinc-950/98 backdrop-blur-2xl border-r border-black/10 dark:border-zinc-800/80 text-zinc-900 dark:text-zinc-100 flex flex-col transition-transform duration-200 ease-in-out ${
+        className={`sidebar fixed top-0 bottom-0 left-0 z-50 w-72 bg-[var(--nav-bg)] backdrop-blur-3xl border-r border-black/10 dark:border-white/10 text-[var(--text-title)] flex flex-col transition-transform duration-200 ease-in-out ${
           isOpen ? 'open translate-x-0 shadow-2xl' : '-translate-x-full lg:hidden'
         }`}
       >
         {/* Brand Header */}
-        <div className="h-14 px-5 border-b border-black/10 dark:border-zinc-800/80 flex items-center justify-between">
+        <div className="h-14 px-5 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-sky-500/20">
               U
@@ -60,7 +60,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
             aria-label="Close menu"
           >
             <X size={16} />
@@ -86,8 +86,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
                       className={({ isActive }) =>
                         `group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                           isActive
-                            ? 'active bg-black/5 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold border border-black/10 dark:border-zinc-700 shadow-sm'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-zinc-900 border border-transparent'
+                            ? 'active ios-pill-active font-extrabold'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 border border-transparent'
                         }`
                       }
                     >
@@ -104,7 +104,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
         </nav>
 
         {/* Footer & Theme Switcher */}
-        <div className="p-4 border-t border-black/10 dark:border-zinc-800/80 bg-slate-100/60 dark:bg-zinc-950/60 flex items-center justify-between text-xs">
+        <div className="p-4 border-t border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-zinc-600 dark:text-zinc-400 text-[11px] font-mono">Live Stream</span>
@@ -113,7 +113,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-1.5 rounded-lg border border-black/10 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shadow-sm"
+            className="p-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/10 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>

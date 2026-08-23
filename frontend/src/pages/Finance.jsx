@@ -205,7 +205,7 @@ export default function Finance() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-400 font-mono font-bold">
                   <span>DANA MASUK (PAYOUTS)</span>
                   <ArrowUpRight size={16} />
@@ -216,7 +216,7 @@ export default function Finance() {
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Saldo yang telah ditarik</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center justify-between text-xs text-rose-700 dark:text-rose-400 font-mono font-bold">
                   <span>BIAYA ASET & CAPEX</span>
                   <ArrowDownRight size={16} />
@@ -227,7 +227,7 @@ export default function Finance() {
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Biaya server & akun</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center justify-between text-xs text-sky-700 dark:text-sky-400 font-mono font-bold">
                   <span>LABA BERSIH AKHIR</span>
                   <Zap size={16} />
@@ -251,7 +251,7 @@ export default function Finance() {
               {providers.map((p) => (
                 <div
                   key={p.upstream_slug}
-                  className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
+                  className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
                 >
                   <div>
                     <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{p.upstream_slug}</div>
@@ -283,14 +283,14 @@ export default function Finance() {
                 placeholder="Cari Asset ID (A-001...) atau nama..."
                 value={assetSearch}
                 onChange={(e) => setAssetSearch(e.target.value)}
-                className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
               />
             </div>
 
             <select
               value={assetStatusFilter}
               onChange={(e) => setAssetStatusFilter(e.target.value)}
-              className="bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 outline-none cursor-pointer"
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3.5 py-2 text-xs sm:text-sm text-[var(--text-title)] outline-none cursor-pointer"
             >
               <option value="">Semua Status</option>
               <option value="active">Active</option>
@@ -303,7 +303,7 @@ export default function Finance() {
           <div className="ios-glass-card overflow-hidden">
             <div className="overflow-x-auto max-h-[500px]">
               <table className="w-full text-left text-xs sm:text-sm border-collapse font-mono">
-                <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+                <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
                   <tr>
                     <th className="px-5 py-3.5">Asset ID</th>
                     <th className="px-5 py-3.5">Provider</th>
@@ -362,7 +362,7 @@ export default function Finance() {
         <div className="ios-glass-card overflow-hidden">
           <div className="overflow-x-auto max-h-[500px]">
             <table className="w-full text-left text-xs sm:text-sm border-collapse font-mono">
-              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
                 <tr>
                   <th className="px-5 py-3.5">ID Transaksi</th>
                   <th className="px-5 py-3.5">Tanggal</th>

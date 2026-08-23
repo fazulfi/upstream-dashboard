@@ -48,19 +48,23 @@ export default function LoginGate({ children }) {
     <div className="login-wrap min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-300">
       {/* Apple iOS 26 Ambient Mesh Orbs */}
       <div
-        className="fixed top-1/4 left-1/4 w-[550px] h-[550px] rounded-full blur-[130px] pointer-events-none transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 60%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.40)',
-        }}
-      />
-      <div
-        className="fixed bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #a855f7 0%, #6366f1 60%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.35)',
-        }}
-      />
+        aria-hidden="true"
+        className="fixed inset-0 overflow-hidden pointer-events-none z-0 transition-opacity duration-700"
+        style={{ opacity: 'var(--mesh-opacity, 0.20)' }}
+      >
+        <div
+          className="absolute top-1/4 left-1/4 w-[560px] h-[560px] rounded-full blur-[140px]"
+          style={{
+            background: 'radial-gradient(circle, #38bdf8 0%, #7dd3fc 45%, transparent 75%)',
+          }}
+        />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-[520px] h-[520px] rounded-full blur-[150px]"
+          style={{
+            background: 'radial-gradient(circle, #c084fc 0%, #818cf8 45%, transparent 75%)',
+          }}
+        />
+      </div>
 
       {/* Login Card Container */}
       <motion.div
@@ -110,7 +114,7 @@ export default function LoginGate({ children }) {
                 onChange={(e) => setPw(e.target.value)}
                 autoFocus
                 placeholder="Dashboard password"
-                className="login-input w-full bg-white/70 dark:bg-black/50 border border-black/10 dark:border-white/15 rounded-xl px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono transition-all shadow-inner"
+                className="login-input w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono transition-all shadow-inner"
               />
             </div>
 
@@ -123,7 +127,7 @@ export default function LoginGate({ children }) {
                 value={operatorName}
                 onChange={(e) => setOperatorName(e.target.value)}
                 placeholder="Operator name (opsional, untuk audit)"
-                className="login-input w-full bg-white/70 dark:bg-black/50 border border-black/10 dark:border-white/15 rounded-xl px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono transition-all shadow-inner"
+                className="login-input w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono transition-all shadow-inner"
               />
             </div>
           </div>

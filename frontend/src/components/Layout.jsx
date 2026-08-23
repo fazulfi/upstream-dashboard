@@ -34,33 +34,39 @@ export default function Layout() {
     <div className="layout min-h-screen text-[var(--text-body)] flex flex-col font-sans relative overflow-x-hidden transition-colors duration-300">
       {/* ── Apple iOS 26 Spatial Ambient Mesh Gradient Refraction Wallpaper ── */}
       <div
-        className="fixed -top-16 -left-16 w-[700px] h-[700px] rounded-full blur-[130px] pointer-events-none z-0 transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 60%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.40)',
-        }}
-      />
-      <div
-        className="fixed top-8 -right-16 w-[750px] h-[750px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #a855f7 0%, #6366f1 60%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.35)',
-        }}
-      />
-      <div
-        className="fixed -bottom-16 left-1/4 w-[650px] h-[650px] rounded-full blur-[130px] pointer-events-none z-0 transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #34d399 0%, #059669 60%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.30)',
-        }}
-      />
-      <div
-        className="fixed top-1/2 right-1/4 w-[550px] h-[550px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, #fb7185 0%, #e11d48 55%, transparent 80%)',
-          opacity: 'var(--mesh-opacity, 0.25)',
-        }}
-      />
+        aria-hidden="true"
+        className="fixed inset-0 overflow-hidden pointer-events-none z-0 transition-opacity duration-700"
+        style={{ opacity: 'var(--mesh-opacity, 0.20)' }}
+      >
+        {/* Top-Left: Sky Blue */}
+        <div
+          className="absolute -top-20 -left-20 w-[720px] h-[720px] rounded-full blur-[140px]"
+          style={{
+            background: 'radial-gradient(circle, #38bdf8 0%, #7dd3fc 45%, transparent 75%)',
+          }}
+        />
+        {/* Top-Right: Violet / Indigo */}
+        <div
+          className="absolute top-4 -right-20 w-[780px] h-[780px] rounded-full blur-[150px]"
+          style={{
+            background: 'radial-gradient(circle, #c084fc 0%, #818cf8 45%, transparent 75%)',
+          }}
+        />
+        {/* Bottom-Left: Emerald / Mint */}
+        <div
+          className="absolute -bottom-20 left-1/4 w-[680px] h-[680px] rounded-full blur-[140px]"
+          style={{
+            background: 'radial-gradient(circle, #34d399 0%, #6ee7b7 45%, transparent 75%)',
+          }}
+        />
+        {/* Center-Right: Rose / Coral */}
+        <div
+          className="absolute top-1/2 right-1/4 w-[580px] h-[580px] rounded-full blur-[150px]"
+          style={{
+            background: 'radial-gradient(circle, #fb7185 0%, #fda4af 45%, transparent 75%)',
+          }}
+        />
+      </div>
 
       {/* Mobile Drawer */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

@@ -411,7 +411,7 @@ export default function Reliability() {
 
           <div className="rel-table-wrap overflow-x-auto max-h-[480px]">
             <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
                 <tr>
                   <th className="px-5 py-3.5">Provider</th>
                   <th className="px-5 py-3.5">Model</th>
