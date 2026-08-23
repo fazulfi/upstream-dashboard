@@ -397,7 +397,13 @@ export default function AutoPricing() {
                         onChange={(e) => toggleScope(upstream, e.target.checked)}
                         className="rounded border-zinc-700 text-sky-600 focus:ring-0"
                       />
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          isEnabled
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                            : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                        }`}
+                      >
                         {isEnabled ? 'on' : 'off'}
                       </span>
                     </label>
