@@ -196,17 +196,17 @@ export default function Reliability() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-800/80">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="eyebrow inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              <Radio size={11} className="animate-pulse" />
-              Realtime Telemetry Control
+            <span className="eyebrow inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <Radio size={11} />
+              Sistem Operasional
             </span>
-            <span className="text-xs text-zinc-500 font-mono">60s Loop Engine</span>
+            <span className="text-xs text-zinc-500 font-mono">Loop 60 Detik</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100">
-            Operations & Fleet Reliability
+            Reliability & Operations
           </h1>
           <p className="faint text-xs sm:text-sm text-zinc-400 mt-0.5">
-            Mission-control console for autonomous undercut loops, provider catalog health, and audited state guards.
+            Monitoring status daemon harga otomatis, inventaris model upstream, dan log mutasi harga.
           </p>
         </div>
 
@@ -329,28 +329,28 @@ export default function Reliability() {
       {/* ── 4. Four Specialized FinOps Metric Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Daemon Loop Service"
+          label="Status Layanan Daemon"
           value={value(current, 'service_status', 'status') || 'Healthy'}
-          sub="systemd active · 60s cycle"
+          sub="Siklus 60 detik"
           delta="100% Uptime"
           deltaDir="up"
           featured={armState}
           icon={Zap}
         />
         <KpiCard
-          label="Last Heartbeat & Latency"
+          label="Heartbeat & Latensi"
           value={formatClock(value(current, 'last_heartbeat', 'heartbeat_at'))}
-          sub={`Duration: ${value(current, 'duration_ms', 'cycle_duration_ms') ?? '1,482'} ms`}
+          sub={`Respon: ${value(current, 'duration_ms', 'cycle_duration_ms') ?? '1.482'} ms`}
           icon={Clock}
         />
         <KpiCard
-          label="Fleet Model Coverage"
-          value={`${value(current, 'model_count', 'models_processed') ?? models.length} Models`}
-          sub="5 Upstream Providers Active"
+          label="Cakupan Model Aktif"
+          value={`${value(current, 'model_count', 'models_processed') ?? models.length} Model`}
+          sub="5 Provider terhubung"
           icon={Layers}
         />
         <KpiCard
-          label="Database Freshness"
+          label="Sinkronisasi Database"
           value={formatClock(value(current, 'db_freshness', 'db_fresh_at'))}
           sub={`Holds: ${value(current, 'hold_count') ?? '0'} · Errors: ${value(current, 'error_count') ?? '0'}`}
           icon={Database}

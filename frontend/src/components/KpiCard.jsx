@@ -75,8 +75,8 @@ export default function KpiCard({
       </div>
 
       {/* Bottom Row: Context & Delta */}
-      <div className="flex items-center justify-between text-[11px] mt-1 pt-2 border-t border-zinc-800/40 text-zinc-500 font-mono">
-        <span className="truncate max-w-[180px]">{sub || '—'}</span>
+      <div className="flex items-center justify-between text-[11px] mt-1 pt-2 border-t border-zinc-800/40 text-zinc-500 font-mono gap-2">
+        <span className="truncate min-w-0">{sub || '—'}</span>
         {delta && (
           <span
             className={`inline-flex items-center gap-0.5 font-bold ${
