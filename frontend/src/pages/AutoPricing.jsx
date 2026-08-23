@@ -359,7 +359,7 @@ export default function AutoPricing() {
 
         {/* Selected Provider Quick Control Strip (Compact & Zero Blocking!) */}
         {prov && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/60 dark:bg-black/40 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/80 dark:bg-black/40 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none text-sm">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input

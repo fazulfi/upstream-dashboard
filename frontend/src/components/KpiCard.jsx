@@ -32,7 +32,7 @@ export default function KpiCard({
             className={`p-2.5 rounded-xl border ${
               featured
                 ? 'bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-300'
-                : 'bg-white/70 dark:bg-white/5 border-white/80 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-none text-zinc-700 dark:text-zinc-300'
+                : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-none text-zinc-700 dark:text-zinc-300'
             }`}
           >
             <Icon size={18} />

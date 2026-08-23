@@ -268,7 +268,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             return (
               <div
                 key={upstream}
-                className="pricing-global p-5 rounded-2xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
+                className="pricing-global p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
               >
                 <div className="pricing-row-head flex items-center justify-between">
                   <strong className="text-sm font-bold text-zinc-900 dark:text-white">{upstream}</strong>

@@ -205,7 +205,7 @@ export default function Finance() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-400 font-mono font-bold">
                   <span>DANA MASUK (PAYOUTS)</span>
                   <ArrowUpRight size={16} />
@@ -216,7 +216,7 @@ export default function Finance() {
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Saldo yang telah ditarik</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center justify-between text-xs text-rose-700 dark:text-rose-400 font-mono font-bold">
                   <span>BIAYA ASET & CAPEX</span>
                   <ArrowDownRight size={16} />
@@ -227,7 +227,7 @@ export default function Finance() {
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Biaya server & akun</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center justify-between text-xs text-sky-700 dark:text-sky-400 font-mono font-bold">
                   <span>LABA BERSIH AKHIR</span>
                   <Zap size={16} />
@@ -251,7 +251,7 @@ export default function Finance() {
               {providers.map((p) => (
                 <div
                   key={p.upstream_slug}
-                  className="p-4 rounded-2xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-black/40 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
+                  className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
                 >
                   <div>
                     <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{p.upstream_slug}</div>

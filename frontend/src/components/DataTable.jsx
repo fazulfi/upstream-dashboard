@@ -50,7 +50,7 @@ export default function DataTable({ columns, data, searchable = true, placeholde
   const pageCount = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
-    <div className="w-full flex flex-col rounded-2xl border border-black/10 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xl shadow-lg overflow-hidden">
+    <div className="w-full flex flex-col rounded-2xl border border-black/15 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/40 backdrop-blur-xl shadow-lg overflow-hidden">
       <div className="p-3 border-b border-black/10 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 bg-slate-100/70 dark:bg-zinc-900/60">
         {searchable && (
           <div className="relative flex-1 min-w-[200px] max-w-sm">

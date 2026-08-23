@@ -114,21 +114,21 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           {/* Command Palette Trigger */}
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
           >
             <Search size={14} />
             <span className="hidden md:inline">Quick search…</span>
             <kbd className="hidden md:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-black rounded border border-black/10 dark:border-white/10 text-zinc-500">
-              Ctrl+K
+              ⌘K
             </kbd>
           </button>
 
-          {/* Theme Switcher */}
+          {/* Theme switcher toggle */}
           <button
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-2 rounded-xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
+            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
