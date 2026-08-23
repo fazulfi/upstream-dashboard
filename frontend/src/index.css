@@ -2,117 +2,107 @@
 
 @layer base {
   :root {
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    --bg-base: #09090b;
-    --bg-surface: #121216;
-    --bg-elevated: #18181e;
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-highlight: rgba(255, 255, 255, 0.14);
-    --accent-sky: #38bdf8;
-    --accent-emerald: #10b981;
-    --accent-indigo: #6366f1;
-  }
-
-  .theme-light {
-    --bg-base: #f8fafc;
-    --bg-surface: #ffffff;
-    --bg-elevated: #f1f5f9;
-    --border-subtle: rgba(0, 0, 0, 0.08);
-    --border-highlight: rgba(0, 0, 0, 0.14);
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", -apple-system, sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+    --bg-base: #000000;
+    --bg-surface: rgba(255, 255, 255, 0.04);
+    --bg-elevated: rgba(255, 255, 255, 0.08);
+    --border-subtle: rgba(255, 255, 255, 0.12);
+    --border-highlight: rgba(255, 255, 255, 0.25);
+    --ios-blue: #0a84ff;
+    --ios-green: #30d158;
+    --ios-indigo: #5e5ce6;
+    --ios-amber: #ffd60a;
+    --ios-red: #ff453a;
   }
 
   body {
     background-color: var(--bg-base);
-    color: #f4f4f5;
+    color: #f5f5f7;
     font-family: var(--font-sans);
-    letter-spacing: -0.01em;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.012em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
   }
-
-  .theme-light body {
-    color: #09090b;
-  }
 }
 
-/* Glassmorphism & High-Precision Surfaces */
-.surface-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 1rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+/* iOS 18 Glossy Liquid Glass Surfaces */
+.ios-glass {
+  background: rgba(24, 24, 28, 0.65);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 12px 36px 0 rgba(0, 0, 0, 0.45);
+  border-radius: 1.25rem;
 }
 
-.surface-card:hover {
-  border-color: var(--border-highlight);
+.ios-glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+    0 8px 32px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 1.25rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.surface-elevated {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.75rem;
+.ios-glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+    0 14px 40px 0 rgba(0, 0, 0, 0.55);
 }
 
-.glow-ambient-sky {
-  box-shadow: 0 0 40px -10px rgba(56, 189, 248, 0.12);
+.ios-pill {
+  background: rgba(30, 30, 36, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
 }
 
-.glow-ambient-emerald {
-  box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.12);
+.ios-btn-primary {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
+    0 4px 16px rgba(2, 132, 199, 0.4);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.85rem;
+  transition: all 0.15s ease;
 }
 
-/* Number & Code Typography */
-.tnum,
+.ios-btn-primary:hover {
+  background: linear-gradient(180deg, #7dd3fc 0%, #0369a1 100%);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    0 6px 20px rgba(2, 132, 199, 0.55);
+}
+
+.ios-btn-emerald {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
+    0 4px 16px rgba(5, 150, 105, 0.4);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.85rem;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
-
-/* Scrollbar Customization */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Shimmer Loading Animation */
-@keyframes shimmerWave {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.shimmer-mask {
-  position: relative;
-  overflow: hidden;
-}
-
-.shimmer-mask::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.05) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  animation: shimmerWave 2s infinite;
 }

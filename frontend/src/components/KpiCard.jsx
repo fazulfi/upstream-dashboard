@@ -16,53 +16,53 @@ export default function KpiCard({
   return (
     <motion.div
       whileHover={{ y: -3, transition: { duration: 0.15 } }}
-      className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-colors ${
+      className={`ios-glass-card relative overflow-hidden p-5 flex flex-col justify-between ${
         featured
-          ? 'bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-sky-950/30 border-sky-500/30 shadow-lg shadow-sky-500/5'
-          : 'bg-zinc-900/40 hover:bg-zinc-900/70 border-zinc-800/80 hover:border-zinc-700/80 shadow-sm'
+          ? 'border-sky-400/40 shadow-sky-500/10'
+          : ''
       } ${className}`}
     >
       {/* Top Row: Label and Icon */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+        <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           {label}
         </span>
         {Icon && (
           <div
-            className={`p-2 rounded-xl border ${
+            className={`p-2.5 rounded-xl border ${
               featured
-                ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
-                : 'bg-zinc-800/60 border-zinc-700/50 text-zinc-400'
+                ? 'bg-sky-500/15 border-sky-400/30 text-sky-300'
+                : 'bg-white/5 border-white/10 text-zinc-300'
             }`}
           >
-            <Icon size={16} />
+            <Icon size={18} />
           </div>
         )}
       </div>
 
-      {/* Middle Row: Big Number & Sparkline */}
-      <div className="flex items-end justify-between gap-3 mt-3 mb-1">
-        <div className="text-xl sm:text-2xl font-extrabold font-mono tracking-tight text-zinc-100 tabular-nums">
+      {/* Middle Row: Big Crisp Number & Sparkline */}
+      <div className="flex items-end justify-between gap-3 mt-4 mb-2">
+        <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white tabular-nums">
           {value != null ? value : '—'}
         </div>
 
         {sparkline && sparkline.length > 0 && (
-          <div className="hidden sm:block w-20 h-7 shrink-0 opacity-70">
+          <div className="hidden sm:block w-20 h-7 shrink-0 opacity-80">
             <svg viewBox="0 0 80 28" className="w-full h-full overflow-visible">
               <defs>
                 <linearGradient id={`sparkGrad-${label}`} x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="0%"
-                    stopColor={deltaDir === 'up' || featured ? '#38bdf8' : '#10b981'}
-                    stopOpacity="0.4"
+                    stopColor={deltaDir === 'up' || featured ? '#38bdf8' : '#34d399'}
+                    stopOpacity="0.5"
                   />
                   <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
                 </linearGradient>
               </defs>
               <polyline
                 fill="none"
-                stroke={deltaDir === 'up' || featured ? '#38bdf8' : '#10b981'}
-                strokeWidth="2"
+                stroke={deltaDir === 'up' || featured ? '#38bdf8' : '#34d399'}
+                strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 points={sparkline
@@ -74,20 +74,20 @@ export default function KpiCard({
         )}
       </div>
 
-      {/* Bottom Row: Context & Delta */}
-      <div className="flex items-center justify-between text-[11px] mt-1 pt-2 border-t border-zinc-800/40 text-zinc-500 font-mono gap-2">
-        <span className="truncate min-w-0">{sub || '—'}</span>
+      {/* Bottom Row: Clear Context & Delta */}
+      <div className="flex items-center justify-between text-xs mt-2 pt-2.5 border-t border-white/10 text-zinc-400 gap-2">
+        <span className="truncate min-w-0 font-medium">{sub || '—'}</span>
         {delta && (
           <span
-            className={`inline-flex items-center gap-0.5 font-bold ${
+            className={`inline-flex items-center gap-1 font-bold shrink-0 ${
               deltaDir === 'up'
                 ? 'text-emerald-400'
                 : deltaDir === 'down'
                 ? 'text-rose-400'
-                : 'text-zinc-400'
+                : 'text-zinc-300'
             }`}
           >
-            {deltaDir === 'up' ? <ArrowUpRight size={12} /> : deltaDir === 'down' ? <ArrowDownRight size={12} /> : null}
+            {deltaDir === 'up' ? <ArrowUpRight size={14} /> : deltaDir === 'down' ? <ArrowDownRight size={14} /> : null}
             {delta}
           </span>
         )}
