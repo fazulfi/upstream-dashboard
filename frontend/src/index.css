@@ -5,57 +5,57 @@
 @layer base {
   :root,
   .theme-dark {
-    --bg-base: #09090b;
+    --bg-base: #07090e;
     --text-main: #ffffff;
     --text-title: #ffffff;
-    --text-body: #f4f4f5;
-    --text-sub: #a1a1aa;
-    --text-muted: #71717a;
-    --card-bg: rgba(30, 30, 30, 0.45);
-    --card-border: rgba(255, 255, 255, 0.12);
-    --card-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.6), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
-    --card-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
-    --nav-bg: rgba(20, 20, 25, 0.55);
-    --table-head-bg: rgba(255, 255, 255, 0.04);
+    --text-body: #f1f5f9;
+    --text-sub: #94a3b8;
+    --text-muted: #64748b;
+    --card-bg: rgba(18, 20, 29, 0.65);
+    --card-border: rgba(255, 255, 255, 0.14);
+    --card-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65), 0 4px 12px 0 rgba(0, 0, 0, 0.4);
+    --card-highlight: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+    --nav-bg: rgba(12, 14, 22, 0.70);
+    --table-head-bg: rgba(255, 255, 255, 0.05);
     --input-bg: rgba(255, 255, 255, 0.06);
     --input-border: rgba(255, 255, 255, 0.14);
     --btn-secondary-bg: rgba(255, 255, 255, 0.08);
-    --btn-secondary-border: rgba(255, 255, 255, 0.12);
-    --btn-secondary-text: #f4f4f5;
-    --btn-secondary-hover: rgba(255, 255, 255, 0.14);
-    --pill-active-bg: rgba(255, 255, 255, 0.15);
-    --pill-active-border: rgba(255, 255, 255, 0.22);
+    --btn-secondary-border: rgba(255, 255, 255, 0.14);
+    --btn-secondary-text: #f8fafc;
+    --btn-secondary-hover: rgba(255, 255, 255, 0.15);
+    --pill-active-bg: rgba(255, 255, 255, 0.18);
+    --pill-active-border: rgba(255, 255, 255, 0.25);
     --pill-active-text: #ffffff;
-    --row-hover: rgba(255, 255, 255, 0.05);
-    --mesh-opacity: 0.16;
+    --row-hover: rgba(255, 255, 255, 0.04);
+    --mesh-opacity: 0.32;
     --scrollbar-thumb: rgba(255, 255, 255, 0.2);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
   }
 
   .theme-light {
-    --bg-base: #eef2f7;
-    --text-main: #1c1c1e;
-    --text-title: #1c1c1e;
-    --text-body: #1c1c1e;
-    --text-sub: #52525b;
+    --bg-base: #e0e7f1;
+    --text-main: #090d16;
+    --text-title: #090d16;
+    --text-body: #1e293b;
+    --text-sub: #475569;
     --text-muted: #64748b;
-    --card-bg: rgba(255, 255, 255, 0.15);
-    --card-border: rgba(255, 255, 255, 0.35);
-    --card-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.10), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
-    --card-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
-    --nav-bg: rgba(255, 255, 255, 0.25);
-    --table-head-bg: rgba(0, 0, 0, 0.03);
-    --input-bg: rgba(0, 0, 0, 0.04);
-    --input-border: rgba(15, 23, 42, 0.14);
-    --btn-secondary-bg: rgba(0, 0, 0, 0.04);
-    --btn-secondary-border: rgba(15, 23, 42, 0.12);
-    --btn-secondary-text: #1c1c1e;
-    --btn-secondary-hover: rgba(0, 0, 0, 0.08);
-    --pill-active-bg: rgba(255, 255, 255, 0.65);
-    --pill-active-border: rgba(15, 23, 42, 0.14);
-    --pill-active-text: #1c1c1e;
-    --row-hover: rgba(0, 0, 0, 0.03);
-    --mesh-opacity: 0.20;
+    --card-bg: rgba(255, 255, 255, 0.58);
+    --card-border: rgba(255, 255, 255, 0.85);
+    --card-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.12), 0 2px 8px 0 rgba(15, 23, 42, 0.04);
+    --card-highlight: inset 0 1.5px 1px 0 rgba(255, 255, 255, 1), inset 0 -1px 1px 0 rgba(15, 23, 42, 0.04);
+    --nav-bg: rgba(255, 255, 255, 0.70);
+    --table-head-bg: rgba(255, 255, 255, 0.40);
+    --input-bg: rgba(255, 255, 255, 0.50);
+    --input-border: rgba(255, 255, 255, 0.85);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.70);
+    --btn-secondary-border: rgba(255, 255, 255, 0.90);
+    --btn-secondary-text: #090d16;
+    --btn-secondary-hover: rgba(255, 255, 255, 0.90);
+    --pill-active-bg: rgba(255, 255, 255, 0.90);
+    --pill-active-border: rgba(255, 255, 255, 1);
+    --pill-active-text: #090d16;
+    --row-hover: rgba(255, 255, 255, 0.35);
+    --mesh-opacity: 0.45;
     --scrollbar-thumb: rgba(15, 23, 42, 0.20);
     --scrollbar-thumb-hover: rgba(15, 23, 42, 0.35);
   }
@@ -77,12 +77,12 @@
 /* iOS 26 Glossy Spatial Liquid Glass Surfaces */
 .ios-glass-card {
   background: var(--card-bg);
-  backdrop-filter: blur(60px) saturate(180%);
-  -webkit-backdrop-filter: blur(60px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow), var(--card-highlight);
   border-radius: 1.5rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .theme-light .ios-glass-card {
@@ -95,8 +95,8 @@
 
 .ios-glass-nav {
   background: var(--nav-bg);
-  backdrop-filter: blur(60px) saturate(180%);
-  -webkit-backdrop-filter: blur(60px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
   border-bottom: 1px solid var(--card-border);
   box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
@@ -109,11 +109,11 @@
 }
 
 .ios-btn-primary {
-  background: linear-gradient(180deg, #0284c7 0%, #0071e3 100%);
+  background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
-    0 4px 16px rgba(2, 132, 199, 0.35);
+    0 4px 16px rgba(10, 132, 255, 0.35);
   color: #ffffff !important;
   font-weight: 700;
   border-radius: 0.85rem;
@@ -121,10 +121,10 @@
 }
 
 .ios-btn-primary:hover {
-  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  background: linear-gradient(180deg, #409cff 0%, #0077ed 100%);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-    0 6px 20px rgba(2, 132, 199, 0.5);
+    0 6px 20px rgba(10, 132, 255, 0.5);
 }
 
 .ios-btn-secondary {

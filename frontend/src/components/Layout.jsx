@@ -36,34 +36,34 @@ export default function Layout() {
       <div
         aria-hidden="true"
         className="fixed inset-0 overflow-hidden pointer-events-none z-0 transition-opacity duration-700"
-        style={{ opacity: 'var(--mesh-opacity, 0.20)' }}
+        style={{ opacity: 'var(--mesh-opacity, 0.40)' }}
       >
-        {/* Top-Left: Sky Blue */}
+        {/* Top-Left: Electric Sky Blue */}
         <div
-          className="absolute -top-20 -left-20 w-[720px] h-[720px] rounded-full blur-[140px]"
+          className="absolute -top-28 -left-28 w-[780px] h-[780px] rounded-full blur-[140px]"
           style={{
-            background: 'radial-gradient(circle, #38bdf8 0%, #7dd3fc 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 50%, transparent 75%)',
           }}
         />
-        {/* Top-Right: Violet / Indigo */}
+        {/* Top-Right: Royal Indigo / Violet */}
         <div
-          className="absolute top-4 -right-20 w-[780px] h-[780px] rounded-full blur-[150px]"
+          className="absolute top-0 -right-28 w-[820px] h-[820px] rounded-full blur-[150px]"
           style={{
-            background: 'radial-gradient(circle, #c084fc 0%, #818cf8 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #818cf8 0%, #6366f1 50%, transparent 75%)',
           }}
         />
-        {/* Bottom-Left: Emerald / Mint */}
+        {/* Bottom-Left: Vivid Apple Mint */}
         <div
-          className="absolute -bottom-20 left-1/4 w-[680px] h-[680px] rounded-full blur-[140px]"
+          className="absolute -bottom-28 left-1/4 w-[740px] h-[740px] rounded-full blur-[140px]"
           style={{
-            background: 'radial-gradient(circle, #34d399 0%, #6ee7b7 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #34d399 0%, #10b981 50%, transparent 75%)',
           }}
         />
-        {/* Center-Right: Rose / Coral */}
+        {/* Center-Right: Sunset Rose */}
         <div
-          className="absolute top-1/2 right-1/4 w-[580px] h-[580px] rounded-full blur-[150px]"
+          className="absolute top-1/3 right-1/4 w-[620px] h-[620px] rounded-full blur-[150px]"
           style={{
-            background: 'radial-gradient(circle, #fb7185 0%, #fda4af 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #f43f5e 0%, #fb7185 50%, transparent 75%)',
           }}
         />
       </div>

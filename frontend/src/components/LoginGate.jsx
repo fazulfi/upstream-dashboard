@@ -50,18 +50,18 @@ export default function LoginGate({ children }) {
       <div
         aria-hidden="true"
         className="fixed inset-0 overflow-hidden pointer-events-none z-0 transition-opacity duration-700"
-        style={{ opacity: 'var(--mesh-opacity, 0.20)' }}
+        style={{ opacity: 'var(--mesh-opacity, 0.40)' }}
       >
         <div
-          className="absolute top-1/4 left-1/4 w-[560px] h-[560px] rounded-full blur-[140px]"
+          className="absolute top-1/4 left-1/4 w-[620px] h-[620px] rounded-full blur-[140px]"
           style={{
-            background: 'radial-gradient(circle, #38bdf8 0%, #7dd3fc 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 50%, transparent 75%)',
           }}
         />
         <div
-          className="absolute bottom-1/4 right-1/4 w-[520px] h-[520px] rounded-full blur-[150px]"
+          className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full blur-[150px]"
           style={{
-            background: 'radial-gradient(circle, #c084fc 0%, #818cf8 45%, transparent 75%)',
+            background: 'radial-gradient(circle, #818cf8 0%, #6366f1 50%, transparent 75%)',
           }}
         />
       </div>
