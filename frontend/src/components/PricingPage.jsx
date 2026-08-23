@@ -268,7 +268,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             return (
               <div
                 key={upstream}
-                className="pricing-global p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
+                className="pricing-global p-5 rounded-2xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
               >
                 <div className="pricing-row-head flex items-center justify-between">
                   <strong className="text-sm font-bold text-zinc-900 dark:text-white">{upstream}</strong>
@@ -292,7 +292,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                         step="0.0001"
                         value={cfg[field] ?? ''}
                         onChange={(e) => updateGlobalForm(upstream, field, e.target.value)}
-                        className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500"
+                        className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500 shadow-inner"
                       />
                     </label>
                   ))}
@@ -342,7 +342,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
 
         <div className="table-scroll overflow-x-auto border border-black/10 dark:border-white/10 rounded-2xl">
           <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-            <thead className="bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+            <thead className="bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
               <tr>
                 <th className="px-5 py-3.5">Upstream / model</th>
                 <th className="px-5 py-3.5 text-center">trigger_pct</th>
@@ -358,13 +358,13 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                     <td className="px-5 py-3 font-bold text-zinc-900 dark:text-zinc-100">
                       {override.upstream} / {override.model_id}
                     </td>
-                    <td className="tnum px-5 py-3 text-center text-sky-600 dark:text-sky-400 font-bold">
+                    <td className="tnum px-5 py-3 text-center text-sky-700 dark:text-sky-400 font-bold">
                       {formatValue(override.trigger_pct)}
                     </td>
                     <td className="faint px-5 py-3 text-zinc-500 text-xs">{override.updated_at || '—'}</td>
                     <td className="px-5 py-3 text-right font-sans">
                       <button
-                        className="btn btn-sm btn-danger px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-300 font-bold text-xs border border-rose-500/30 disabled:opacity-50 transition-all cursor-pointer"
+                        className="btn btn-sm btn-danger px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 font-bold text-xs border border-rose-500/30 disabled:opacity-50 transition-all cursor-pointer"
                         onClick={() => deleteOverride(override)}
                         disabled={!override.id || busy === key}
                       >
@@ -410,7 +410,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
 
         <div className="table-scroll overflow-x-auto max-h-[500px]">
           <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-            <thead className="sticky top-0 bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
               <tr>
                 <th className="px-5 py-3.5">Model</th>
                 <th className="px-5 py-3.5 text-right">Min ask</th>
@@ -432,7 +432,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                     {formatValue(row.min_ask ?? row.ask)}
                   </td>
                   <td className="tnum px-5 py-3.5 text-right text-zinc-500 dark:text-zinc-400">{formatValue(row.max_ask)}</td>
-                  <td className="tnum px-5 py-3.5 text-right text-amber-600 dark:text-amber-400 font-bold">{formatValue(row.spread)}</td>
+                  <td className="tnum px-5 py-3.5 text-right text-amber-700 dark:text-amber-400 font-bold">{formatValue(row.spread)}</td>
                   <td className="tnum pos px-5 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
                     {formatValue(row.our_ask)}
                   </td>

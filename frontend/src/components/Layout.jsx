@@ -32,26 +32,33 @@ export default function Layout() {
 
   return (
     <div className="layout min-h-screen text-[var(--text-body)] flex flex-col font-sans relative overflow-x-hidden transition-colors duration-300">
-      {/* ── Apple iOS 18 Ambient Mesh Gradient Refraction Wallpaper ── */}
+      {/* ── Apple iOS 26 Spatial Ambient Mesh Gradient Refraction Wallpaper ── */}
       <div
-        className="fixed top-0 -left-20 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-300"
+        className="fixed -top-16 -left-16 w-[700px] h-[700px] rounded-full blur-[130px] pointer-events-none z-0 transition-opacity duration-500"
         style={{
-          background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 70%, transparent 100%)',
-          opacity: 'var(--mesh-opacity, 0.25)',
+          background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 60%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.40)',
         }}
       />
       <div
-        className="fixed top-12 -right-20 w-[650px] h-[650px] rounded-full blur-[160px] pointer-events-none z-0 transition-opacity duration-300"
+        className="fixed top-8 -right-16 w-[750px] h-[750px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-500"
         style={{
-          background: 'radial-gradient(circle, #818cf8 0%, #4f46e5 70%, transparent 100%)',
-          opacity: 'var(--mesh-opacity, 0.25)',
+          background: 'radial-gradient(circle, #a855f7 0%, #6366f1 60%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.35)',
         }}
       />
       <div
-        className="fixed -bottom-20 left-1/3 w-[550px] h-[550px] rounded-full blur-[150px] pointer-events-none z-0 transition-opacity duration-300"
+        className="fixed -bottom-16 left-1/4 w-[650px] h-[650px] rounded-full blur-[130px] pointer-events-none z-0 transition-opacity duration-500"
         style={{
-          background: 'radial-gradient(circle, #34d399 0%, #059669 70%, transparent 100%)',
-          opacity: 'var(--mesh-opacity, 0.2)',
+          background: 'radial-gradient(circle, #34d399 0%, #059669 60%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.30)',
+        }}
+      />
+      <div
+        className="fixed top-1/2 right-1/4 w-[550px] h-[550px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-500"
+        style={{
+          background: 'radial-gradient(circle, #fb7185 0%, #e11d48 55%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.25)',
         }}
       />
 

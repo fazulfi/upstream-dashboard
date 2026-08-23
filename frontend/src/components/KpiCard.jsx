@@ -31,8 +31,8 @@ export default function KpiCard({
           <div
             className={`p-2.5 rounded-xl border ${
               featured
-                ? 'bg-sky-500/15 border-sky-500/30 text-sky-600 dark:text-sky-300'
-                : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-700 dark:text-zinc-300'
+                ? 'bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-300'
+                : 'bg-white/70 dark:bg-white/5 border-white/80 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-none text-zinc-700 dark:text-zinc-300'
             }`}
           >
             <Icon size={18} />
@@ -71,10 +71,10 @@ export default function KpiCard({
           <span
             className={`inline-flex items-center gap-1 font-bold shrink-0 ${
               deltaDir === 'up'
-                ? 'text-emerald-600 dark:text-emerald-400'
+                ? 'text-emerald-700 dark:text-emerald-400'
                 : deltaDir === 'down'
-                ? 'text-rose-600 dark:text-rose-400'
-                : 'text-zinc-600 dark:text-zinc-300'
+                ? 'text-rose-700 dark:text-rose-400'
+                : 'text-zinc-700 dark:text-zinc-300'
             }`}
           >
             {deltaDir === 'up' ? <ArrowUpRight size={14} /> : deltaDir === 'down' ? <ArrowDownRight size={14} /> : null}

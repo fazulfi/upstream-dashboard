@@ -109,7 +109,7 @@ export default function ModelDetailDrawer({ model, isOpen, onClose, onUpdated })
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-          className="w-screen max-w-md bg-[var(--nav-bg)] backdrop-blur-3xl border-l border-black/10 dark:border-white/10 shadow-2xl flex flex-col text-[var(--text-primary)]"
+          className="w-screen max-w-md bg-[var(--nav-bg)] backdrop-blur-3xl border-l border-black/10 dark:border-white/10 shadow-2xl flex flex-col text-[var(--text-body)]"
         >
           {/* Drawer Header */}
           <div className="p-6 border-b border-black/10 dark:border-white/10 flex items-center justify-between">

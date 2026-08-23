@@ -33,26 +33,26 @@ export function ToastProvider({ children }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-lg border shadow-xl backdrop-blur-md text-xs font-medium ${
+              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-xl backdrop-blur-xl text-xs font-semibold ${
                 t.type === 'success'
-                  ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-200'
+                  ? 'bg-white/95 dark:bg-emerald-950/80 border-emerald-500/40 text-emerald-900 dark:text-emerald-200'
                   : t.type === 'error'
-                  ? 'bg-rose-950/80 border-rose-500/30 text-rose-200'
+                  ? 'bg-white/95 dark:bg-rose-950/80 border-rose-500/40 text-rose-900 dark:text-rose-200'
                   : t.type === 'warning'
-                  ? 'bg-amber-950/80 border-amber-500/30 text-amber-200'
-                  : 'bg-zinc-900/90 border-zinc-700/50 text-zinc-200'
+                  ? 'bg-white/95 dark:bg-amber-950/80 border-amber-500/40 text-amber-900 dark:text-amber-200'
+                  : 'bg-white/95 dark:bg-zinc-900/90 border-black/10 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-200'
               }`}
             >
               <div className="mt-0.5 shrink-0">
-                {t.type === 'success' && <CheckCircle2 size={16} className="text-emerald-400" />}
-                {t.type === 'error' && <AlertCircle size={16} className="text-rose-400" />}
-                {t.type === 'warning' && <AlertTriangle size={16} className="text-amber-400" />}
-                {t.type === 'info' && <Info size={16} className="text-sky-400" />}
+                {t.type === 'success' && <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />}
+                {t.type === 'error' && <AlertCircle size={16} className="text-rose-600 dark:text-rose-400" />}
+                {t.type === 'warning' && <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />}
+                {t.type === 'info' && <Info size={16} className="text-sky-600 dark:text-sky-400" />}
               </div>
               <div className="flex-1 leading-snug break-words">{t.message}</div>
               <button
                 onClick={() => removeToast(t.id)}
-                className="shrink-0 p-0.5 text-zinc-400 hover:text-zinc-100 transition-colors rounded"
+                className="shrink-0 p-0.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors rounded cursor-pointer"
                 aria-label="Dismiss"
               >
                 <X size={14} />

@@ -44,11 +44,11 @@ export default function SlideToConfirm({
       }`}
     >
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-xs font-semibold tracking-wide text-zinc-300 flex items-center gap-1.5 opacity-80">
+        <span className="text-xs font-semibold tracking-wide text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 opacity-90">
           {loading ? (
             'Processing...'
           ) : confirmed ? (
-            <span className="flex items-center gap-1 text-emerald-400">
+            <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
               <ShieldCheck size={14} /> {confirmedLabel}
             </span>
           ) : (

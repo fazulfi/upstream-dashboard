@@ -115,14 +115,14 @@ export default function Settings() {
             <div className="settings-list grid grid-cols-1 sm:grid-cols-2 gap-4">
               {items.map((it, i) => (
                 <div
-                  className="setting-row p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
+                  className="setting-row p-4 rounded-2xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-black/40 flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none"
                   key={i}
                 >
                   <div>
                     <div className="setting-label text-xs font-mono font-bold uppercase text-zinc-500 dark:text-zinc-400 tracking-wider">
                       {it.label}
                     </div>
-                    <div className="setting-sub text-xs text-zinc-400 mt-0.5">{it.sub}</div>
+                    <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{it.sub}</div>
                   </div>
                   <div className="setting-value tnum font-mono font-bold text-zinc-900 dark:text-white text-base mt-2">
                     {it.value}
@@ -143,7 +143,7 @@ export default function Settings() {
             </div>
 
             <div className="settings-list space-y-3 text-xs sm:text-sm">
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/60 dark:bg-black/40 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center gap-3">
                   <Globe size={18} className="text-sky-500" />
                   <div>
@@ -151,12 +151,12 @@ export default function Settings() {
                     <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">React · Vite · Vercel Edge Serverless</div>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                   HOSTED
                 </span>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/60 dark:bg-black/40 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center gap-3">
                   <Server size={18} className="text-indigo-500" />
                   <div>
@@ -167,7 +167,7 @@ export default function Settings() {
                 <div className="setting-value tnum font-mono font-bold text-sky-600 dark:text-sky-400">ops.budgezen.com</div>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-white/60 dark:bg-black/40 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
                 <div className="flex items-center gap-3">
                   <Database size={18} className="text-emerald-500" />
                   <div>
@@ -175,7 +175,7 @@ export default function Settings() {
                     <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">InferHub autonomous daemon · Loop 60s</div>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                   ACTIVE
                 </span>
               </div>
@@ -193,11 +193,11 @@ export default function Settings() {
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white">Sesi Operator</h2>
               </div>
               {hasToken ? (
-                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                   Token Aktif
                 </span>
               ) : (
-                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-black/5 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                   Belum Login
                 </span>
               )}

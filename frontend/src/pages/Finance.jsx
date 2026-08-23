@@ -205,30 +205,30 @@ export default function Finance() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-black/5 dark:bg-black/50 border border-black/10 dark:border-white/10">
-                <div className="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+                <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-400 font-mono font-bold">
                   <span>DANA MASUK (PAYOUTS)</span>
                   <ArrowUpRight size={16} />
                 </div>
-                <div className="text-2xl font-extrabold font-mono text-emerald-600 dark:text-emerald-300 mt-2">
+                <div className="text-2xl font-extrabold font-mono text-emerald-700 dark:text-emerald-300 mt-2">
                   {fmtMoney(financeData?.payout_confirmed)}
                 </div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Saldo yang telah ditarik</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-black/5 dark:bg-black/50 border border-black/10 dark:border-white/10">
-                <div className="flex items-center justify-between text-xs text-rose-600 dark:text-rose-400 font-mono font-bold">
+              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+                <div className="flex items-center justify-between text-xs text-rose-700 dark:text-rose-400 font-mono font-bold">
                   <span>BIAYA ASET & CAPEX</span>
                   <ArrowDownRight size={16} />
                 </div>
-                <div className="text-2xl font-extrabold font-mono text-rose-600 dark:text-rose-300 mt-2">
+                <div className="text-2xl font-extrabold font-mono text-rose-700 dark:text-rose-300 mt-2">
                   -{fmtMoney(financeData?.amortization)}
                 </div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Biaya server & akun</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-black/5 dark:bg-black/50 border border-black/10 dark:border-white/10 shadow-md">
-                <div className="flex items-center justify-between text-xs text-sky-600 dark:text-sky-400 font-mono font-bold">
+              <div className="p-5 rounded-2xl bg-white/60 dark:bg-black/50 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none">
+                <div className="flex items-center justify-between text-xs text-sky-700 dark:text-sky-400 font-mono font-bold">
                   <span>LABA BERSIH AKHIR</span>
                   <Zap size={16} />
                 </div>
@@ -251,13 +251,13 @@ export default function Finance() {
               {providers.map((p) => (
                 <div
                   key={p.upstream_slug}
-                  className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors"
+                  className="p-4 rounded-2xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-black/40 flex items-center justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
                 >
                   <div>
                     <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{p.upstream_slug}</div>
                     <div className="text-xs text-zinc-500">Upstream Provider</div>
                   </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                     {p.n} Node Aktif
                   </span>
                 </div>
@@ -303,7 +303,7 @@ export default function Finance() {
           <div className="ios-glass-card overflow-hidden">
             <div className="overflow-x-auto max-h-[500px]">
               <table className="w-full text-left text-xs sm:text-sm border-collapse font-mono">
-                <thead className="sticky top-0 bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+                <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
                   <tr>
                     <th className="px-5 py-3.5">Asset ID</th>
                     <th className="px-5 py-3.5">Provider</th>
@@ -333,10 +333,10 @@ export default function Finance() {
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             (asset.status || 'active') === 'active'
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
                               : (asset.status || '') === 'refunded'
-                              ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                              : 'bg-black/10 dark:bg-white/10 text-zinc-600 dark:text-zinc-300'
+                              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30'
+                              : 'bg-black/10 dark:bg-white/10 text-zinc-700 dark:text-zinc-300'
                           }`}
                         >
                           {(asset.status || 'active').toUpperCase()}
@@ -362,7 +362,7 @@ export default function Finance() {
         <div className="ios-glass-card overflow-hidden">
           <div className="overflow-x-auto max-h-[500px]">
             <table className="w-full text-left text-xs sm:text-sm border-collapse font-mono">
-              <thead className="sticky top-0 bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
                 <tr>
                   <th className="px-5 py-3.5">ID Transaksi</th>
                   <th className="px-5 py-3.5">Tanggal</th>
@@ -377,11 +377,11 @@ export default function Finance() {
                     <td className="px-5 py-3 font-bold text-sky-600 dark:text-sky-400">{p.ref || `payout-${idx + 1}`}</td>
                     <td className="px-5 py-3 text-zinc-500 dark:text-zinc-400">{p.date || '—'}</td>
                     <td className="px-5 py-3 text-zinc-800 dark:text-zinc-200 font-sans">{p.note || 'Payout settled'}</td>
-                    <td className="px-5 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                    <td className="px-5 py-3 text-right font-bold text-emerald-700 dark:text-emerald-400">
                       {fmtMoney(p.usd)}
                     </td>
                     <td className="px-5 py-3 font-sans">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                         {(p.status || 'CONFIRMED').toUpperCase()}
                       </span>
                     </td>

@@ -40,11 +40,11 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
   const currentPage = pageNames[location.pathname] || 'Reliability';
 
   const statusConfig = {
-    live: { label: 'Live Stream', color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/30 bg-emerald-500/10' },
-    connecting: { label: 'Connecting', color: 'bg-amber-500', textColor: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/30 bg-amber-500/10' },
-    reconnecting: { label: 'Reconnecting', color: 'bg-rose-500', textColor: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30 bg-rose-500/10' },
-    recovering: { label: 'Recovering', color: 'bg-sky-500', textColor: 'text-sky-600 dark:text-sky-400', border: 'border-sky-500/30 bg-sky-500/10' },
-    'auth-required': { label: 'Expired', color: 'bg-rose-500', textColor: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30 bg-rose-500/10' },
+    live: { label: 'Live Stream', color: 'bg-emerald-500', textColor: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-500/30 bg-emerald-500/10' },
+    connecting: { label: 'Connecting', color: 'bg-amber-500', textColor: 'text-amber-800 dark:text-amber-400', border: 'border-amber-500/30 bg-amber-500/10' },
+    reconnecting: { label: 'Reconnecting', color: 'bg-rose-500', textColor: 'text-rose-700 dark:text-rose-400', border: 'border-rose-500/30 bg-rose-500/10' },
+    recovering: { label: 'Recovering', color: 'bg-sky-500', textColor: 'text-sky-700 dark:text-sky-400', border: 'border-sky-500/30 bg-sky-500/10' },
+    'auth-required': { label: 'Expired', color: 'bg-rose-500', textColor: 'text-rose-700 dark:text-rose-400', border: 'border-rose-500/30 bg-rose-500/10' },
   };
 
   const currentStatus = statusConfig[streamStatus] || statusConfig.live;
@@ -72,7 +72,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
                 Upstream
               </span>
               <span className="text-xs text-zinc-400 dark:text-zinc-600">/</span>
-              <h1 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{currentPage}</h1>
+              <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-300">{currentPage}</h1>
             </div>
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           {/* Command Palette Trigger */}
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 text-xs font-medium transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
           >
             <Search size={14} />
             <span className="hidden md:inline">Quick search…</span>
@@ -128,7 +128,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
+            className="p-2 rounded-xl border border-white/80 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>

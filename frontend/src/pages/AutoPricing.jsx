@@ -359,7 +359,7 @@ export default function AutoPricing() {
 
         {/* Selected Provider Quick Control Strip (Compact & Zero Blocking!) */}
         {prov && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/60 dark:bg-black/40 border border-white/80 dark:border-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-none text-sm">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -569,7 +569,7 @@ export default function AutoPricing() {
 
       {/* ── 4. Algo Log Terminal ── */}
       <section className="ios-glass-card overflow-hidden shadow-lg">
-        <div className="p-4 border-b border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 flex items-center justify-between">
+        <div className="p-4 border-b border-black/10 dark:border-white/10 bg-slate-100/70 dark:bg-black/40 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[var(--text-title)] font-mono text-xs font-bold">
             <Terminal size={15} />
             <span>Log Eksekusi Algo Terakhir</span>
@@ -585,7 +585,7 @@ export default function AutoPricing() {
             <span>Copy Log</span>
           </button>
         </div>
-        <pre className="p-4 text-xs font-mono text-[var(--text-body)] bg-black/5 dark:bg-black/60 overflow-x-auto max-h-52 leading-relaxed">
+        <pre className="p-4 text-xs font-mono text-slate-800 dark:text-slate-200 bg-white/40 dark:bg-black/60 overflow-x-auto max-h-52 leading-relaxed">
           {data?.log || '—'}
         </pre>
       </section>

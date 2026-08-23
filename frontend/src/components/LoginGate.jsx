@@ -46,9 +46,21 @@ export default function LoginGate({ children }) {
 
   return (
     <div className="login-wrap min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-300">
-      {/* Apple Ambient Mesh Orbs */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-sky-500/25 dark:bg-sky-500/20 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[450px] bg-indigo-500/20 dark:bg-indigo-600/20 rounded-full blur-[140px] pointer-events-none" />
+      {/* Apple iOS 26 Ambient Mesh Orbs */}
+      <div
+        className="fixed top-1/4 left-1/4 w-[550px] h-[550px] rounded-full blur-[130px] pointer-events-none transition-opacity duration-500"
+        style={{
+          background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 60%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.40)',
+        }}
+      />
+      <div
+        className="fixed bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none transition-opacity duration-500"
+        style={{
+          background: 'radial-gradient(circle, #a855f7 0%, #6366f1 60%, transparent 80%)',
+          opacity: 'var(--mesh-opacity, 0.35)',
+        }}
+      />
 
       {/* Login Card Container */}
       <motion.div

@@ -120,16 +120,16 @@ export default function CommandPalette({ isOpen, onClose }) {
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl overflow-hidden font-sans">
-        <div className="flex items-center px-3 py-2.5 border-b border-zinc-800/80 gap-3">
-          <Search size={18} className="text-zinc-500 shrink-0" />
+      <div className="relative w-full max-w-xl rounded-2xl border border-black/10 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950 p-2 shadow-2xl backdrop-blur-3xl overflow-hidden font-sans">
+        <div className="flex items-center px-3 py-2.5 border-b border-black/10 dark:border-zinc-800/80 gap-3">
+          <Search size={18} className="text-zinc-400 shrink-0" />
           <input
             type="text"
             placeholder="Type a command or search modules... (Esc to close)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
-            className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 outline-none"
+            className="w-full bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 outline-none"
           />
         </div>
 
@@ -148,28 +148,28 @@ export default function CommandPalette({ isOpen, onClose }) {
                     onClose();
                   }}
                   onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer border ${
                     isSelected
-                      ? 'bg-sky-950/60 text-sky-100'
-                      : 'bg-transparent text-zinc-300 hover:bg-zinc-900'
+                      ? 'bg-sky-500/15 dark:bg-sky-950/60 text-sky-900 dark:text-sky-100 border-sky-500/20'
+                      : 'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-zinc-900 border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`p-2 rounded-lg ${
                         isSelected
-                          ? 'bg-sky-900/80 text-sky-300'
-                          : 'bg-zinc-900 text-zinc-400'
+                          ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300'
+                          : 'bg-black/5 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400'
                       }`}
                     >
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate text-zinc-100">{item.title}</div>
-                      <div className="text-[11px] text-zinc-400 truncate">{item.sub}</div>
+                      <div className="text-xs font-semibold truncate text-zinc-900 dark:text-zinc-100">{item.title}</div>
+                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{item.sub}</div>
                     </div>
                   </div>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 shrink-0 ml-2">
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-black/5 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0 ml-2">
                     {item.category}
                   </span>
                 </button>
@@ -178,7 +178,7 @@ export default function CommandPalette({ isOpen, onClose }) {
           )}
         </div>
 
-        <div className="px-3 py-2 border-t border-zinc-800/80 bg-zinc-900/40 flex items-center justify-between text-[11px] text-zinc-500">
+        <div className="px-3 py-2 border-t border-black/10 dark:border-zinc-800/80 bg-slate-100/80 dark:bg-zinc-900/40 flex items-center justify-between text-[11px] text-zinc-500">
           <div className="flex items-center gap-2">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>

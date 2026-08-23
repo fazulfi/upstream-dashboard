@@ -12,7 +12,8 @@
     --text-muted: #71717a;
     --card-bg: rgba(22, 22, 28, 0.7);
     --card-border: rgba(255, 255, 255, 0.12);
-    --card-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 12px 40px -5px rgba(0, 0, 0, 0.5);
+    --card-shadow: 0 12px 40px -5px rgba(0, 0, 0, 0.5);
+    --card-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
     --nav-bg: rgba(18, 18, 22, 0.75);
     --table-head-bg: rgba(14, 14, 18, 0.9);
     --input-bg: rgba(0, 0, 0, 0.55);
@@ -25,35 +26,36 @@
     --pill-active-border: rgba(255, 255, 255, 0.25);
     --pill-active-text: #ffffff;
     --row-hover: rgba(255, 255, 255, 0.05);
-    --mesh-opacity: 0.22;
+    --mesh-opacity: 0.25;
     --scrollbar-thumb: rgba(255, 255, 255, 0.2);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
   }
 
   .theme-light {
-    --bg-base: #f2f2f7;
-    --text-title: #000000;
-    --text-body: #1c1c1e;
-    --text-sub: #8e8e93;
-    --text-muted: #aeaeb2;
-    --card-bg: #ffffff;
-    --card-border: transparent;
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-    --nav-bg: rgba(255, 255, 255, 0.85);
-    --table-head-bg: #f2f2f7;
-    --input-bg: rgba(118, 118, 128, 0.12);
-    --input-border: transparent;
-    --btn-secondary-bg: rgba(118, 118, 128, 0.12);
-    --btn-secondary-border: transparent;
-    --btn-secondary-text: #007aff;
-    --btn-secondary-hover: rgba(118, 118, 128, 0.2);
-    --pill-active-bg: #ffffff;
-    --pill-active-border: rgba(0, 0, 0, 0.04);
-    --pill-active-text: #000000;
-    --row-hover: rgba(0, 0, 0, 0.04);
-    --mesh-opacity: 0;
-    --scrollbar-thumb: rgba(0, 0, 0, 0.2);
-    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+    --bg-base: #eef2f7;
+    --text-title: #09090b;
+    --text-body: #18181b;
+    --text-sub: #52525b;
+    --text-muted: #64748b;
+    --card-bg: rgba(255, 255, 255, 0.76);
+    --card-border: rgba(255, 255, 255, 0.85);
+    --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 20px 40px -12px rgba(15, 23, 42, 0.06);
+    --card-highlight: inset 0 1.5px 1px 0 rgba(255, 255, 255, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    --nav-bg: rgba(255, 255, 255, 0.82);
+    --table-head-bg: rgba(241, 245, 249, 0.85);
+    --input-bg: rgba(255, 255, 255, 0.85);
+    --input-border: rgba(15, 23, 42, 0.12);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.85);
+    --btn-secondary-border: rgba(15, 23, 42, 0.12);
+    --btn-secondary-text: #0284c7;
+    --btn-secondary-hover: rgba(255, 255, 255, 0.98);
+    --pill-active-bg: rgba(255, 255, 255, 0.95);
+    --pill-active-border: rgba(255, 255, 255, 1);
+    --pill-active-text: #09090b;
+    --row-hover: rgba(255, 255, 255, 0.6);
+    --mesh-opacity: 0.50;
+    --scrollbar-thumb: rgba(15, 23, 42, 0.20);
+    --scrollbar-thumb-hover: rgba(15, 23, 42, 0.35);
   }
 
   body {
@@ -70,13 +72,13 @@
   }
 }
 
-/* iOS 18 Glossy Liquid Glass Surfaces */
+/* iOS 26 Glossy Spatial Liquid Glass Surfaces */
 .ios-glass-card {
   background: var(--card-bg);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--card-border);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--card-shadow), var(--card-highlight);
   border-radius: 1.5rem;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -86,21 +88,22 @@
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border-bottom: 1px solid var(--card-border);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
 
 .ios-pill-active {
   background: var(--pill-active-bg);
   border: 1px solid var(--pill-active-border);
   color: var(--pill-active-text) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 .ios-btn-primary {
-  background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(180deg, #0284c7 0%, #0071e3 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
-    0 4px 16px rgba(10, 132, 255, 0.35);
+    0 4px 16px rgba(2, 132, 199, 0.35);
   color: #ffffff !important;
   font-weight: 700;
   border-radius: 0.85rem;
@@ -108,10 +111,10 @@
 }
 
 .ios-btn-primary:hover {
-  background: linear-gradient(180deg, #409cff 0%, #0077ed 100%);
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-    0 6px 20px rgba(10, 132, 255, 0.5);
+    0 6px 20px rgba(2, 132, 199, 0.5);
 }
 
 .ios-btn-secondary {
@@ -120,6 +123,7 @@
   color: var(--btn-secondary-text);
   font-weight: 600;
   border-radius: 0.85rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   transition: all 0.15s ease;
 }
 
