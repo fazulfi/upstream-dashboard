@@ -2,23 +2,38 @@
 
 @layer base {
   :root {
-    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", -apple-system, sans-serif;
-    --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", monospace;
     --bg-base: #000000;
-    --bg-surface: rgba(255, 255, 255, 0.04);
-    --bg-elevated: rgba(255, 255, 255, 0.08);
-    --border-subtle: rgba(255, 255, 255, 0.12);
-    --border-highlight: rgba(255, 255, 255, 0.25);
-    --ios-blue: #0a84ff;
-    --ios-green: #30d158;
-    --ios-indigo: #5e5ce6;
-    --ios-amber: #ffd60a;
-    --ios-red: #ff453a;
+    --text-primary: #f5f5f7;
+    --text-secondary: #86868b;
+    --text-muted: #6e6e73;
+    --card-bg: rgba(26, 26, 32, 0.65);
+    --card-border: rgba(255, 255, 255, 0.12);
+    --nav-bg: rgba(18, 18, 22, 0.75);
+    --inner-highlight: rgba(255, 255, 255, 0.22);
+    --table-header-bg: rgba(10, 10, 14, 0.85);
+    --table-row-hover: rgba(255, 255, 255, 0.05);
+    --input-bg: rgba(0, 0, 0, 0.55);
+  }
+
+  .theme-light {
+    --bg-base: #f2f2f7;
+    --text-primary: #1d1d1f;
+    --text-secondary: #515154;
+    --text-muted: #86868b;
+    --card-bg: rgba(255, 255, 255, 0.82);
+    --card-border: rgba(0, 0, 0, 0.08);
+    --nav-bg: rgba(255, 255, 255, 0.88);
+    --inner-highlight: rgba(255, 255, 255, 0.95);
+    --table-header-bg: rgba(242, 242, 247, 0.95);
+    --table-row-hover: rgba(0, 0, 0, 0.03);
+    --input-bg: rgba(255, 255, 255, 0.95);
   }
 
   body {
     background-color: var(--bg-base);
-    color: #f5f5f7;
+    color: var(--text-primary);
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.5;
@@ -26,81 +41,75 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
 /* iOS 18 Glossy Liquid Glass Surfaces */
-.ios-glass {
-  background: rgba(24, 24, 28, 0.65);
+.ios-glass-card {
+  background: var(--card-bg);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--card-border);
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
-    0 12px 36px 0 rgba(0, 0, 0, 0.45);
-  border-radius: 1.25rem;
+    inset 0 1px 0 0 var(--inner-highlight),
+    0 10px 30px 0 rgba(0, 0, 0, 0.25);
+  border-radius: 1.5rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.ios-glass-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.07) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.13);
+.theme-light .ios-glass-card {
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-    0 8px 32px 0 rgba(0, 0, 0, 0.35);
-  border-radius: 1.25rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    inset 0 1px 0 0 var(--inner-highlight),
+    0 8px 24px 0 rgba(0, 0, 0, 0.05);
 }
 
 .ios-glass-card:hover {
   border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
-    0 14px 40px 0 rgba(0, 0, 0, 0.55);
 }
 
-.ios-pill {
-  background: rgba(30, 30, 36, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
-  border-radius: 9999px;
+.theme-light .ios-glass-card:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.ios-glass-nav {
+  background: var(--nav-bg);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border-bottom: 1px solid var(--card-border);
+}
+
+.ios-pill-active {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.theme-light .ios-pill-active {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #1d1d1f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .ios-btn-primary {
-  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
-    0 4px 16px rgba(2, 132, 199, 0.4);
-  color: #ffffff;
+    0 4px 16px rgba(10, 132, 255, 0.4);
+  color: #ffffff !important;
   font-weight: 600;
   border-radius: 0.85rem;
   transition: all 0.15s ease;
 }
 
 .ios-btn-primary:hover {
-  background: linear-gradient(180deg, #7dd3fc 0%, #0369a1 100%);
+  background: linear-gradient(180deg, #409cff 0%, #0077ed 100%);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-    0 6px 20px rgba(2, 132, 199, 0.55);
-}
-
-.ios-btn-emerald {
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
-    0 4px 16px rgba(5, 150, 105, 0.4);
-  color: #ffffff;
-  font-weight: 600;
-  border-radius: 0.85rem;
+    0 6px 20px rgba(10, 132, 255, 0.55);
 }
 
 .tabular-nums {

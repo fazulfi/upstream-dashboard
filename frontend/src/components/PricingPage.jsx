@@ -98,8 +98,9 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
       });
       onChanged?.();
     } catch (err) {
-      setMessage(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
+      const errText = `Error: ${err.message}`;
+      setMessage(errText);
+      toastError(errText);
     } finally {
       setBusy(null);
     }
@@ -109,7 +110,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
     event.preventDefault();
     const { upstream, model_id, trigger_pct } = overrideForm;
     if (!upstream || !model_id || !(Number(trigger_pct) > 0)) {
-      const err = 'Error: upstream, model_id, dan trigger_pct valid wajib diisi';
+      const err = 'Error: upstream, model_id, dan trigger_pct harus diisi';
       setMessage(err);
       toastError(err);
       return;
@@ -117,14 +118,13 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
     setBusy('override-new');
     setMessage('');
     try {
-      const response = await apiFetch('/api/auto-pricing/config', {
+      const response = await apiFetch('/api/pricing/override', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() },
         body: JSON.stringify({ upstream, model_id, trigger_pct: Number(trigger_pct) }),
       });
       const data = await response.json();
-      if (!response.ok || data.error || data.ok === false)
-        throw new Error(data.error || `HTTP ${response.status}`);
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
       const okMsg = `✓ ${upstream}/${model_id} override tersimpan`;
       setMessage(okMsg);
       success(okMsg);
@@ -139,19 +139,17 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
   };
 
   const deleteOverride = async (override) => {
-    if (!override.id) return;
     const key = actionKey('delete', override.id);
     setBusy(key);
     setMessage('');
     try {
-      const response = await apiFetch(`/api/auto-pricing/config/${override.id}`, {
+      const response = await apiFetch(`/api/pricing/override/${override.id}`, {
         method: 'DELETE',
         headers: { 'Idempotency-Key': idempotencyKey() },
       });
       const data = await response.json();
-      if (!response.ok || data.error || data.ok === false)
-        throw new Error(data.error || `HTTP ${response.status}`);
-      const okMsg = `✓ ${override.upstream}/${override.model_id} override dihapus`;
+      if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+      const okMsg = `✓ override ${override.upstream}/${override.model_id} dihapus`;
       setMessage(okMsg);
       success(okMsg);
       onChanged?.();
@@ -215,34 +213,26 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="page pricing-page space-y-6 max-w-7xl mx-auto"
+    <div
+      className="page pricing-page space-y-6 max-w-7xl mx-auto pb-12 font-sans transition-colors"
       aria-label="Pricing control plane"
     >
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 p-6 shadow-xl backdrop-blur-xl">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                <CircleDollarSign size={11} className="text-sky-400" />
-                Market Economics & Orderbook Depth
-              </span>
-              <span className="text-xs text-zinc-500 font-mono hidden sm:inline">
-                InferHub Publisher Control Plane
-              </span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight">
-              Manual Pricing & Spread Depth
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl">
-              Global economics, model-specific automation, and the merged ask orderbook.
-            </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-500/15 text-sky-600 dark:text-sky-300 border border-sky-400/30">
+              <CircleDollarSign size={13} />
+              Manual Ask & Orderbook
+            </span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">Market Depth</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white">
+            Pricing & Orderbook
+          </h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1 max-w-2xl">
+            Konfigurasi parameter ekonomi global dan pantau kedalaman ask buku order pasar.
+          </p>
         </div>
       </div>
 
@@ -250,24 +240,24 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
         <motion.div
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`batch-note p-3.5 rounded-xl border text-xs font-semibold shadow-md flex items-center gap-2.5 ${
+          className={`batch-note p-4 rounded-2xl border text-xs sm:text-sm font-semibold shadow-md flex items-center gap-2.5 ${
             message.startsWith('Error')
-              ? 'pricing-error bg-rose-500/10 border-rose-500/30 text-rose-300'
-              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              ? 'pricing-error bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300'
+              : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
           }`}
           role="status"
         >
-          {message.startsWith('Error') ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+          {message.startsWith('Error') ? <AlertTriangle size={18} className="text-rose-500" /> : <CheckCircle2 size={18} className="text-emerald-500" />}
           <span>{message}</span>
         </motion.div>
       )}
 
       {/* Global per Upstream Grid */}
-      <section className="panel pricing-section rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-        <div className="panel-head border-b border-zinc-800/80 pb-3">
-          <h3 className="text-sm font-bold text-zinc-100">Global per Upstream</h3>
-          <div className="sub text-xs text-zinc-400 mt-0.5">
-            Caps and revenue shares per upstream — trigger global kini di halaman Auto Pricing.
+      <section className="panel pricing-section ios-glass-card p-6 space-y-4">
+        <div className="panel-head border-b border-black/10 dark:border-white/10 pb-3">
+          <h2 className="text-base font-bold text-zinc-900 dark:text-white">Global per Upstream</h2>
+          <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">
+            Batas atas ask dan persentase bagi hasil per provider upstream.
           </div>
         </div>
 
@@ -278,12 +268,12 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             return (
               <div
                 key={upstream}
-                className="pricing-global p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 space-y-3 hover:border-zinc-700 transition-colors shadow-sm"
+                className="pricing-global p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 space-y-3 hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
               >
                 <div className="pricing-row-head flex items-center justify-between">
-                  <strong className="text-xs font-bold text-zinc-200">{upstream}</strong>
+                  <strong className="text-sm font-bold text-zinc-900 dark:text-white">{upstream}</strong>
                   <button
-                    className="btn btn-sm btn-primary px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] disabled:opacity-50 transition-all shadow-sm cursor-pointer"
+                    className="btn btn-sm btn-primary px-3.5 py-1.5 rounded-xl ios-btn-primary font-bold text-xs shadow-sm cursor-pointer"
                     onClick={() => saveGlobal(upstream)}
                     disabled={busy?.startsWith('global-')}
                   >
@@ -291,10 +281,10 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   </button>
                 </div>
 
-                <div className="space-y-2 text-xs">
+                <div className="space-y-2.5 text-xs sm:text-sm">
                   {fieldNames.map((field) => (
                     <label className="pricing-field space-y-1 block" key={field}>
-                      <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                      <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase">
                         {field}
                       </span>
                       <input
@@ -302,7 +292,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                         step="0.0001"
                         value={cfg[field] ?? ''}
                         onChange={(e) => updateGlobalForm(upstream, field, e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-100 outline-none focus:border-sky-500"
+                        className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono text-zinc-900 dark:text-white outline-none focus:border-sky-500"
                       />
                     </label>
                   ))}
@@ -312,36 +302,36 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             );
           })}
           {!upstreamNames.length && (
-            <div className="dt-empty text-xs text-zinc-500 py-4">Belum ada konfigurasi upstream.</div>
+            <div className="dt-empty text-sm text-zinc-500 py-4">Belum ada konfigurasi upstream.</div>
           )}
         </div>
       </section>
 
       {/* Per-Model Override Section */}
-      <section className="panel pricing-section rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-        <div className="panel-head border-b border-zinc-800/80 pb-3">
-          <h3 className="text-sm font-bold text-zinc-100">Per-Model Override</h3>
-          <div className="sub text-xs text-zinc-400 mt-0.5">
-            Override the trigger band for a specific upstream/model pair.
+      <section className="panel pricing-section ios-glass-card p-6 space-y-4">
+        <div className="panel-head border-b border-black/10 dark:border-white/10 pb-3">
+          <h2 className="text-base font-bold text-zinc-900 dark:text-white">Per-Model Override</h2>
+          <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">
+            Atur selisih trigger % khusus untuk kombinasi model upstream tertentu.
           </div>
         </div>
 
         <form onSubmit={saveOverride} className="pricing-override-form grid grid-cols-1 sm:grid-cols-4 gap-3.5">
           {['upstream', 'model_id', 'trigger_pct'].map((field) => (
             <label className="pricing-field space-y-1 block text-xs" key={field}>
-              <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">{field}</span>
+              <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase">{field}</span>
               <input
                 type={field.endsWith('_pct') ? 'number' : 'text'}
                 step={field.endsWith('_pct') ? '0.0001' : undefined}
                 value={overrideForm[field]}
                 onChange={(e) => setOverrideForm((prev) => ({ ...prev, [field]: e.target.value }))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 outline-none focus:border-sky-500 font-mono"
+                className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-zinc-900 dark:text-white outline-none focus:border-sky-500 font-mono shadow-inner"
               />
             </label>
           ))}
           <div className="flex items-end">
             <button
-              className="btn btn-primary w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-sky-500/10 disabled:opacity-50 transition-all cursor-pointer"
+              className="btn btn-primary w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl ios-btn-primary text-xs sm:text-sm font-bold shadow-md disabled:opacity-50 transition-all cursor-pointer"
               type="submit"
               disabled={busy === 'override-new'}
             >
@@ -350,31 +340,31 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
           </div>
         </form>
 
-        <div className="table-scroll overflow-x-auto border border-zinc-800/80 rounded-xl">
-          <table className="tbl w-full text-left text-xs border-collapse font-mono">
-            <thead className="bg-zinc-950 text-zinc-400 text-[10px] uppercase border-b border-zinc-800">
+        <div className="table-scroll overflow-x-auto border border-black/10 dark:border-white/10 rounded-2xl">
+          <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
+            <thead className="bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
               <tr>
-                <th className="px-4 py-3">Upstream / model</th>
-                <th className="px-4 py-3 text-center">trigger_pct</th>
-                <th className="px-4 py-3">updated_at</th>
-                <th className="px-4 py-3 text-right">Aksi</th>
+                <th className="px-5 py-3.5">Upstream / model</th>
+                <th className="px-5 py-3.5 text-center">trigger_pct</th>
+                <th className="px-5 py-3.5">updated_at</th>
+                <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/40">
+            <tbody className="divide-y divide-black/5 dark:divide-white/10">
               {overrideRows.map((override) => {
                 const key = actionKey('delete', override.id);
                 return (
-                  <tr key={`${override.upstream}-${override.model_id}`} className="hover:bg-zinc-800/30 transition-colors">
-                    <td className="px-4 py-2.5 font-bold text-zinc-200">
+                  <tr key={`${override.upstream}-${override.model_id}`} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <td className="px-5 py-3 font-bold text-zinc-900 dark:text-zinc-100">
                       {override.upstream} / {override.model_id}
                     </td>
-                    <td className="tnum px-4 py-2.5 text-center text-sky-400 font-bold">
+                    <td className="tnum px-5 py-3 text-center text-sky-600 dark:text-sky-400 font-bold">
                       {formatValue(override.trigger_pct)}
                     </td>
-                    <td className="faint px-4 py-2.5 text-zinc-500 text-[11px]">{override.updated_at || '—'}</td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="faint px-5 py-3 text-zinc-500 text-xs">{override.updated_at || '—'}</td>
+                    <td className="px-5 py-3 text-right font-sans">
                       <button
-                        className="btn btn-sm btn-danger px-3 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold text-[11px] border border-rose-500/30 disabled:opacity-50 transition-all cursor-pointer"
+                        className="btn btn-sm btn-danger px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-300 font-bold text-xs border border-rose-500/30 disabled:opacity-50 transition-all cursor-pointer"
                         onClick={() => deleteOverride(override)}
                         disabled={!override.id || busy === key}
                       >
@@ -386,7 +376,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
               })}
               {!overrideRows.length && (
                 <tr>
-                  <td colSpan={4} className="dt-empty px-4 py-8 text-center text-zinc-500 font-sans text-xs">
+                  <td colSpan={4} className="dt-empty px-5 py-8 text-center text-zinc-500 font-sans text-xs sm:text-sm">
                     Belum ada override tersimpan.
                   </td>
                 </tr>
@@ -397,65 +387,65 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
       </section>
 
       {/* Merged Orderbook Table */}
-      <section className="panel pricing-section rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-lg">
-        <div className="panel-head p-5 border-b border-zinc-800/80 bg-zinc-900/80 flex flex-wrap items-center justify-between gap-3">
+      <section className="panel pricing-section ios-glass-card overflow-hidden shadow-xl">
+        <div className="panel-head p-6 border-b border-black/10 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold text-zinc-100">Orderbook · merged asks + auto-pricing</h3>
-            <div className="sub text-xs text-zinc-400 mt-0.5">
-              Our asks are marked separately from competitor levels. Set a manual ask per upstream — note: auto-pricing remains authoritative while armed.
+            <h2 className="text-base font-bold text-zinc-900 dark:text-white">Orderbook · merged asks + auto-pricing</h2>
+            <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">
+              Kedalaman harga ask kita dibandingkan dengan level kompetitor pasar.
             </div>
           </div>
 
-          <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <div className="relative min-w-[200px] max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
-              placeholder="Search model or label..."
+              placeholder="Search model..."
               value={searchOrderbook}
               onChange={(e) => setSearchOrderbook(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-lg pl-7 pr-3 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-sky-500 font-mono"
+              className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
             />
           </div>
         </div>
 
         <div className="table-scroll overflow-x-auto max-h-[500px]">
-          <table className="tbl w-full text-left text-xs border-collapse font-mono">
-            <thead className="sticky top-0 bg-zinc-950 text-zinc-400 text-[10px] uppercase border-b border-zinc-800">
+          <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
+            <thead className="sticky top-0 bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
               <tr>
-                <th className="px-4 py-3 font-sans">Model</th>
-                <th className="px-4 py-3 text-right">Min ask</th>
-                <th className="px-4 py-3 text-right">Max ask</th>
-                <th className="px-4 py-3 text-right">Spread</th>
-                <th className="px-4 py-3 text-right font-bold text-emerald-400">Our ask</th>
-                <th className="px-4 py-3">Levels</th>
-                <th className="px-4 py-3 text-right">Aksi</th>
+                <th className="px-5 py-3.5">Model</th>
+                <th className="px-5 py-3.5 text-right">Min ask</th>
+                <th className="px-5 py-3.5 text-right">Max ask</th>
+                <th className="px-5 py-3.5 text-right">Spread</th>
+                <th className="px-5 py-3.5 text-right font-bold text-emerald-600 dark:text-emerald-400">Our ask</th>
+                <th className="px-5 py-3.5">Levels</th>
+                <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/40">
+            <tbody className="divide-y divide-black/5 dark:divide-white/10">
               {filteredOrderbook.map((row) => (
-                <tr key={row.model_id} className="hover:bg-zinc-800/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <strong className="font-bold text-zinc-200 font-sans">{row.label || row.model_id}</strong>
-                    <div className="prov-sub text-[10px] text-zinc-500 font-mono">{row.model_id}</div>
+                <tr key={row.model_id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                  <td className="px-5 py-3.5">
+                    <strong className="font-bold text-zinc-900 dark:text-zinc-100 font-sans text-sm">{row.label || row.model_id}</strong>
+                    <div className="prov-sub text-xs text-zinc-500 font-mono">{row.model_id}</div>
                   </td>
-                  <td className="tnum px-4 py-3 text-right text-zinc-300">
+                  <td className="tnum px-5 py-3.5 text-right text-zinc-700 dark:text-zinc-300">
                     {formatValue(row.min_ask ?? row.ask)}
                   </td>
-                  <td className="tnum px-4 py-3 text-right text-zinc-400">{formatValue(row.max_ask)}</td>
-                  <td className="tnum px-4 py-3 text-right text-amber-400 font-bold">{formatValue(row.spread)}</td>
-                  <td className="tnum pos px-4 py-3 text-right font-bold text-emerald-400">
+                  <td className="tnum px-5 py-3.5 text-right text-zinc-500 dark:text-zinc-400">{formatValue(row.max_ask)}</td>
+                  <td className="tnum px-5 py-3.5 text-right text-amber-600 dark:text-amber-400 font-bold">{formatValue(row.spread)}</td>
+                  <td className="tnum pos px-5 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
                     {formatValue(row.our_ask)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <div className="pricing-levels flex flex-wrap gap-1.5 max-w-sm">
                       {(row.upstreams || []).flatMap((upstream) =>
                         (upstream.levels || []).map((level, index) => (
                           <span
                             key={`${upstream.slug}-${index}`}
-                            className={`pricing-level inline-flex items-center px-2 py-0.5 rounded text-[10px] border ${
+                            className={`pricing-level inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${
                               upstream.is_ours
-                                ? 'ours bg-emerald-500/15 border-emerald-500/30 text-emerald-300 font-bold shadow-sm'
-                                : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                                ? 'ours bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold'
+                                : 'bg-black/5 dark:bg-black/50 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400'
                             }`}
                           >
                             {formatValue(level.price)} · {upstream.is_ours ? 'ours' : upstream.label || upstream.slug}
@@ -463,15 +453,15 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                         ))
                       )}
                       {!row.upstreams?.length && row.ask != null && (
-                        <span className="pricing-level inline-flex items-center px-2 py-0.5 rounded text-[10px] border bg-zinc-950 border-zinc-800 text-zinc-400">
+                        <span className="pricing-level inline-flex items-center px-2 py-0.5 rounded text-[11px] border bg-black/5 dark:bg-black/50 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400">
                           ask: {formatValue(row.ask)}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-5 py-3.5 text-right font-sans">
                     <button
-                      className="btn btn-sm px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-[11px] shadow-sm transition-all cursor-pointer"
+                      className="btn btn-sm px-3.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 font-bold text-xs shadow-sm transition-all cursor-pointer"
                       onClick={() => openAskForm(row)}
                     >
                       Set manual ask
@@ -481,7 +471,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
               ))}
               {!filteredOrderbook.length && (
                 <tr>
-                  <td colSpan={7} className="dt-empty px-4 py-12 text-center text-zinc-500 font-sans text-xs">
+                  <td colSpan={7} className="dt-empty px-5 py-12 text-center text-zinc-500 font-sans text-xs sm:text-sm">
                     Belum ada data orderbook.
                   </td>
                 </tr>
@@ -491,26 +481,26 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
         </div>
 
         {askForm && (
-          <form className="pricing-ask-form p-6 border-t border-zinc-800 bg-zinc-950/90 space-y-4" onSubmit={saveAsk}>
-            <div className="pricing-ask-head text-sm font-bold text-zinc-100 flex items-center justify-between">
+          <form className="pricing-ask-form p-6 border-t border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/60 space-y-4" onSubmit={saveAsk}>
+            <div className="pricing-ask-head text-sm font-bold text-zinc-900 dark:text-white flex items-center justify-between">
               <strong>
                 Set manual ask — {askForm.upstream} / {askForm.model_id}
               </strong>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs sm:text-sm">
               <label className="pricing-field space-y-1 block">
-                <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">upstream</span>
+                <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase">upstream</span>
                 <input
                   type="text"
                   value={askForm.upstream}
                   onChange={(e) => setAskForm((prev) => ({ ...prev, upstream: e.target.value }))}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 font-mono outline-none"
+                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none"
                 />
               </label>
 
               <label className="pricing-field space-y-1 block">
-                <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase">
                   ask input per Mtok
                 </span>
                 <input
@@ -520,12 +510,12 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   onChange={(e) =>
                     setAskForm((prev) => ({ ...prev, ask_input_per_mtok: e.target.value }))
                   }
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 font-mono outline-none focus:border-sky-500"
+                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none focus:border-sky-500"
                 />
               </label>
 
               <label className="pricing-field space-y-1 block">
-                <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase">
                   ask output per Mtok
                 </span>
                 <input
@@ -535,21 +525,21 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   onChange={(e) =>
                     setAskForm((prev) => ({ ...prev, ask_output_per_mtok: e.target.value }))
                   }
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 font-mono outline-none focus:border-sky-500"
+                  className="w-full bg-white/80 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-zinc-900 dark:text-white font-mono outline-none focus:border-sky-500"
                 />
               </label>
             </div>
 
-            <div className="pricing-ask-actions flex items-center justify-end gap-2 pt-2">
+            <div className="pricing-ask-actions flex items-center justify-end gap-2.5 pt-2 font-sans">
               <button
                 type="button"
-                className="btn px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                className="btn px-4 py-2 rounded-xl text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
                 onClick={() => setAskForm(null)}
               >
                 Batal
               </button>
               <button
-                className="btn btn-primary px-5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-sky-500/10 cursor-pointer"
+                className="btn btn-primary px-5 py-2.5 rounded-xl ios-btn-primary font-bold text-xs sm:text-sm shadow-md cursor-pointer"
                 type="submit"
                 disabled={busy === 'ask-set'}
               >
@@ -559,6 +549,6 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
           </form>
         )}
       </section>
-    </motion.div>
+    </div>
   );
 }

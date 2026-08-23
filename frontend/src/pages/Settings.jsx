@@ -51,11 +51,11 @@ export default function Settings() {
     setBusy(true);
     try {
       await loginWithPassword(pw);
-      success('Authentication successful — 24h session token active.');
+      success('Autentikasi berhasil — token sesi 24 jam aktif.');
       setPw('');
       setTimeout(() => window.location.reload(), 600);
     } catch (err) {
-      toastError('Authentication failed: ' + (err.message || 'unauthorized'));
+      toastError('Autentikasi gagal: ' + (err.message || 'unauthorized'));
     } finally {
       setBusy(false);
     }
@@ -63,47 +63,37 @@ export default function Settings() {
 
   const doLogout = () => {
     clearSessionToken();
-    success('Logged out successfully.');
+    success('Berhasil logout.');
     setTimeout(() => window.location.reload(), 400);
   };
 
   const items = [
-    { label: 'Account', value: data?.account?.displayName || '—', sub: data?.account?.email || 'publisher@upstream.internal' },
-    { label: 'Publisher role', value: 'publisher + consumer', sub: 'InferHub' },
-    { label: 'Publisher earnings (USDC)', value: usd(bal.publisher_earnings), sub: 'live' },
-    { label: 'Fiat pending', value: usd(bal.fiat_pendings), sub: 'settlement' },
-    { label: 'Active fleet', value: `${data?.fleet_summary?.ok_total || 0} / ${data?.fleet_summary?.total || 0}`, sub: 'ok / total providers' },
-    { label: 'Data refresh', value: '15s frontend · 60s daemon', sub: `frontend poll interval · source ${data?.ts || ''}` },
+    { label: 'Akun Operator', value: data?.account?.displayName || '—', sub: data?.account?.email || 'publisher@upstream.internal' },
+    { label: 'Role Publisher', value: 'publisher + consumer', sub: 'InferHub' },
+    { label: 'Pendapatan USDC', value: usd(bal.publisher_earnings), sub: 'real-time' },
+    { label: 'Fiat Pending', value: usd(bal.fiat_pendings), sub: 'settlement' },
+    { label: 'Node Provider Aktif', value: `${data?.fleet_summary?.ok_total || 0} / ${data?.fleet_summary?.total || 0}`, sub: 'node terhubung' },
+    { label: 'Interval Refresh', value: '15s UI · 60s Daemon', sub: `source: ${data?.ts || 'live'}` },
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="page space-y-6 max-w-7xl mx-auto"
-    >
+    <div className="page space-y-6 max-w-7xl mx-auto pb-12 font-sans transition-colors">
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 p-6 shadow-xl backdrop-blur-xl">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                <SettingsIcon size={11} className="text-indigo-400" />
-                Platform Configuration · Node Security
-              </span>
-              <span className="text-xs text-zinc-500 font-mono hidden sm:inline">
-                System Diagnostics
-              </span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight">
-              Settings & Security Gate
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl">
-              Operator session authentication, node infrastructure topology, and decision-grade finance verification.
-            </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30">
+              <SettingsIcon size={13} />
+              Konfigurasi & Keamanan
+            </span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">Sistem Platform</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white">
+            Settings & Security
+          </h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1 max-w-2xl">
+            Manajemen autentikasi sesi operator, topologi server hybrid, dan diagnostik platform.
+          </p>
         </div>
       </div>
 
@@ -111,30 +101,30 @@ export default function Settings() {
         {/* Left Column (2 cols): System Overview & Bento Grid */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account & Fleet Panel */}
-          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel ios-glass-card p-6 space-y-4 shadow-xl">
+            <div className="panel-head flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
               <div>
-                <h2 className="text-sm font-bold text-zinc-100">System · Account</h2>
-                <div className="sub text-xs text-zinc-400 mt-0.5">About this deployment</div>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">System & Account</h2>
+                <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">Informasi akun deployment saat ini</div>
               </div>
               <Badge kind="ok" dot>
                 Connected
               </Badge>
             </div>
 
-            <div className="settings-list grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="settings-list grid grid-cols-1 sm:grid-cols-2 gap-4">
               {items.map((it, i) => (
                 <div
-                  className="setting-row p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 flex flex-col justify-between hover:border-zinc-700 transition-colors shadow-sm"
+                  className="setting-row p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-colors shadow-sm"
                   key={i}
                 >
                   <div>
-                    <div className="setting-label text-[10px] font-mono font-bold uppercase text-zinc-400 tracking-wider">
+                    <div className="setting-label text-xs font-mono font-bold uppercase text-zinc-500 dark:text-zinc-400 tracking-wider">
                       {it.label}
                     </div>
-                    <div className="setting-sub text-[11px] text-zinc-500 mt-0.5">{it.sub}</div>
+                    <div className="setting-sub text-xs text-zinc-400 mt-0.5">{it.sub}</div>
                   </div>
-                  <div className="setting-value tnum font-mono font-bold text-zinc-100 text-sm mt-2">
+                  <div className="setting-value tnum font-mono font-bold text-zinc-900 dark:text-white text-base mt-2">
                     {it.value}
                   </div>
                 </div>
@@ -143,47 +133,51 @@ export default function Settings() {
           </section>
 
           {/* Architecture Topology */}
-          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel ios-glass-card p-6 space-y-4 shadow-xl">
+            <div className="panel-head flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
               <div>
-                <h2 className="text-sm font-bold text-zinc-100">Architecture</h2>
-                <div className="sub text-xs text-zinc-400 mt-0.5">hybrid deployment</div>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">Arsitektur Infrastruktur</h2>
+                <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">Topologi deployment hybrid production</div>
               </div>
-              <Server size={16} className="text-sky-400" />
+              <Server size={18} className="text-sky-500" />
             </div>
 
-            <div className="settings-list space-y-2.5 text-xs">
-              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
+            <div className="settings-list space-y-3 text-xs sm:text-sm">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
-                  <Globe size={16} className="text-sky-400" />
+                  <Globe size={18} className="text-sky-500" />
                   <div>
-                    <div className="setting-label font-bold text-zinc-200">Frontend</div>
-                    <div className="setting-sub text-[11px] text-zinc-500">React · Vite · Vercel edge</div>
+                    <div className="setting-label font-bold text-zinc-900 dark:text-white">Frontend Edge</div>
+                    <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">React · Vite · Vercel Edge Serverless</div>
                   </div>
                 </div>
-                <div className="setting-value font-mono font-bold text-emerald-400">hosted</div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  HOSTED
+                </span>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
-                  <Server size={16} className="text-indigo-400" />
+                  <Server size={18} className="text-indigo-500" />
                   <div>
-                    <div className="setting-label font-bold text-zinc-200">Backend API</div>
-                    <div className="setting-sub text-[11px] text-zinc-500">Flask · waitress · nginx TLS</div>
+                    <div className="setting-label font-bold text-zinc-900 dark:text-white">Backend Production Server</div>
+                    <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">Python Flask · Nginx Reverse Proxy · TLS</div>
                   </div>
                 </div>
-                <div className="setting-value tnum font-mono font-bold text-sky-400">ops.budgezen.com</div>
+                <div className="setting-value tnum font-mono font-bold text-sky-600 dark:text-sky-400">ops.budgezen.com</div>
               </div>
 
-              <div className="setting-row flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
+              <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
-                  <Database size={16} className="text-emerald-400" />
+                  <Database size={18} className="text-emerald-500" />
                   <div>
-                    <div className="setting-label font-bold text-zinc-200">Real-time source</div>
-                    <div className="setting-sub text-[11px] text-zinc-500">InferHub daemon · every 60s · backend REST/SSE</div>
+                    <div className="setting-label font-bold text-zinc-900 dark:text-white">Pricing Loop Engine</div>
+                    <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">InferHub autonomous daemon · Loop 60s</div>
                   </div>
                 </div>
-                <div className="setting-value font-mono font-bold text-emerald-400">active</div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  ACTIVE
+                </span>
               </div>
             </div>
           </section>
@@ -192,32 +186,38 @@ export default function Settings() {
         {/* Right Column (1 col): Security Session & Diagnostics */}
         <div className="space-y-6">
           {/* Session Token Card */}
-          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel ios-glass-card p-6 space-y-4 shadow-xl">
+            <div className="panel-head flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
               <div className="flex items-center gap-2">
-                <Lock size={16} className="text-sky-400" />
-                <h2 className="text-sm font-bold text-zinc-100">Session</h2>
+                <Lock size={18} className="text-sky-500" />
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">Sesi Operator</h2>
               </div>
-              <div className="setting-value font-mono text-xs font-bold text-zinc-300">
-                {hasToken ? 'token aktif' : 'belum login'}
-              </div>
+              {hasToken ? (
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                  Token Aktif
+                </span>
+              ) : (
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                  Belum Login
+                </span>
+              )}
             </div>
 
-            <div className="sub text-xs text-zinc-400 leading-relaxed">
-              login sekali — token sesi (24h), password tidak disimpan di browser
+            <div className="sub text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+              Token sesi terenkripsi 24 jam. Password tidak disimpan secara terbuka.
             </div>
 
             {hasToken ? (
               <div className="space-y-3 pt-1">
-                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center gap-2.5">
-                  <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5">
+                  <CheckCircle2 size={18} className="shrink-0 text-emerald-500" />
                   <span>Token aktif dalam sessionStorage.</span>
                 </div>
                 <button
                   onClick={doLogout}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
-                  <LogOut size={14} />
+                  <LogOut size={16} />
                   <span>Hapus Token Sesi</span>
                 </button>
               </div>
@@ -229,15 +229,15 @@ export default function Settings() {
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
                     placeholder="Dashboard password"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200 outline-none focus:border-sky-500 font-mono"
+                    className="w-full bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-zinc-900 dark:text-white outline-none focus:border-sky-500 font-mono shadow-inner"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={busy || !pw}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-sky-500/10 disabled:opacity-50 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl ios-btn-primary font-bold text-xs sm:text-sm shadow-md disabled:opacity-50 transition-all cursor-pointer"
                 >
-                  <KeyRound size={14} />
+                  <KeyRound size={16} />
                   <span>{busy ? 'Login…' : 'Login'}</span>
                 </button>
               </form>
@@ -245,18 +245,18 @@ export default function Settings() {
           </section>
 
           {/* Decision-Grade Finance Status */}
-          <section className="panel rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-md p-6 space-y-4 shadow-lg">
-            <div className="panel-head flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <section className="panel ios-glass-card p-6 space-y-4 shadow-xl">
+            <div className="panel-head flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
               <div>
-                <h2 className="text-sm font-bold text-zinc-100">Finance</h2>
-                <div className="sub text-xs text-zinc-400 mt-0.5">decision-grade metrics</div>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">Finance Status</h2>
+                <div className="sub text-xs text-zinc-600 dark:text-zinc-300 mt-0.5">Status verifikasi metrik keuangan</div>
               </div>
-              <ShieldCheck size={16} className="text-emerald-400" />
+              <ShieldCheck size={18} className="text-emerald-500" />
             </div>
             <FinanceStatus metrics={financeMetrics} variance={financeData?.variance ?? ''} />
           </section>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
