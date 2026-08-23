@@ -72,7 +72,7 @@ export default function Layout() {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Topbar Header */}
-      <div className="relative z-30">
+      <div className="sticky top-0 z-40">
         <Topbar
           onOpenSearch={() => setSearchOpen(true)}
           onToggleSidebar={toggleSidebar}
