@@ -97,6 +97,7 @@ export default function AutoPricing() {
       await reload();
       success(next ? 'Auto-Pricing ARMED — live PUT aktif!' : 'Auto-Pricing DISARMED (dry-run)');
     } catch (err) {
+      setNote(`Error: ${err.message}`);
       toastError(`Error: ${err.message}`);
     } finally {
       setArming(false);
@@ -154,6 +155,7 @@ export default function AutoPricing() {
       });
       success(`✓ ${upstream}/${model_id} → kembali default`);
     } catch (err) {
+      setNote(`Error: ${err.message}`);
       toastError(`Error: ${err.message}`);
     } finally {
       setSaving(null);
@@ -188,6 +190,7 @@ export default function AutoPricing() {
       await reloadGlobals();
       success(`✓ ${upstream} trigger global → ${global_trigger_pct ?? 10}%`);
     } catch (err) {
+      setNote(`Error: ${err.message}`);
       toastError(`Error: ${err.message}`);
     } finally {
       setSavingGlobal(null);
@@ -211,6 +214,7 @@ export default function AutoPricing() {
           : `✓ ${upstream} dikeluarkan dari scope — TIDAK diproses cycle berikutnya`
       );
     } catch (err) {
+      setNote(`Error: ${err.message}`);
       toastError(`Error: ${err.message}`);
     } finally {
       setSavingGlobal(null);
@@ -229,21 +233,21 @@ export default function AutoPricing() {
   const isProvEnabled = activeProvCfg.auto_pricing_enabled !== false;
 
   return (
-    <div className="page space-y-6 max-w-7xl mx-auto pb-12 font-sans">
+    <div className="page space-y-6 max-w-7xl mx-auto pb-12 font-sans transition-colors">
       {/* ── 1. Top Operations Bar ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-500/15 text-sky-300 border border-sky-400/30">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30">
               <Sparkles size={13} />
               Aturan Harga Otomatis
             </span>
-            <span className="text-xs text-zinc-400 font-mono">Loop Eksekusi 60s</span>
+            <span className="text-xs text-[var(--text-sub)] font-mono">Loop Eksekusi 60s</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-title)]">
             Auto-Pricing Engine
           </h1>
-          <p className="text-sm text-zinc-300 mt-1 max-w-2xl">
+          <p className="text-sm text-[var(--text-sub)] mt-1 max-w-2xl">
             Tentukan selisih undercut kompetitor dan kelola scope aktif tiap provider upstream secara instan.
           </p>
         </div>
@@ -255,7 +259,7 @@ export default function AutoPricing() {
             className={`px-6 py-2.5 rounded-2xl font-bold text-sm shadow-lg transition-all cursor-pointer ${
               data?.armed
                 ? 'ios-btn-primary'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10'
+                : 'ios-btn-secondary'
             } disabled:opacity-50`}
           >
             {arming ? 'Menyimpan…' : data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)'}
@@ -264,7 +268,7 @@ export default function AutoPricing() {
           <button
             onClick={() => reload()}
             disabled={loading}
-            className="p-2.5 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="ios-btn-secondary p-2.5 rounded-2xl shadow-sm cursor-pointer"
             title="Refresh snapshot"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -273,8 +277,8 @@ export default function AutoPricing() {
       </div>
 
       {note && (
-        <div className="note p-3 rounded-2xl bg-zinc-900/90 border border-white/10 text-zinc-100 text-xs flex items-center gap-2 font-mono" role="status">
-          <AlertTriangle size={15} className="text-amber-400 shrink-0" />
+        <div className="note p-4 rounded-2xl bg-zinc-900 text-zinc-100 border border-white/10 text-xs sm:text-sm flex items-center gap-2.5 font-mono shadow-md" role="status">
+          <AlertTriangle size={16} className="text-amber-400 shrink-0" />
           <span>{note}</span>
         </div>
       )}
@@ -317,7 +321,7 @@ export default function AutoPricing() {
       {/* ── 3. Integrated Provider Navigation & Instant Target Table ── */}
       <section className="ios-glass-card overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6">
         {/* Provider Tabs Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
           <div className="flex items-center gap-2 overflow-x-auto">
             {provs.map((u) => {
               const isActive = prov === u;
@@ -327,12 +331,12 @@ export default function AutoPricing() {
                   onClick={() => setProv(u)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-sky-500/20 text-sky-200 border border-sky-400/40 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 border border-transparent'
+                      ? 'ios-pill-active font-extrabold'
+                      : 'text-[var(--text-sub)] hover:text-[var(--text-title)] hover:bg-black/5 dark:hover:bg-white/5 border border-transparent'
                   }`}
                 >
                   <span>{u}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-md bg-black/40 text-zinc-300 font-mono">
+                  <span className="text-xs px-2 py-0.5 rounded-md bg-black/10 dark:bg-black/40 text-[var(--text-sub)] font-mono">
                     {byProv[u]?.length || 0}
                   </span>
                 </button>
@@ -348,14 +352,14 @@ export default function AutoPricing() {
               placeholder="Cari model..."
               value={searchModel}
               onChange={(e) => setSearchModel(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-sky-400 font-mono"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
             />
           </div>
         </div>
 
         {/* Selected Provider Quick Control Strip (Compact & Zero Blocking!) */}
         {prov && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10 text-sm">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -363,14 +367,14 @@ export default function AutoPricing() {
                   checked={isProvEnabled}
                   disabled={savingGlobal === prov}
                   onChange={(e) => toggleScope(prov, e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-700 text-sky-500 focus:ring-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-zinc-500 text-sky-600 focus:ring-0 cursor-pointer"
                 />
-                <span className="font-bold text-zinc-200">Scope Provider:</span>
+                <span className="font-bold text-[var(--text-title)]">Scope Provider:</span>
                 <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-lg ${
                     isProvEnabled
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                      : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)] border border-black/10 dark:border-white/10'
                   }`}
                 >
                   {isProvEnabled ? 'ON (Diproses)' : 'OFF (Dikecualikan)'}
@@ -379,7 +383,7 @@ export default function AutoPricing() {
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-xs text-zinc-400 font-medium">Trigger Global:</span>
+              <span className="text-xs text-[var(--text-sub)] font-medium">Trigger Global:</span>
               <input
                 type="number"
                 step="0.1"
@@ -395,13 +399,13 @@ export default function AutoPricing() {
                     [prov]: { ...prev[prov], global_trigger_pct: e.target.value },
                   }))
                 }
-                className="w-24 bg-black/50 border border-white/10 rounded-xl px-3 py-1 text-xs text-white font-mono text-center outline-none focus:border-sky-400"
+                className="w-24 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-1 text-xs text-[var(--text-title)] font-mono text-center outline-none focus:border-sky-500 shadow-inner"
               />
-              <span className="text-xs text-zinc-400 font-mono">%</span>
+              <span className="text-xs text-[var(--text-sub)] font-mono">%</span>
               <button
                 onClick={() => saveGlobalTrigger(prov)}
                 disabled={savingGlobal === prov}
-                className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                className="px-4 py-1.5 rounded-xl ios-btn-primary font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 {savingGlobal === prov ? '…' : 'Simpan'}
               </button>
@@ -437,20 +441,20 @@ export default function AutoPricing() {
         </div>
 
         {/* Target Price Table */}
-        <div className="overflow-x-auto rounded-2xl border border-white/10">
+        <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
           <table className="w-full text-left text-sm border-collapse font-mono">
-            <thead className="sticky top-0 bg-zinc-950 text-zinc-400 font-sans text-xs uppercase tracking-wider border-b border-white/10">
+            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] font-sans text-xs uppercase tracking-wider border-b border-black/10 dark:border-white/10 backdrop-blur-xl">
               <tr>
                 <th className="px-5 py-3.5">Model ID</th>
                 <th className="px-5 py-3.5 text-right">Ask Saat Ini</th>
                 <th className="px-5 py-3.5 text-right">Kompetitor</th>
                 <th className="px-5 py-3.5 text-center">Trigger %</th>
-                <th className="px-5 py-3.5 text-right font-bold text-emerald-400">Target Ask</th>
+                <th className="px-5 py-3.5 text-right font-bold text-emerald-600 dark:text-emerald-400">Target Ask</th>
                 <th className="px-5 py-3.5 text-center">Status</th>
                 <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10 font-mono text-xs sm:text-sm">
+            <tbody className="divide-y divide-black/5 dark:divide-white/10 font-mono text-xs sm:text-sm">
               {rows.map((c, i) => {
                 const bare = (c.model_id || '').split('/').pop();
                 const key = `${c.slug}|${bare}`;
@@ -467,22 +471,22 @@ export default function AutoPricing() {
                   <tr
                     key={i}
                     onClick={() => setSelectedModel(c)}
-                    className="hover:bg-white/5 transition-colors cursor-pointer"
+                    className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
                   >
                     <td className="px-5 py-3">
-                      <div className="font-bold text-white text-sm">{c.model_id}</div>
+                      <div className="font-bold text-[var(--text-title)] text-sm">{c.model_id}</div>
                       {cfg && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold inline-block mt-0.5">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold inline-block mt-0.5">
                           custom: {cfg.trigger_pct}%
                         </span>
                       )}
                     </td>
 
-                    <td className="px-5 py-3 text-right font-bold text-zinc-100">
+                    <td className="px-5 py-3 text-right font-bold text-[var(--text-title)]">
                       {c.ask_in != null ? `$${Number(c.ask_in).toFixed(4)}` : '—'}
                     </td>
 
-                    <td className="px-5 py-3 text-right text-zinc-300">
+                    <td className="px-5 py-3 text-right text-[var(--text-sub)]">
                       {c.competitor_price != null ? `$${Number(c.competitor_price).toFixed(4)}` : '—'}
                     </td>
 
@@ -498,11 +502,11 @@ export default function AutoPricing() {
                             [key]: { ...prev[key], trigger: e.target.value },
                           }))
                         }
-                        className="w-20 bg-black/60 border border-white/10 rounded-xl px-2.5 py-1 text-center text-xs text-white font-mono outline-none focus:border-sky-400"
+                        className="w-20 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-2.5 py-1 text-center text-xs text-[var(--text-title)] font-mono outline-none focus:border-sky-500 shadow-inner"
                       />
                     </td>
 
-                    <td className="px-5 py-3 text-right font-extrabold text-emerald-400">
+                    <td className="px-5 py-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
                       {c.target != null ? `$${Number(c.target).toFixed(4)}` : '—'}
                     </td>
 
@@ -510,15 +514,15 @@ export default function AutoPricing() {
                       <span
                         className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
                           isUndercut
-                            ? 'bg-sky-500/15 text-sky-300 border border-sky-400/30'
+                            ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
                             : isLeader
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                            : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)]'
                         }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
-                            isUndercut ? 'bg-sky-400 animate-pulse' : isLeader ? 'bg-emerald-400' : 'bg-zinc-500'
+                            isUndercut ? 'bg-sky-500 animate-pulse' : isLeader ? 'bg-emerald-500' : 'bg-zinc-400'
                           }`}
                         />
                         {(c.action || 'HOLD').toUpperCase()}
@@ -530,7 +534,7 @@ export default function AutoPricing() {
                         <button
                           onClick={() => saveConfig(c.slug, bare, cfg?.id)}
                           disabled={saving === key}
-                          className="px-3 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs border border-white/10 transition-all cursor-pointer"
+                          className="ios-btn-secondary px-3 py-1 rounded-xl text-xs shadow-sm cursor-pointer"
                         >
                           {saving === key ? '…' : cfg ? 'Update' : 'Set'}
                         </button>
@@ -540,7 +544,7 @@ export default function AutoPricing() {
                             title="kembali ke default"
                             onClick={() => deleteConfig(cfg.id, c.slug, bare)}
                             disabled={saving === key}
-                            className="p-1.5 rounded-xl hover:bg-rose-500/20 text-rose-400 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-xl hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
                           >
                             <RotateCcw size={14} />
                           </button>
@@ -553,7 +557,7 @@ export default function AutoPricing() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-zinc-400 font-sans text-sm">
+                  <td colSpan={7} className="px-5 py-12 text-center text-[var(--text-sub)] font-sans text-sm">
                     Belum ada data model untuk provider ini. Jalankan siklus daemon.
                   </td>
                 </tr>
@@ -565,8 +569,8 @@ export default function AutoPricing() {
 
       {/* ── 4. Algo Log Terminal ── */}
       <section className="ios-glass-card overflow-hidden shadow-lg">
-        <div className="p-4 border-b border-white/10 bg-black/40 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-zinc-300 font-mono text-xs font-bold">
+        <div className="p-4 border-b border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/40 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[var(--text-title)] font-mono text-xs font-bold">
             <Terminal size={15} />
             <span>Log Eksekusi Algo Terakhir</span>
           </div>
@@ -575,13 +579,13 @@ export default function AutoPricing() {
               navigator.clipboard?.writeText(data?.log || '');
               success('Log disalin ke clipboard!');
             }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer transition-colors"
+            className="ios-btn-secondary flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
           >
             <Copy size={13} />
             <span>Copy Log</span>
           </button>
         </div>
-        <pre className="p-4 text-xs font-mono text-zinc-300 bg-black/60 overflow-x-auto max-h-52 leading-relaxed">
+        <pre className="p-4 text-xs font-mono text-[var(--text-body)] bg-black/5 dark:bg-black/60 overflow-x-auto max-h-52 leading-relaxed">
           {data?.log || '—'}
         </pre>
       </section>

@@ -56,12 +56,12 @@ const eventView = (event) => ({
 });
 
 const PROVIDER_COLORS = {
-  'codebuddy-cn': 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30',
-  codebuddy: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30',
-  'cline-pass': 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
-  clinepass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
-  commandcode: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
-  'opencode-go': 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
+  'codebuddy-cn': 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
+  codebuddy: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
+  'cline-pass': 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
+  clinepass: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
+  commandcode: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  'opencode-go': 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
 };
 
 function State({ status }) {
@@ -76,10 +76,10 @@ function State({ status }) {
     <span
       className={`rel-state rel-state-${status} inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
         status === 'live'
-          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
           : status === 'connecting'
-          ? 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
-          : 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
+          ? 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-400'
+          : 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-400'
       }`}
       role="status"
     >
@@ -196,16 +196,16 @@ export default function Reliability() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="eyebrow inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+            <span className="eyebrow inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               <Radio size={13} />
               Sistem Operasional
             </span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">Loop 60 Detik</span>
+            <span className="text-xs text-[var(--text-sub)] font-mono">Loop 60 Detik</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-title)]">
             Reliability & Operations
           </h1>
-          <p className="faint text-sm text-zinc-600 dark:text-zinc-300 mt-1">
+          <p className="faint text-sm text-[var(--text-sub)] mt-1">
             Monitoring status daemon harga otomatis, inventaris model upstream, dan log mutasi harga.
           </p>
         </div>
@@ -214,7 +214,7 @@ export default function Reliability() {
           <State status={status} />
           <button
             onClick={() => recover()}
-            className="p-2.5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors shadow-sm cursor-pointer"
+            className="ios-btn-secondary p-2.5 rounded-2xl shadow-sm cursor-pointer"
             title="Refresh snapshot"
           >
             <RefreshCw size={16} />
@@ -281,7 +281,7 @@ export default function Reliability() {
             <div
               className={`p-3.5 rounded-2xl border shadow-inner ${
                 armState
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
                   : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-500 dark:text-zinc-400'
               }`}
             >
@@ -289,20 +289,20 @@ export default function Reliability() {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-sub)]">
                   STATUS DAEMON:
                 </span>
                 <span
                   className={`text-xs font-mono font-extrabold px-3 py-1 rounded-xl border ${
                     armState
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                      : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-700 dark:text-zinc-300'
+                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                      : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-[var(--text-title)]'
                   }`}
                 >
                   {armState ? 'ARMED (LIVE PRICING)' : 'DISARMED'}
                 </span>
               </div>
-              <p className="faint text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-1 max-w-xl">
+              <p className="faint text-xs sm:text-sm text-[var(--text-sub)] mt-1 max-w-xl">
                 {armState
                   ? 'Perubahan harga otomatis diterapkan ke pasar InferHub tiap siklus 60 detik.'
                   : 'Mode simulasi aktif (dry-run) — harga target dihitung tanpa mengubah ask di pasar.'}
@@ -314,7 +314,7 @@ export default function Reliability() {
             <button
               className={`px-6 py-2.5 rounded-2xl font-bold text-sm shadow-lg transition-all cursor-pointer ${
                 armState
-                  ? 'bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 border border-black/10 dark:border-white/10'
+                  ? 'ios-btn-secondary'
                   : 'ios-btn-primary'
               } disabled:opacity-50`}
               disabled={transition?.pending || status === 'auth-required'}
@@ -368,11 +368,11 @@ export default function Reliability() {
                 <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 block">
                   Model Inventory Snapshot
                 </span>
-                <h2 className="text-base font-bold text-zinc-900 dark:text-white">Every processed model</h2>
+                <h2 className="text-base font-bold text-[var(--text-title)]">Every processed model</h2>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="faint text-xs text-zinc-500 font-mono">HOLD included</span>
+                <span className="faint text-xs text-[var(--text-sub)] font-mono">HOLD included</span>
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                   <input
@@ -380,7 +380,7 @@ export default function Reliability() {
                     placeholder="Search model ID..."
                     value={filter.search}
                     onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-                    className="bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
+                    className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
                   />
                 </div>
               </div>
@@ -400,7 +400,7 @@ export default function Reliability() {
                   className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
                     activeTab === tab.id
                       ? 'ios-pill-active font-extrabold'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5'
+                      : 'text-[var(--text-sub)] hover:text-[var(--text-title)] hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {tab.label}
@@ -411,7 +411,7 @@ export default function Reliability() {
 
           <div className="rel-table-wrap overflow-x-auto max-h-[480px]">
             <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-              <thead className="sticky top-0 bg-[var(--table-header-bg)] text-zinc-600 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
+              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans backdrop-blur-xl">
                 <tr>
                   <th className="px-5 py-3.5">Provider</th>
                   <th className="px-5 py-3.5">Model</th>
@@ -426,7 +426,7 @@ export default function Reliability() {
                   const act = model.action || model.status || 'hold';
                   const isUpd = act.toLowerCase().includes('undercut') || act.toLowerCase().includes('update');
                   const isLead = act.toLowerCase() === 'leader';
-                  const provColor = PROVIDER_COLORS[model.slug] || 'bg-black/5 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 border-black/10 dark:border-white/10';
+                  const provColor = PROVIDER_COLORS[model.slug] || 'bg-black/5 dark:bg-white/5 text-[var(--text-body)] border-black/10 dark:border-white/10';
 
                   return (
                     <tr
@@ -439,32 +439,32 @@ export default function Reliability() {
                           {model.slug || '—'}
                         </span>
                       </td>
-                      <td className="mono px-5 py-3.5 text-zinc-900 dark:text-zinc-100 font-bold">{model.model_id || '—'}</td>
+                      <td className="mono px-5 py-3.5 text-[var(--text-title)] font-bold">{model.model_id || '—'}</td>
                       <td className="px-5 py-3.5 text-center font-sans">
                         <span
                           className={`rel-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
                             isUpd
-                              ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border border-sky-400/30'
+                              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
                               : isLead
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                              : 'bg-black/5 dark:bg-white/10 text-zinc-600 dark:text-zinc-300'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                              : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)]'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isUpd ? 'bg-sky-400 animate-pulse' : isLead ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${isUpd ? 'bg-sky-500 animate-pulse' : isLead ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
                           {act.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right font-extrabold text-zinc-900 dark:text-white">
+                      <td className="px-5 py-3.5 text-right font-extrabold text-[var(--text-title)]">
                         {model.our_price != null ? `$${Number(model.our_price).toFixed(4)}` : '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-right text-zinc-600 dark:text-zinc-400">
+                      <td className="px-5 py-3.5 text-right text-[var(--text-sub)]">
                         {model.competitor_price != null
                           ? `$${Number(model.competitor_price).toFixed(4)}`
                           : model.reference_price != null
                           ? `$${Number(model.reference_price).toFixed(4)}`
                           : '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-right text-zinc-500 dark:text-zinc-400 text-xs">
+                      <td className="px-5 py-3.5 text-right text-[var(--text-sub)] text-xs">
                         {formatClock(model.freshness || model.updated_at)}
                       </td>
                     </tr>
@@ -474,7 +474,7 @@ export default function Reliability() {
             </table>
           </div>
           {!models.length && (
-            <p className="empty py-12 text-center text-sm text-zinc-500 font-sans">
+            <p className="empty py-12 text-center text-sm text-[var(--text-sub)] font-sans">
               No model snapshot is available yet.
             </p>
           )}
@@ -487,7 +487,7 @@ export default function Reliability() {
               <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 block">
                 Execution History
               </span>
-              <h2 className="text-base font-bold text-zinc-900 dark:text-white">Recent completions</h2>
+              <h2 className="text-base font-bold text-[var(--text-title)]">Recent completions</h2>
             </div>
             <Clock size={18} className="text-zinc-400" />
           </div>
@@ -499,10 +499,10 @@ export default function Reliability() {
                 key={cycle.cycle_id}
               >
                 <div>
-                  <div className="mono font-bold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm">
+                  <div className="mono font-bold text-[var(--text-title)] text-xs sm:text-sm">
                     {String(cycle.cycle_id || 'cycle').slice(0, 12)}
                   </div>
-                  <div className="faint text-xs text-zinc-500 mt-0.5 font-sans">
+                  <div className="faint text-xs text-[var(--text-sub)] mt-0.5 font-sans">
                     {formatFullDate(cycle.completed_at || cycle.finished_at)}
                   </div>
                 </div>
@@ -512,7 +512,7 @@ export default function Reliability() {
               </div>
             ))}
             {cycles.length === 0 && (
-              <div className="py-12 text-center text-sm text-zinc-500 font-sans">
+              <div className="py-12 text-center text-sm text-[var(--text-sub)] font-sans">
                 No completed cycles recorded yet.
               </div>
             )}
@@ -527,7 +527,7 @@ export default function Reliability() {
             <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 block">
               Security & Operations Stream
             </span>
-            <h2 className="text-base font-bold text-zinc-900 dark:text-white">Audit timeline</h2>
+            <h2 className="text-base font-bold text-[var(--text-title)]">Audit timeline</h2>
           </div>
 
           <div className="rel-filters flex items-center gap-2">
@@ -535,7 +535,7 @@ export default function Reliability() {
               aria-label="Filter provider"
               value={filter.provider}
               onChange={(e) => setFilter({ ...filter, provider: e.target.value })}
-              className="bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 outline-none cursor-pointer"
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] outline-none cursor-pointer"
             >
               <option value="">All providers</option>
               {[...new Set(events.map((e) => e.slug).filter(Boolean))].map((slug) => (
@@ -548,7 +548,7 @@ export default function Reliability() {
               aria-label="Filter severity"
               value={filter.severity}
               onChange={(e) => setFilter({ ...filter, severity: e.target.value })}
-              className="bg-white/80 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 outline-none cursor-pointer"
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] outline-none cursor-pointer"
             >
               <option value="">All severity</option>
               {['info', 'warning', 'error', 'critical'].map((s) => (
@@ -577,19 +577,19 @@ export default function Reliability() {
                   }`}
                 />
                 <div className="min-w-0 truncate">
-                  <strong className="text-zinc-900 dark:text-zinc-100 font-semibold">{event.event_type || 'event'}</strong>
-                  <span className="faint text-zinc-500 dark:text-zinc-400 ml-2 font-mono text-xs">
+                  <strong className="text-[var(--text-title)] font-semibold">{event.event_type || 'event'}</strong>
+                  <span className="faint text-[var(--text-sub)] ml-2 font-mono text-xs">
                     {event.slug || ''} {event.model_id || ''}
                   </span>
                 </div>
               </div>
-              <time className="text-zinc-500 font-mono text-xs shrink-0">
+              <time className="text-[var(--text-sub)] font-mono text-xs shrink-0">
                 {formatFullDate(event.occurred_at || event.detected_at)}
               </time>
             </div>
           ))}
           {!visibleEvents.length && (
-            <p className="empty py-8 text-center text-sm text-zinc-500 font-sans">
+            <p className="empty py-8 text-center text-sm text-[var(--text-sub)] font-sans">
               No events match the selected filters.
             </p>
           )}
@@ -599,7 +599,7 @@ export default function Reliability() {
       {/* Transition Success Feedback */}
       {transition && !transition.pending && !transition.error && !transition.unknown && (
         <div
-          className="rel-feedback p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2.5 shadow-md"
+          className="rel-feedback p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2.5 shadow-md"
           role="status"
         >
           <CheckCircle2 size={18} className="text-emerald-500" />
