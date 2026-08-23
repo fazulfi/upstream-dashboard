@@ -4,20 +4,6 @@
   "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://ops.budgezen.com/api/:path*"
-    }
-  ],
-  "experimentalServices": {
-    "frontend": {
-      "entrypoint": "frontend",
-      "routePrefix": "/",
-      "framework": "vite"
-    },
-    "backend": {
-      "entrypoint": "backend",
-      "routePrefix": "/_/backend"
-    }
-  }
+    { "source": "/api/:path*", "destination": "https://ops.budgezen.com/api/:path*" }
+  ]
 }
