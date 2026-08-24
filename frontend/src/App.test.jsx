@@ -96,7 +96,7 @@ describe('App routing', () => {
 
 import Analytics from './pages/Analytics';
 import Logs from './pages/Logs';
-import { render } from '@testing-library/react';
+
 import { MemoryRouter } from 'react-router-dom';
 describe('Coverage booster', () => {
   it('renders analytics', () => {
@@ -106,3 +106,5 @@ describe('Coverage booster', () => {
     try { render(<MemoryRouter><Logs /></MemoryRouter>); } catch (e) {}
   });
 });
+
+import { render } from '@testing-library/react';
