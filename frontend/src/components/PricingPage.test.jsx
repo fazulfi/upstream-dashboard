@@ -1,8 +1,32 @@
 import React from 'react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import PricingPage from './PricingPage';
 
+const mockApi = vi.hoisted(() => ({
+  useApi: vi.fn(),
+  apiFetch: vi.fn(),
+}));
+
+vi.mock('../hooks/useApi', () => mockApi);
+
+const mockMarketData = {
+  models: [
+    { slug: 'openai/gpt-4o', minAskIn: 2.5, maxAskIn: 3.2, sellersCount: 5 },
+    { slug: 'anthropic/claude-3-5-sonnet', minAskIn: 3.0, maxAskIn: 3.8, sellersCount: 3 },
+  ],
+};
+
 describe('PricingPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockApi.useApi.mockReturnValue({
+      data: mockMarketData,
+      loading: false,
+      reload: vi.fn(),
+    });
+  });
+
   it('renders globals, overrides and orderbook sections', () => {
     render(<PricingPage
       globals={{ clinepass: { max_ask_pct: 0.05 } }}
@@ -43,5 +67,26 @@ describe('PricingPage', () => {
     fireEvent.click(screen.getAllByText(/set manual ask/i)[0]);
     expect(screen.getAllByText(/ask input per Mtok/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/ask output per Mtok/i).length).toBeGreaterThan(0);
+  });
+
+  it('renders Live Market Rates table and filters by search query', () => {
+    render(<PricingPage
+      globals={{}}
+      overrides={[]}
+      orderbook={[]}
+    />);
+
+    expect(screen.getByTestId('live-market-rates-section')).toBeInTheDocument();
+    expect(screen.getByText('openai/gpt-4o')).toBeInTheDocument();
+    expect(screen.getByText('$2.5000')).toBeInTheDocument();
+    expect(screen.getByText('5 sellers')).toBeInTheDocument();
+    expect(screen.getByText('anthropic/claude-3-5-sonnet')).toBeInTheDocument();
+
+    // Filter search
+    const searchInput = screen.getByPlaceholderText('Filter live market...');
+    fireEvent.change(searchInput, { target: { value: 'claude' } });
+
+    expect(screen.queryByText('openai/gpt-4o')).not.toBeInTheDocument();
+    expect(screen.getByText('anthropic/claude-3-5-sonnet')).toBeInTheDocument();
   });
 });

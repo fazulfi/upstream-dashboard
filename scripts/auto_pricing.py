@@ -970,18 +970,24 @@ def run_cycle(dry_run=False):
             official = a["official"]
             max_in = a["max_ask_in"]
             mid = a["model_id"]
+            mid_bare = mid.split("/")[-1]  # bare model_id, tanpa vendor prefix
             if official <= 0:
                 cat_models_slug = catalog.get(slug, {})
                 cat_model = cat_models_slug.get(mid)
                 if cat_model is None:
-                    cat_model = cat_models_slug.get(mid.split("/")[-1])
+                    cat_model = cat_models_slug.get(mid_bare)
                 if cat_model:
                     official = _f(cat_model.get("officialIn")) or _f(cat_model.get("official")) or official
 
-            # config key bisa bare ("deepseek-v4-flash") atau prefixed ("codebuddy-cn/deepseek-v4-flash")
+            # config key bisa bare ("deepseek-v4-flash") atau prefixed ("codebuddy-cn/deepseek-v4-flash").
+            # mid bisa prefixed vendor ("MiniMaxAI/MiniMax-M2.5") — coba versi bare juga.
             conf = config.get((slug, mid))
+            if conf is None and mid_bare != mid:
+                conf = config.get((slug, mid_bare))
             if conf is None:
                 conf = config.get((slug, f"{slug}/{mid}"))
+                if conf is None and mid_bare != mid:
+                    conf = config.get((slug, f"{slug}/{mid_bare}"))
             t_pct, _r_pct = band_for(slug, mid, conf, globals_map)   # trigger% (rebound dihapus v2)
             hk = f"{slug}|{mid}"
             prev = hold.get(hk, {})
@@ -999,6 +1005,9 @@ def run_cycle(dry_run=False):
             # kompetitor = /market minAskIn (harga termurah yg tersedia utk upstream-model ini,
             #   dari platform market). catalog/asksIn = SEMUA provider (termasuk kita) → utk posisi.
             comp = market.get((slug, mid))
+            if comp is None:
+                # mid bisa prefixed vendor ("MiniMaxAI/MiniMax-M2.5") — coba versi bare
+                comp = market.get((slug, mid.split("/")[-1]))
             if comp is None or comp <= 0:
                 cap = a.get("cheapest_active_pct") or 0
                 if cap > 0 and official > 0:
@@ -1007,8 +1016,12 @@ def run_cycle(dry_run=False):
                     comp = None
 
             # ── POSISI KOMPETITOR (Faiz v2) ──
-            # key bisa bare (cbcn) atau prefixed (cline-pass) — coba dua-duanya
+            # key bisa bare (cbcn) atau prefixed (cline-pass) — coba dua-duanya.
+            # mid bisa prefixed vendor ("MiniMaxAI/MiniMax-M2.5") — coba bare + lower
+            # karena get_positions simpan key bare lowered (line 826).
             pos = positions.get((slug, mid))
+            if pos is None:
+                pos = positions.get((slug, mid.split("/")[-1].lower()))
             if pos is None:
                 pos = positions.get((slug, mid.split("/")[-1]))
             tot_prov = pos.get("total_provider", 0) if pos else 0

@@ -211,13 +211,18 @@ def test_provider_ask_and_breakdown_contracts(client, monkeypatch):
     monkeypatch.setattr(app_module, "inferhub_get", lambda path, *args, **kwargs: providers if path == "/publisher/providers" else asks if "/asks" in path else {"byModel": ["x"]})
     assert client.get("/api/asks", headers=headers).get_json()["count"] == 1
     assert client.get("/api/breakdown?range=24h", headers=headers).get_json()["byModel"] == ["x"]
+    assert client.get("/api/usage/breakdown?range=24h", headers=headers).get_json()["byModel"] == ["x"]
     monkeypatch.setattr(app_module, "inferhub_get", lambda *args, **kwargs: None)
     assert client.get("/api/asks", headers=headers).get_json()["rows"] == []
     assert client.get("/api/breakdown", headers=headers).get_json()["range"] == "7d"
+    assert client.get("/api/usage/breakdown", headers=headers).get_json()["range"] == "7d"
     assert client.get("/api/market", headers=headers).status_code == 200
-    assert client.get("/api/usage/cache-stats", headers=headers).get_json()["error"] == "unavailable"
-    assert client.get("/api/usage/logs", headers=headers).get_json()["error"] == "unavailable"
+    cache_stats = client.get("/api/usage/cache-stats", headers=headers).get_json()
+    assert cache_stats["error"] == "unavailable" and cache_stats["rows"] == [] and cache_stats["totals"]["hitRate"] == 0.0
+    logs = client.get("/api/usage/logs", headers=headers).get_json()
+    assert logs["error"] == "unavailable" and logs["rows"] == [] and logs["total"] == 0 and logs["page"] == 1
     assert client.get("/api/usage/logs-models", headers=headers).get_json() == []
+    assert client.get("/api/usage/logs/models", headers=headers).get_json() == []
     assert client.get("/api/v1-models", headers=headers).get_json()["error"] == "unavailable"
     assert client.get("/api/v1-me-usage", headers=headers).get_json()["error"] == "unavailable"
 
@@ -247,7 +252,7 @@ def test_route_sweep_critical_paths(client, monkeypatch):
     monkeypatch.setattr(app_module, "db_read_earning_range", lambda *args: 0.0)
     monkeypatch.setattr(app_module, "_reliability_query", lambda *args: [])
     headers = {"Authorization": "Bearer fake-token"}
-    for path in ("/api/history", "/api/data", "/api/payouts", "/api/upstreams", "/api/earnings-log", "/api/earnings-alltime", "/api/earnings-trend", "/api/earnings-summary", "/api/publisher-analytics", "/api/model-ranking", "/api/keys", "/api/topups", "/api/budgets", "/api/combos", "/api/pricing-config", "/api/pricing", "/api/budgets/aliases", "/api/combos/available-models", "/api/breakdown", "/api/market", "/api/catalog", "/api/orderbook", "/api/usage/cache-stats", "/api/usage/logs", "/api/usage/logs-models", "/api/v1-models", "/api/v1-me-usage", "/api/fleet-health", "/api/asks", "/api/auto-pricing", "/api/reliability/summary", "/api/reliability/cycles", "/api/reliability/events", "/api/reliability/models", "/api/auto-pricing/config"):
+    for path in ("/api/history", "/api/data", "/api/payouts", "/api/upstreams", "/api/earnings-log", "/api/earnings-alltime", "/api/earnings-trend", "/api/earnings-summary", "/api/publisher-analytics", "/api/model-ranking", "/api/keys", "/api/topups", "/api/budgets", "/api/combos", "/api/pricing-config", "/api/pricing", "/api/budgets/aliases", "/api/combos/available-models", "/api/breakdown", "/api/usage/breakdown", "/api/market", "/api/catalog", "/api/orderbook", "/api/usage/cache-stats", "/api/usage/logs", "/api/usage/logs-models", "/api/usage/logs/models", "/api/v1-models", "/api/v1-me-usage", "/api/fleet-health", "/api/asks", "/api/auto-pricing", "/api/reliability/summary", "/api/reliability/cycles", "/api/reliability/events", "/api/reliability/models", "/api/auto-pricing/config"):
         response = client.get(path, headers=headers)
         assert response.status_code in (200, 502), path
 
@@ -664,4 +669,163 @@ def test_auto_pricing_state_file_failure_rolls_back(monkeypatch, tmp_path):
     monkeypatch.setattr(os, "replace", lambda *args: (_ for _ in ()).throw(OSError("write failed")))
     with pytest.raises(OSError, match="write failed"):
         app_module._set_auto_pricing_state(True, correlation_id="cid")
+
+
+def test_publisher_and_budget_endpoints(client, monkeypatch):
+    _auth(monkeypatch)
+    headers = {"Authorization": "Bearer fake-token"}
+
+    # 1. usage-windows
+    monkeypatch.setattr(app_module, "inferhub_get", lambda path, params=None, timeout=25: {"prov-1": [{"windowKind": "5h"}]} if path == "/publisher/providers/usage-windows" else None)
+    r = client.get("/api/publisher/providers/usage-windows", headers=headers)
+    assert r.status_code == 200
+    assert "prov-1" in r.get_json()
+
+    # usage-windows fallback
+    monkeypatch.setattr(app_module, "inferhub_get", lambda *args, **kwargs: None)
+    r = client.get("/api/publisher/providers/usage-windows", headers=headers)
+    assert r.status_code == 200
+    assert r.get_json() == {}
+
+    # 2. earnings transfer
+    # invalid amount
+    r = client.post("/api/publisher/earnings/transfer", json={"amount": -5}, headers=headers)
+    assert r.status_code == 400
+    r = client.post("/api/publisher/earnings/transfer", json={"amount": "abc"}, headers=headers)
+    assert r.status_code == 400
+
+    # success
+    monkeypatch.setattr(app_module, "inferhub_post", lambda path, payload=None, timeout=25: {"ok": True, "transferred": 10.0} if path == "/publisher/earnings/transfer" else None)
+    r = client.post("/api/publisher/earnings/transfer", json={"amount": 10.0}, headers=headers)
+    assert r.status_code == 200
+    assert r.get_json()["ok"] is True
+
+    # 3. budget put with slash model ID
+    called_budget = {}
+    def mock_inferhub_put(path, payload=None, timeout=25):
+        called_budget["path"] = path
+        called_budget["payload"] = payload
+        return {"ok": True}
+    monkeypatch.setattr(app_module, "inferhub_put", mock_inferhub_put)
+
+    r = client.put("/api/budgets/openai/gpt-4o", json={"max_input_per_mtok": 2.5, "max_output_per_mtok": 10.0, "min_discount_pct": 5}, headers=headers)
+    assert r.status_code == 200
+    assert called_budget["path"] == "/budgets/openai/gpt-4o"
+    assert called_budget["payload"]["maxInputPerMtok"] == 2.5
+
+    # 4. withdrawals OTP
+    r = client.post("/api/publisher/withdrawals/otp", json={"destination": "0x123", "amount": -1}, headers=headers)
+    assert r.status_code == 400
+    monkeypatch.setattr(app_module, "inferhub_post", lambda path, payload=None, timeout=25: {"otpRequested": True} if path == "/publisher/withdrawals/otp" else None)
+    r = client.post("/api/publisher/withdrawals/otp", json={"destination": "0x123", "amount": 50}, headers=headers)
+    assert r.status_code == 200
+    assert r.get_json()["otpRequested"] is True
+
+    # 5. withdrawals submission
+    r = client.post("/api/publisher/withdrawals", json={"destination": "0x123", "amount": 50}, headers=headers) # missing otp
+    assert r.status_code == 400
+    monkeypatch.setattr(app_module, "inferhub_post", lambda path, payload=None, timeout=25: {"txHash": "0xabc"} if path == "/publisher/withdrawals" else None)
+    r = client.post("/api/publisher/withdrawals", json={"destination": "0x123", "amount": 50, "otp": "123456"}, headers=headers)
+    assert r.status_code == 200
+    assert r.get_json()["txHash"] == "0xabc"
+
+    # 6. withdrawals destinations
+    monkeypatch.setattr(app_module, "inferhub_get", lambda path, params=None, timeout=25: [{"address": "0x123"}] if path == "/publisher/withdrawals/destinations" else None)
+    r = client.get("/api/publisher/withdrawals/destinations", headers=headers)
+    assert r.status_code == 200
+    assert len(r.get_json()) == 1
+
+
+def test_usage_proxy_routes_query_params_and_fallbacks(client, monkeypatch):
+    _auth(monkeypatch)
+    headers = {"Authorization": "Bearer fake-token"}
+
+    recorded = []
+    def mock_get(path, params=None, timeout=25):
+        recorded.append({"path": path, "params": params})
+        if path == "/usage/breakdown":
+            return {"range": (params or {}).get("range"), "byModel": [{"model": "m1"}], "byProvider": []}
+        if path == "/usage/cache-stats":
+            return {"range": (params or {}).get("range"), "rows": [{"label": "m1"}], "totals": {"hitRate": 0.85}}
+        if path == "/usage/logs":
+            return {"range": (params or {}).get("range"), "rows": [{"id": "1"}], "total": 1, "page": int((params or {}).get("page", 1))}
+        if path == "/usage/logs/models":
+            return [{"value": "m1", "label": "m1"}]
+        return None
+
+    monkeypatch.setattr(app_module, "inferhub_get", mock_get)
+
+    # 1. /api/usage/breakdown and /api/breakdown
+    r1 = client.get("/api/usage/breakdown?range=30d", headers=headers)
+    assert r1.status_code == 200
+    assert r1.get_json()["byModel"] == [{"model": "m1"}]
+    assert recorded[-1] == {"path": "/usage/breakdown", "params": {"range": "30d"}}
+
+    r1_alias = client.get("/api/breakdown?range=90d", headers=headers)
+    assert r1_alias.status_code == 200
+    assert recorded[-1] == {"path": "/usage/breakdown", "params": {"range": "90d"}}
+
+    # 2. /api/usage/cache-stats
+    r2 = client.get("/api/usage/cache-stats?range=24h", headers=headers)
+    assert r2.status_code == 200
+    assert r2.get_json()["totals"]["hitRate"] == 0.85
+    assert recorded[-1] == {"path": "/usage/cache-stats", "params": {"range": "24h"}}
+
+    # 3. /api/usage/logs with full query params
+    r3 = client.get("/api/usage/logs?range=7d&page=2&pageSize=50&model=deepseek&status=ok&sort=cost&dir=asc", headers=headers)
+    assert r3.status_code == 200
+    assert r3.get_json()["total"] == 1
+    assert recorded[-1] == {
+        "path": "/usage/logs",
+        "params": {
+            "range": "7d",
+            "page": "2",
+            "pageSize": "50",
+            "sort": "cost",
+            "dir": "asc",
+            "model": "deepseek",
+            "status": "ok",
+        },
+    }
+
+    # 4. /api/usage/logs/models and /api/usage/logs-models
+    r4 = client.get("/api/usage/logs/models?range=7d", headers=headers)
+    assert r4.status_code == 200
+    assert len(r4.get_json()) == 1
+    assert recorded[-1] == {"path": "/usage/logs/models", "params": {"range": "7d"}}
+
+    r4_alias = client.get("/api/usage/logs-models?range=30d", headers=headers)
+    assert r4_alias.status_code == 200
+    assert len(r4_alias.get_json()) == 1
+    assert recorded[-1] == {"path": "/usage/logs/models", "params": {"range": "30d"}}
+
+    # 5. Dict format in logs/models
+    monkeypatch.setattr(app_module, "inferhub_get", lambda path, params=None, timeout=25: {"models": [{"value": "m2"}]})
+    r5 = client.get("/api/usage/logs/models", headers=headers)
+    assert r5.status_code == 200
+    assert r5.get_json() == [{"value": "m2"}]
+
+    # 6. Fallback when upstream is None (dev mode / offline)
+    monkeypatch.setattr(app_module, "inferhub_get", lambda *args, **kwargs: None)
+    fb_breakdown = client.get("/api/usage/breakdown?range=24h", headers=headers).get_json()
+    assert fb_breakdown == {"byModel": [], "byProvider": [], "byProviderModel": [], "range": "24h"}
+
+    fb_cache = client.get("/api/usage/cache-stats?range=90d", headers=headers).get_json()
+    assert fb_cache["error"] == "unavailable"
+    assert fb_cache["range"] == "90d"
+    assert fb_cache["rows"] == []
+    assert fb_cache["totals"]["hitRate"] == 0.0
+
+    fb_logs = client.get("/api/usage/logs?range=30d&page=3&pageSize=10", headers=headers).get_json()
+    assert fb_logs["error"] == "unavailable"
+    assert fb_logs["range"] == "30d"
+    assert fb_logs["rows"] == []
+    assert fb_logs["total"] == 0
+    assert fb_logs["page"] == 3
+    assert fb_logs["pageSize"] == 10
+
+    fb_models = client.get("/api/usage/logs/models", headers=headers).get_json()
+    assert fb_models == []
+
+
 
