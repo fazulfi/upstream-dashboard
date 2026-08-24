@@ -159,7 +159,7 @@ describe('Reliability landing page', () => {
   it('renders provider quota tracker cards, progress thresholds, and reactive_429 badge', async () => {
     render(<Reliability />)
     await waitFor(() => expect(screen.getByText('Provider Quota & Capacity Tracker')).toBeInTheDocument())
-    expect(screen.getByTestId('quota-card-provider-a')).toBeInTheDocument()
+    expect(screen.getByTestId('quota-card-test-provider')).toBeInTheDocument()
     expect(screen.getByText('80.0%')).toBeInTheDocument()
     expect(screen.getByText('95.0%')).toBeInTheDocument()
     expect(screen.getByTestId('badge-reactive-429')).toBeInTheDocument()
