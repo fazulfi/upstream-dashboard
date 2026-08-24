@@ -15,9 +15,7 @@ function renderLayout(route = '/') {
 }
 
 describe('Layout', () => {
-  it('shows route title, links, and toggles mobile navigation', () => {
-    renderLayout('/auto-pricing')
-    expect(screen.getByRole('heading', { name: 'Auto Pricing' })).toBeInTheDocument()
+  ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Reliability/ })).toBeInTheDocument()
     const sidebar = document.querySelector('.sidebar')
     fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
