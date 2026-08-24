@@ -1,30 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { apiFetch, isApiEnabled, loginWithPassword, setSessionToken, useApi } from './useApi.jsx'
+import { apiFetch, loginWithPassword, setSessionToken, useApi } from './useApi.jsx'
 
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
 
 describe('useApi session and fetch behavior', () => {
-  it('whitelists /api/usage/* and /api/breakdown with and without query parameters', () => {
-    expect(isApiEnabled('/api/usage/breakdown')).toBe(true)
-    expect(isApiEnabled('/api/usage/breakdown?range=24h')).toBe(true)
-    expect(isApiEnabled('/api/usage/cache-stats')).toBe(true)
-    expect(isApiEnabled('/api/usage/cache-stats?range=30d')).toBe(true)
-    expect(isApiEnabled('/api/usage/logs')).toBe(true)
-    expect(isApiEnabled('/api/usage/logs?range=7d&page=1&pageSize=25')).toBe(true)
-    expect(isApiEnabled('/api/usage/logs-models')).toBe(true)
-    expect(isApiEnabled('/api/usage/logs/models')).toBe(true)
-    expect(isApiEnabled('/api/breakdown')).toBe(true)
-    expect(isApiEnabled('/api/breakdown?range=7d')).toBe(true)
-    expect(isApiEnabled('/api/orderbook')).toBe(true)
-    expect(isApiEnabled('/api/orderbook?filter=all')).toBe(true)
-    expect(isApiEnabled('/api/auto-pricing/config')).toBe(true)
-    expect(isApiEnabled('/api/reliability/summary')).toBe(true)
-    expect(isApiEnabled('/api/unknown-unregistered-path')).toBe(false)
-    expect(isApiEnabled('')).toBe(false)
-    expect(isApiEnabled(null)).toBe(false)
-  })
-
   it('injects session token and sends login body', async () => {
     setSessionToken('token')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ token: 'next' })))

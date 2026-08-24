@@ -50,19 +50,8 @@ export default function Finance() {
   const [payoutOtp, setPayoutOtp] = useState('');
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutError, setPayoutError] = useState(null);
-  const kurs = useMemo(() => {
-    if (typeof financeData?.kurs === 'number' && !isNaN(financeData.kurs)) return financeData.kurs;
-    if (typeof financeData?.kurs_meta === 'number' && !isNaN(financeData.kurs_meta)) return financeData.kurs_meta;
-    if (financeData?.kurs_meta && typeof financeData.kurs_meta === 'object') {
-      const val = financeData.kurs_meta.kurs_usd_idr || financeData.kurs_meta.kurs_ref_usd_idr || Object.values(financeData.kurs_meta)[0];
-      if (Number(val) > 0) return Number(val);
-    }
-    if (financeData?.kurs && typeof financeData.kurs === 'object') {
-      const val = financeData.kurs.kurs_usd_idr || financeData.kurs.kurs_ref_usd_idr || Object.values(financeData.kurs)[0];
-      if (Number(val) > 0) return Number(val);
-    }
-    return 17801.17;
-  }, [financeData]);
+
+  const kurs = financeData?.kurs_meta || financeData?.kurs || 17801.17;
   const assets = useMemo(() => financeData?.assets || [], [financeData]);
   const payouts = useMemo(() => payoutsData?.payouts || [], [payoutsData]);
   const providers = useMemo(() => financeData?.providers || [], [financeData]);

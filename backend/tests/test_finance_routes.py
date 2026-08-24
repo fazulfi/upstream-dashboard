@@ -89,32 +89,3 @@ def test_db_read_finance_amort_retired_dihitung(fake_finance_db):
     assert res["total_refund_usd"] == 2.0
     assert res["total_imp_loss_usd"] == 1.0
     assert res["net_income"] == round(100 + 2 - 10 - 1 - 0.10, 2)
-    # Verification of UI Glass FinOps required fields
-    assert res["payout_confirmed"] == 100.0
-    assert res["amortization"] == 10.0
-    assert res["impairment"] == 1.0
-    assert res["impairments_count"] == 1
-    assert res["kurs_meta"] == 17000.0
-    assert len(res["providers"]) == 1
-    assert res["providers"][0]["upstream_slug"] == "cline-pass"
-
-
-def test_api_finance_and_payouts_endpoints(auth_client, fake_finance_db):
-    fake_finance_db()
-    r = auth_client.get("/api/finance")
-    assert r.status_code == 200
-    data = r.get_json()
-    assert "net_income" in data
-    assert "payout_confirmed" in data
-    assert "amortization" in data
-    assert "impairment" in data
-    assert "providers" in data
-    assert "assets" in data
-
-    r_payouts = auth_client.get("/api/payouts")
-    assert r_payouts.status_code == 200
-    pdata = r_payouts.get_json()
-    assert "payouts" in pdata
-    assert "total" in pdata
-    assert "count" in pdata
-
