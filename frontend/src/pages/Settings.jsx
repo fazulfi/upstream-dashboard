@@ -151,7 +151,7 @@ export default function Settings() {
                     <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">React · Vite · Vercel Edge Serverless</div>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="ios-badge px-3 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
                   HOSTED
                 </span>
               </div>
@@ -169,13 +169,13 @@ export default function Settings() {
 
               <div className="setting-row flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <div className="flex items-center gap-3">
-                  <Database size={18} className="text-emerald-500" />
+                  <Database size={18} className="text-sky-500" />
                   <div>
                     <div className="setting-label font-bold text-zinc-900 dark:text-white">Pricing Loop Engine</div>
                     <div className="setting-sub text-xs text-zinc-500 dark:text-zinc-400">InferHub autonomous daemon · Loop 60s</div>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="ios-badge px-3 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
                   ACTIVE
                 </span>
               </div>
@@ -193,7 +193,7 @@ export default function Settings() {
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white">Sesi Operator</h2>
               </div>
               {hasToken ? (
-                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                <span className="ios-badge text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
                   Token Aktif
                 </span>
               ) : (
@@ -209,13 +209,13 @@ export default function Settings() {
 
             {hasToken ? (
               <div className="space-y-3 pt-1">
-                <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5">
-                  <CheckCircle2 size={18} className="shrink-0 text-emerald-500" />
+                <div className="p-3.5 rounded-2xl bg-sky-500/15 border border-sky-500/30 text-xs text-sky-700 dark:text-sky-300 flex items-center gap-2.5">
+                  <CheckCircle2 size={18} className="shrink-0 text-sky-500" />
                   <span>Token aktif dalam sessionStorage.</span>
                 </div>
                 <button
                   onClick={doLogout}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="ios-btn-glass w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm cursor-pointer"
                 >
                   <LogOut size={16} />
                   <span>Hapus Token Sesi</span>
@@ -251,7 +251,7 @@ export default function Settings() {
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white">Finance Status</h2>
                 <div className="sub text-xs text-zinc-600 dark:text-zinc-300 mt-0.5">Status verifikasi metrik keuangan</div>
               </div>
-              <ShieldCheck size={18} className="text-emerald-500" />
+              <ShieldCheck size={18} className="text-sky-500" />
             </div>
             <FinanceStatus metrics={financeMetrics} variance={financeData?.variance ?? ''} />
           </section>
