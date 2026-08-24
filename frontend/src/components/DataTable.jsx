@@ -1,21 +1,18 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  useTable,
-  flexRender,
+  useTable, flexRender,
   tableFeatures,
-  columnFilteringFeature,
-  globalFilteringFeature,
-  rowSortingFeature,
-  rowPaginationFeature,
+  columnFilteringFeature, globalFilteringFeature, rowSortingFeature, rowPaginationFeature,
   columnVisibilityFeature,
-  createFilteredRowModel,
-  createSortedRowModel,
-  createPaginatedRowModel,
-  filterFn_includesString,
-  sortFn_alphanumeric,
+  createFilteredRowModel, createSortedRowModel, createPaginatedRowModel,
+  filterFn_includesString, sortFn_alphanumeric,
 } from '@tanstack/react-table';
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
+/**
+ * DataTable — enterprise table wrapper (TanStack Table v9, feature composition).
+ * Fitur: sort per kolom, global search, pagination (rows per page select),
+ * density (compact/comfortable), hover highlight.
+ */
 const features = tableFeatures({
   columnFilteringFeature,
   globalFilteringFeature,
@@ -29,7 +26,7 @@ const features = tableFeatures({
   sortFns: { alphanumeric: sortFn_alphanumeric },
 });
 
-export default function DataTable({ columns, data, searchable = true, placeholder = 'Search table…' }) {
+export default function DataTable({ columns, data, searchable = true }) {
   const [sorting, setSorting] = useState([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
@@ -50,152 +47,70 @@ export default function DataTable({ columns, data, searchable = true, placeholde
   const pageCount = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
-    <div className="w-full flex flex-col rounded-2xl border border-black/10 dark:border-white/10 ios-glass-card shadow-lg overflow-hidden">
-      <div className="p-3 border-b border-black/10 dark:border-white/10 flex flex-wrap items-center justify-between gap-3 bg-black/5 dark:bg-white/5">
+    <div className="datatable">
+      <div className="dt-toolbar">
         {searchable && (
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-title)] placeholder-zinc-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500/30 outline-none transition-all shadow-inner"
-              placeholder={placeholder}
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              aria-label="Search table"
-            />
-          </div>
+          <input
+            className="dt-search"
+            placeholder="Search providers…"
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            aria-label="Search table"
+          />
         )}
-        <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-0.5 rounded-lg border border-black/10 dark:border-white/10 text-[11px]">
-          <button
-            type="button"
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              density === 'compact' ? 'bg-white/80 dark:bg-white/15 text-zinc-900 dark:text-zinc-100 shadow-sm border border-black/5 dark:border-transparent' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-            onClick={() => setDensity('compact')}
-          >
-            Compact
-          </button>
-          <button
-            type="button"
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              density === 'comfortable' ? 'bg-white/80 dark:bg-white/15 text-zinc-900 dark:text-zinc-100 shadow-sm border border-black/5 dark:border-transparent' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-            onClick={() => setDensity('comfortable')}
-          >
-            Comfortable
-          </button>
+        <div className="dt-density" role="group" aria-label="Density">
+          {['compact', 'comfortable'].map((dim) => (
+            <button key={dim} className={density === dim ? 'on' : ''} onClick={() => setDensity(dim)}>{dim}</button>
+          ))}
         </div>
       </div>
-
-      <div className="w-full overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse">
+      <div className="dt-scroll">
+        <table className={`tbl tbl-${density}`}>
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-black/10 dark:border-white/10 bg-[var(--table-head-bg)] text-[var(--text-sub)] font-semibold uppercase tracking-wider text-[10px]">
-                {hg.headers.map((h) => {
-                  const isSorted = h.column.getIsSorted();
-                  const alignRight = h.column.columnDef.meta?.align === 'right';
-                  return (
-                    <th
-                      key={h.id}
-                      className={`px-4 py-3 select-none ${alignRight ? 'text-right' : 'text-left'}`}
-                      style={{ width: h.column.columnDef.meta?.width }}
-                    >
-                      <div
-                        className={`inline-flex items-center gap-1.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors ${
-                          alignRight ? 'justify-end' : ''
-                        }`}
-                        onClick={h.column.getToggleSortingHandler()}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') h.column.toggleSorting();
-                        }}
-                      >
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        <span className="text-zinc-400">
-                          {isSorted === 'asc' ? (
-                            <ArrowUp size={12} className="text-sky-500" />
-                          ) : isSorted === 'desc' ? (
-                            <ArrowDown size={12} className="text-sky-500" />
-                          ) : (
-                            <ArrowUpDown size={11} className="opacity-40" />
-                          )}
-                        </span>
-                      </div>
-                    </th>
-                  );
-                })}
+              <tr key={hg.id}>
+                {hg.headers.map((h) => (
+                  <th key={h.id} className={h.column.columnDef.meta?.align === 'right' ? 'right' : ''}
+                      style={{ width: h.column.columnDef.meta?.width }}>
+                    <div className="th-wrap" onClick={h.column.getToggleSortingHandler()}
+                         role="button" tabIndex={0}
+                         onKeyDown={(e) => { if (e.key === 'Enter') h.column.toggleSorting(); }}>
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                      <span className="th-sort">
+                        {h.column.getIsSorted() === 'asc' ? '↑' : h.column.getIsSorted() === 'desc' ? '↓' : ''}
+                      </span>
+                    </div>
+                  </th>
+                ))}
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-black/5 dark:divide-white/10">
+          <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-zinc-800 dark:text-zinc-300"
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const alignRight = cell.column.columnDef.meta?.align === 'right';
-                  const py = density === 'compact' ? 'py-2' : 'py-3.5';
-                  return (
-                    <td
-                      key={cell.id}
-                      className={`px-4 ${py} ${alignRight ? 'text-right font-mono' : ''}`}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  );
-                })}
+              <tr key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className={cell.column.columnDef.meta?.align === 'right' ? 'right' : ''}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
               </tr>
             ))}
             {table.getRowModel().rows.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-zinc-500 text-xs">
-                  No matching records found.
-                </td>
-              </tr>
+              <tr><td colSpan={columns.length} className="dt-empty">No providers found.</td></tr>
             )}
           </tbody>
         </table>
       </div>
-
-      <div className="p-3 border-t border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-        <span className="font-mono text-[11px]">{filteredCount} total records</span>
-        <div className="flex items-center gap-3">
-          <select
-            aria-label="Rows per page"
-            value={pageSize}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              table.setPageSize(v);
-            }}
-            className="bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 outline-none"
-          >
-            {[8, 10, 25, 50].map((n) => (
-              <option key={n} value={n}>
-                {n} / page
-              </option>
-            ))}
+      <div className="dt-pager">
+        <span className="faint tnum">{filteredCount} providers</span>
+        <div className="dt-page-actions">
+          <select aria-label="Rows per page" value={pageSize}
+                  onChange={(e) => { const v = Number(e.target.value); table.setPageSize(v); }}>
+            {[8, 10, 25, 50].map((n) => <option key={n} value={n}>{n} / page</option>)}
           </select>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="ios-icon-btn p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="px-2 font-mono text-[11px]">
-              {pageIndex + 1} / {pageCount}
-            </span>
-            <button
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="ios-icon-btn p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
+          <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>‹</button>
+          <span className="tnum faint">{pageIndex + 1}/{pageCount}</span>
+          <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>›</button>
         </div>
       </div>
     </div>
