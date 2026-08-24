@@ -39,8 +39,8 @@ function formatValue(value) {
 }
 
 export default function PricingPage({ globals = {}, overrides = [], orderbook = [], onChanged }) {
-  const marketApi = (typeof useApi === 'function' ? useApi('/api/market', 30000) : null) || {};
-  const { data: marketData, loading: marketLoading, reload: reloadMarket } = marketApi;
+  const marketApi = useApi('/api/market', 30000);
+  const { data: marketData, loading: marketLoading, reload: reloadMarket } = marketApi || {};
   const [globalForms, setGlobalForms] = useState({});
   const [overrideForm, setOverrideForm] = useState({ upstream: '', model_id: '', trigger_pct: '' });
   const [askForm, setAskForm] = useState(null);
