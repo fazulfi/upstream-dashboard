@@ -244,10 +244,10 @@ export default function AutoPricing() {
             </span>
             <span className="text-xs text-[var(--text-sub)] font-mono">Loop Eksekusi 60s</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-title)]">
+          <h1 className="text-3xl sm:text-[34px] font-extrabold tracking-tight leading-tight text-[var(--text-title)]">
             Auto-Pricing Engine
           </h1>
-          <p className="text-sm text-[var(--text-sub)] mt-1 max-w-2xl">
+          <p className="text-[15px] text-[var(--text-sub)] mt-1 max-w-2xl leading-relaxed">
             Tentukan selisih undercut kompetitor dan kelola scope aktif tiap provider upstream secara instan.
           </p>
         </div>
@@ -259,7 +259,7 @@ export default function AutoPricing() {
             className={`px-6 py-2.5 rounded-2xl font-bold text-sm shadow-lg transition-all cursor-pointer ${
               data?.armed
                 ? 'ios-btn-primary'
-                : 'ios-btn-secondary'
+                : 'ios-btn-glass'
             } disabled:opacity-50`}
           >
             {arming ? 'Menyimpan…' : data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)'}
@@ -267,9 +267,8 @@ export default function AutoPricing() {
 
           <button
             onClick={() => reload()}
-            disabled={loading}
-            className="ios-btn-secondary p-2.5 rounded-2xl shadow-sm cursor-pointer"
-            title="Refresh snapshot"
+            className="ios-btn-glass p-2.5 rounded-2xl shadow-sm cursor-pointer"
+            aria-label="Refresh snapshot"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -284,7 +283,7 @@ export default function AutoPricing() {
       )}
 
       {/* ── 2. Top 4 iOS Glossy KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <KpiCard
           label="Status Algoritma"
           value={data?.armed ? 'ARMED' : 'DISARMED'}
@@ -373,7 +372,7 @@ export default function AutoPricing() {
                 <span
                   className={`text-xs font-bold px-2.5 py-0.5 rounded-lg ${
                     isProvEnabled
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                      ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30'
                       : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)] border border-black/10 dark:border-white/10'
                   }`}
                 >
@@ -449,7 +448,7 @@ export default function AutoPricing() {
                 <th className="px-5 py-3.5 text-right">Ask Saat Ini</th>
                 <th className="px-5 py-3.5 text-right">Kompetitor</th>
                 <th className="px-5 py-3.5 text-center">Trigger %</th>
-                <th className="px-5 py-3.5 text-right font-bold text-emerald-600 dark:text-emerald-400">Target Ask</th>
+                <th className="px-5 py-3.5 text-right font-bold text-sky-600 dark:text-sky-400">Target Ask</th>
                 <th className="px-5 py-3.5 text-center">Status</th>
                 <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
               </tr>
@@ -506,23 +505,23 @@ export default function AutoPricing() {
                       />
                     </td>
 
-                    <td className="px-5 py-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
+                    <td className="px-5 py-3 text-right font-extrabold text-sky-600 dark:text-sky-400">
                       {c.target != null ? `$${Number(c.target).toFixed(4)}` : '—'}
                     </td>
 
                     <td className="px-5 py-3 text-center font-sans">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        className={`ios-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
                           isUndercut
                             ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
                             : isLeader
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                            : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)]'
+                            ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
+                            : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)] border border-black/10 dark:border-white/10'
                         }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
-                            isUndercut ? 'bg-sky-500 animate-pulse' : isLeader ? 'bg-emerald-500' : 'bg-zinc-400'
+                            isUndercut ? 'bg-sky-500 animate-pulse' : isLeader ? 'bg-indigo-500' : 'bg-zinc-400'
                           }`}
                         />
                         {(c.action || 'HOLD').toUpperCase()}
@@ -534,7 +533,7 @@ export default function AutoPricing() {
                         <button
                           onClick={() => saveConfig(c.slug, bare, cfg?.id)}
                           disabled={saving === key}
-                          className="ios-btn-secondary px-3 py-1 rounded-xl text-xs shadow-sm cursor-pointer"
+                          className="ios-btn-glass px-3 py-1 rounded-xl text-xs shadow-sm cursor-pointer"
                         >
                           {saving === key ? '…' : cfg ? 'Update' : 'Set'}
                         </button>
@@ -579,7 +578,7 @@ export default function AutoPricing() {
               navigator.clipboard?.writeText(data?.log || '');
               success('Log disalin ke clipboard!');
             }}
-            className="ios-btn-secondary flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+            className="ios-btn-glass flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
           >
             <Copy size={13} />
             <span>Copy Log</span>

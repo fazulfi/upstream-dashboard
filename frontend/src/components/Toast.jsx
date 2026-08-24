@@ -24,27 +24,19 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={{ addToast, toast: addToast, success: (msg) => addToast(msg, 'success'), error: (msg) => addToast(msg, 'error'), warn: (msg) => addToast(msg, 'warning') }}>
       {children}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0">
+      <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0 items-center">
         <AnimatePresence>
           {toasts.map((t) => (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              initial={{ opacity: 0, y: -40, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+              exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-xl backdrop-blur-xl text-xs font-semibold ${
-                t.type === 'success'
-                  ? 'bg-white/95 dark:bg-emerald-950/80 border-emerald-500/40 text-emerald-900 dark:text-emerald-200'
-                  : t.type === 'error'
-                  ? 'bg-white/95 dark:bg-rose-950/80 border-rose-500/40 text-rose-900 dark:text-rose-200'
-                  : t.type === 'warning'
-                  ? 'bg-white/95 dark:bg-amber-950/80 border-amber-500/40 text-amber-900 dark:text-amber-200'
-                  : 'bg-white/95 dark:bg-zinc-900/90 border-black/10 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-200'
-              }`}
+              className={`ios-notification pointer-events-auto flex items-start gap-3 p-4 w-full text-xs font-medium text-[var(--text-title)]`}
             >
               <div className="mt-0.5 shrink-0">
-                {t.type === 'success' && <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />}
+                {t.type === 'success' && <CheckCircle2 size={16} className="text-sky-600 dark:text-sky-400" />}
                 {t.type === 'error' && <AlertCircle size={16} className="text-rose-600 dark:text-rose-400" />}
                 {t.type === 'warning' && <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />}
                 {t.type === 'info' && <Info size={16} className="text-sky-600 dark:text-sky-400" />}

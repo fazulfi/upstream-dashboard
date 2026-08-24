@@ -11,12 +11,16 @@ import {
   SlidersHorizontal,
   CircleDollarSign,
   Settings as SettingsIcon,
+  BarChart3,
+  ScrollText,
 } from 'lucide-react';
 import { useTheme } from '../theme';
 import { getSessionToken } from '../hooks/useApi';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Overview', Icon: Activity, end: true },
+  { to: '/analytics', label: 'Analytics', Icon: BarChart3 },
+  { to: '/logs', label: 'Logs', Icon: ScrollText },
   { to: '/finance', label: 'Finance & P&L', Icon: TrendingUp },
   { to: '/auto-pricing', label: 'Auto Pricing', Icon: SlidersHorizontal },
   { to: '/pricing', label: 'Pricing', Icon: CircleDollarSign },
@@ -31,6 +35,8 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
 
   const pageNames = {
     '/': 'Reliability',
+    '/analytics': 'Consumer Analytics',
+    '/logs': 'Request Logs',
     '/finance': 'Finance & Profitability',
     '/auto-pricing': 'Auto Pricing',
     '/pricing': 'Pricing',
@@ -40,7 +46,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
   const currentPage = pageNames[location.pathname] || 'Reliability';
 
   const statusConfig = {
-    live: { label: 'Live Stream', color: 'bg-emerald-500', textColor: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-500/30 bg-emerald-500/10' },
+    live: { label: 'Live Stream', color: 'bg-sky-500', textColor: 'text-sky-700 dark:text-sky-300', border: 'border-sky-500/30 bg-sky-500/10' },
     connecting: { label: 'Connecting', color: 'bg-amber-500', textColor: 'text-amber-800 dark:text-amber-400', border: 'border-amber-500/30 bg-amber-500/10' },
     reconnecting: { label: 'Reconnecting', color: 'bg-rose-500', textColor: 'text-rose-700 dark:text-rose-400', border: 'border-rose-500/30 bg-rose-500/10' },
     recovering: { label: 'Recovering', color: 'bg-sky-500', textColor: 'text-sky-700 dark:text-sky-400', border: 'border-sky-500/30 bg-sky-500/10' },
@@ -77,8 +83,8 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           </div>
         </div>
 
-        {/* Center: Desktop Segmented Navigation Tabs (Apple Segmented Style) */}
-        <nav aria-label="Topbar Tabs" className="hidden lg:flex items-center gap-1.5 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl border border-black/10 dark:border-white/10">
+        {/* Center: Desktop Segmented Navigation Tabs (Apple Spatial Tab Bar) */}
+        <nav aria-label="Topbar Tabs" className="hidden lg:flex ios-tab-bar">
           {NAV_ITEMS.map((item) => {
             const Icon = item.Icon;
             return (
@@ -114,7 +120,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           {/* Command Palette Trigger */}
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+            className="ios-btn-glass flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold cursor-pointer shadow-sm"
           >
             <Search size={14} />
             <span className="hidden md:inline">Quick search…</span>
@@ -128,7 +134,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
+            className="ios-icon-btn p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>

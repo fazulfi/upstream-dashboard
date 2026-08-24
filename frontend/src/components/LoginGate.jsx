@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Lock, ShieldCheck, KeyRound, AlertTriangle, User, ArrowRight } from 'lucide-react';
 import { loginWithPassword, getSessionToken, setSessionToken } from '../hooks/useApi';
 
 /**
- * LoginGate — Apple iOS 18 Glossy Liquid Glass Session Gate.
+ * LoginGate — Apple iOS 26 Glossy Liquid Glass Session Gate with 3D Spring Physics.
  */
 export default function LoginGate({ children }) {
   const [pw, setPw] = useState('');
@@ -45,34 +44,45 @@ export default function LoginGate({ children }) {
   if (authed) return children;
 
   return (
-    <div className="login-wrap min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-300">
-      {/* Apple iOS 26 Ambient Mesh Orbs */}
+    <div className="login-wrap min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-500">
+      {/* Apple iOS 26 Ambient Mesh Orbs with 700ms Cross-fade */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 overflow-hidden pointer-events-none z-0 transition-opacity duration-700"
-        style={{ opacity: 'var(--mesh-opacity, 0.40)' }}
+        className="ambient-mesh-container fixed inset-0 overflow-hidden pointer-events-none z-0"
+        style={{ opacity: 'var(--mesh-opacity, 0.32)' }}
       >
-        <div
-          className="absolute top-1/4 left-1/4 w-[620px] h-[620px] rounded-full blur-[140px]"
-          style={{
-            background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 50%, transparent 75%)',
-          }}
-        />
-        <div
-          className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full blur-[150px]"
-          style={{
-            background: 'radial-gradient(circle, #818cf8 0%, #6366f1 50%, transparent 75%)',
-          }}
-        />
+        <div className="ambient-mesh ambient-mesh-dark absolute inset-0">
+          <div
+            className="ambient-mesh-orb absolute top-1/4 left-1/4 w-[620px] h-[620px] rounded-full blur-[140px]"
+            style={{
+              background: 'radial-gradient(circle, #38bdf8 0%, #0284c7 50%, transparent 75%)',
+            }}
+          />
+          <div
+            className="ambient-mesh-orb absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full blur-[150px]"
+            style={{
+              background: 'radial-gradient(circle, #818cf8 0%, #6366f1 50%, transparent 75%)',
+            }}
+          />
+        </div>
+        <div className="ambient-mesh ambient-mesh-light absolute inset-0">
+          <div
+            className="ambient-mesh-orb absolute top-1/4 left-1/4 w-[620px] h-[620px] rounded-full blur-[140px]"
+            style={{
+              background: 'radial-gradient(circle, #7dd3fc 0%, #38bdf8 45%, transparent 70%)',
+            }}
+          />
+          <div
+            className="ambient-mesh-orb absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full blur-[150px]"
+            style={{
+              background: 'radial-gradient(circle, #a5b4fc 0%, #818cf8 45%, transparent 70%)',
+            }}
+          />
+        </div>
       </div>
 
       {/* Login Card Container */}
-      <motion.div
-        initial={{ opacity: 0, y: 16, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="w-full max-w-md relative z-10"
-      >
+      <div className="w-full max-w-md relative z-10 transition-all duration-300">
         <form
           onSubmit={doLogin}
           className="login-card ios-glass-card p-6 sm:p-8 space-y-6"
@@ -133,20 +143,15 @@ export default function LoginGate({ children }) {
           </div>
 
           {/* Error Message */}
-          <AnimatePresence>
-            {msg && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="login-err p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs font-semibold flex items-center gap-2"
-                role="alert"
-              >
-                <AlertTriangle size={16} className="shrink-0 text-rose-500" />
-                <span>{msg}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {msg && (
+            <div
+              className="login-err p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs font-semibold flex items-center gap-2"
+              role="alert"
+            >
+              <AlertTriangle size={16} className="shrink-0 text-rose-500" />
+              <span>{msg}</span>
+            </div>
+          )}
 
           {/* Submit Button */}
           <button
@@ -167,10 +172,10 @@ export default function LoginGate({ children }) {
 
         {/* Security Footer Note */}
         <div className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400 font-mono flex items-center justify-center gap-2">
-          <ShieldCheck size={14} className="text-emerald-500" />
+          <ShieldCheck size={14} className="text-sky-500" />
           <span>Sesi Terenkripsi 24 Jam</span>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

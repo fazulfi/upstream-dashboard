@@ -2,9 +2,9 @@ import React from 'react';
 
 export default function Badge({ kind = 'ok', dot = false, children, className = '' }) {
   const map = {
-    ok: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-    active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-    live: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+    ok: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
+    active: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
+    live: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
     warn: 'bg-amber-500/15 text-amber-800 dark:text-amber-400 border-amber-500/30',
     warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-400 border-amber-500/30',
     drained: 'bg-amber-500/15 text-amber-800 dark:text-amber-400 border-amber-500/30',
@@ -18,9 +18,9 @@ export default function Badge({ kind = 'ok', dot = false, children, className = 
   };
 
   const dotMap = {
-    ok: 'bg-emerald-600 dark:bg-emerald-400',
-    active: 'bg-emerald-600 dark:bg-emerald-400',
-    live: 'bg-emerald-600 dark:bg-emerald-400',
+    ok: 'bg-sky-500 dark:bg-sky-400',
+    active: 'bg-sky-500 dark:bg-sky-400',
+    live: 'bg-sky-500 dark:bg-sky-400',
     warn: 'bg-amber-600 dark:bg-amber-400',
     warning: 'bg-amber-600 dark:bg-amber-400',
     drained: 'bg-amber-600 dark:bg-amber-400',
@@ -38,7 +38,7 @@ export default function Badge({ kind = 'ok', dot = false, children, className = 
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border tracking-wide transition-colors ${colorCls} ${className}`}
+      className={`ios-badge badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border tracking-wide select-none ${colorCls} ${className}`}
     >
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotCls} animate-pulse`} />}
       {children}

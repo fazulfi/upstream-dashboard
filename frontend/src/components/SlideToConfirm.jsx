@@ -48,7 +48,7 @@ export default function SlideToConfirm({
           {loading ? (
             'Processing...'
           ) : confirmed ? (
-            <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+            <span className="flex items-center gap-1 text-sky-700 dark:text-sky-400 font-bold">
               <ShieldCheck size={14} /> {confirmedLabel}
             </span>
           ) : (

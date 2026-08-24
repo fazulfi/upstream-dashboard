@@ -13,8 +13,9 @@ import {
   Search,
   Sliders,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
-import { apiFetch } from '../hooks/useApi';
+import { apiFetch, useApi } from '../hooks/useApi';
 import Badge from './Badge';
 import { useToast } from './Toast';
 
@@ -38,17 +39,34 @@ function formatValue(value) {
 }
 
 export default function PricingPage({ globals = {}, overrides = [], orderbook = [], onChanged }) {
+  const marketApi = (typeof useApi === 'function' ? useApi('/api/market', 30000) : null) || {};
+  const { data: marketData, loading: marketLoading, reload: reloadMarket } = marketApi;
   const [globalForms, setGlobalForms] = useState({});
   const [overrideForm, setOverrideForm] = useState({ upstream: '', model_id: '', trigger_pct: '' });
   const [askForm, setAskForm] = useState(null);
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState('');
   const [searchOrderbook, setSearchOrderbook] = useState('');
+  const [searchMarket, setSearchMarket] = useState('');
   const { success, error: toastError } = useToast();
 
   const upstreamNames = useMemo(() => Object.keys(globals).sort(), [globals]);
   const overrideRows = Array.isArray(overrides) ? overrides : [];
   const orderbookRows = Array.isArray(orderbook) ? orderbook : [];
+
+  const marketModels = useMemo(() => {
+    const raw = marketData?.models || (Array.isArray(marketData) ? marketData : []);
+    return Array.isArray(raw) ? raw : [];
+  }, [marketData]);
+
+  const filteredMarketModels = useMemo(() => {
+    if (!searchMarket) return marketModels;
+    return marketModels.filter((m) => {
+      const q = searchMarket.toLowerCase();
+      const slug = (m.slug || m.model || m.model_id || '').toLowerCase();
+      return slug.includes(q);
+    });
+  }, [marketModels, searchMarket]);
 
   const filteredOrderbook = useMemo(() => {
     if (!searchOrderbook) return orderbookRows;
@@ -227,10 +245,10 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             </span>
             <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">Market Depth</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white">
+          <h1 className="text-3xl sm:text-[34px] font-extrabold tracking-tight leading-tight text-zinc-900 dark:text-white">
             Pricing & Orderbook
           </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1 max-w-2xl">
+          <p className="text-[15px] text-zinc-600 dark:text-zinc-300 mt-1 max-w-2xl leading-relaxed">
             Konfigurasi parameter ekonomi global dan pantau kedalaman ask buku order pasar.
           </p>
         </div>
@@ -243,11 +261,11 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
           className={`batch-note p-4 rounded-2xl border text-xs sm:text-sm font-semibold shadow-md flex items-center gap-2.5 ${
             message.startsWith('Error')
               ? 'pricing-error bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300'
-              : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              : 'bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-300'
           }`}
           role="status"
         >
-          {message.startsWith('Error') ? <AlertTriangle size={18} className="text-rose-500" /> : <CheckCircle2 size={18} className="text-emerald-500" />}
+          {message.startsWith('Error') ? <AlertTriangle size={18} className="text-rose-500" /> : <CheckCircle2 size={18} className="text-sky-500" />}
           <span>{message}</span>
         </motion.div>
       )}
@@ -386,6 +404,119 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
         </div>
       </section>
 
+      {/* ── Live Market Rates Section (R3) ── */}
+      <section className="panel pricing-section ios-glass-card overflow-hidden shadow-xl" data-testid="live-market-rates-section">
+        <div className="panel-head p-6 border-b border-black/10 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                  Live Asks
+                </span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+              </div>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                Live Market Rates & Spread
+              </h2>
+              <div className="sub text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mt-0.5">
+                Snapshot harga ask terendah (floor) dan tertinggi di seluruh pasar InferHub.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative min-w-[200px] max-w-xs">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Filter live market..."
+                value={searchMarket}
+                onChange={(e) => setSearchMarket(e.target.value)}
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3.5 py-2 text-xs sm:text-sm font-mono text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 shadow-inner"
+              />
+            </div>
+            <button
+              onClick={() => reloadMarket?.()}
+              disabled={marketLoading}
+              className="ios-btn-glass p-2 rounded-xl text-xs font-bold cursor-pointer"
+              title="Refresh market rates"
+            >
+              <RefreshCw size={14} className={marketLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        <div className="table-scroll overflow-x-auto">
+          <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono" data-testid="live-market-table">
+            <thead className="bg-[var(--table-head-bg)] text-zinc-700 dark:text-zinc-400 text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
+              <tr>
+                <th className="px-5 py-3.5">Model Identifier</th>
+                <th className="px-5 py-3.5 text-right">Lowest Ask (Floor)</th>
+                <th className="px-5 py-3.5 text-right">Highest Ask</th>
+                <th className="px-5 py-3.5 text-right">Spread ($ / %)</th>
+                <th className="px-5 py-3.5 text-center">Active Sellers</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5 dark:divide-white/10">
+              {filteredMarketModels.map((m, idx) => {
+                const slug = m.slug || m.model || m.model_id || `model-${idx}`;
+                const minAsk = m.minAskIn ?? m.minAsk ?? m.min_ask ?? m.floorPrice ?? null;
+                const maxAsk = m.maxAskIn ?? m.maxAsk ?? m.max_ask ?? m.ceilingPrice ?? null;
+                const sellers = m.sellersCount ?? m.sellers ?? m.active_sellers ?? m.sellers_count ?? 1;
+                const spreadVal = minAsk != null && maxAsk != null ? maxAsk - minAsk : (m.spread ?? null);
+                const spreadPct = minAsk != null && maxAsk != null && minAsk > 0 ? ((maxAsk - minAsk) / minAsk) * 100 : null;
+
+                return (
+                  <tr key={slug} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <td className="px-5 py-3.5 font-bold text-zinc-900 dark:text-zinc-100">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sky-600 dark:text-sky-400">{slug}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {minAsk != null ? `$${Number(minAsk).toFixed(4)}` : '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-bold text-zinc-700 dark:text-zinc-300">
+                      {maxAsk != null ? `$${Number(maxAsk).toFixed(4)}` : '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right text-xs">
+                      {spreadVal != null ? (
+                        <div>
+                          <span className="font-bold text-zinc-900 dark:text-white">${Number(spreadVal).toFixed(4)}</span>
+                          {spreadPct != null && (
+                            <span className="text-[10px] text-zinc-500 font-mono block">
+                              +{spreadPct.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className="ios-badge px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+                        {sellers} seller{sellers > 1 ? 's' : ''}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredMarketModels.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="dt-empty px-5 py-8 text-center text-zinc-500 font-sans text-xs sm:text-sm">
+                    {marketLoading ? 'Memuat data pasar live…' : 'Tidak ada data market rate yang cocok.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Merged Orderbook Table */}
       <section className="panel pricing-section ios-glass-card overflow-hidden shadow-xl">
         <div className="panel-head p-6 border-b border-black/10 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
@@ -416,7 +547,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                 <th className="px-5 py-3.5 text-right">Min ask</th>
                 <th className="px-5 py-3.5 text-right">Max ask</th>
                 <th className="px-5 py-3.5 text-right">Spread</th>
-                <th className="px-5 py-3.5 text-right font-bold text-emerald-600 dark:text-emerald-400">Our ask</th>
+                <th className="px-5 py-3.5 text-right font-bold text-sky-600 dark:text-sky-400">Our ask</th>
                 <th className="px-5 py-3.5">Levels</th>
                 <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
               </tr>
@@ -433,7 +564,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   </td>
                   <td className="tnum px-5 py-3.5 text-right text-zinc-500 dark:text-zinc-400">{formatValue(row.max_ask)}</td>
                   <td className="tnum px-5 py-3.5 text-right text-amber-700 dark:text-amber-400 font-bold">{formatValue(row.spread)}</td>
-                  <td className="tnum pos px-5 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
+                  <td className="tnum pos px-5 py-3.5 text-right font-extrabold text-sky-600 dark:text-sky-400">
                     {formatValue(row.our_ask)}
                   </td>
                   <td className="px-5 py-3.5">
@@ -444,7 +575,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                             key={`${upstream.slug}-${index}`}
                             className={`pricing-level inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${
                               upstream.is_ours
-                                ? 'ours bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold'
+                                ? 'ours bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-300 font-bold'
                                 : 'bg-black/5 dark:bg-black/50 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400'
                             }`}
                           >
@@ -461,7 +592,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
                   </td>
                   <td className="px-5 py-3.5 text-right font-sans">
                     <button
-                      className="btn btn-sm px-3.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 font-bold text-xs shadow-sm transition-all cursor-pointer"
+                      className="btn btn-sm px-3.5 py-1.5 rounded-xl ios-btn-glass font-bold text-xs shadow-sm cursor-pointer"
                       onClick={() => openAskForm(row)}
                     >
                       Set manual ask
@@ -533,7 +664,7 @@ export default function PricingPage({ globals = {}, overrides = [], orderbook = 
             <div className="pricing-ask-actions flex items-center justify-end gap-2.5 pt-2 font-sans">
               <button
                 type="button"
-                className="btn px-4 py-2 rounded-xl text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
+                className="btn btn-ghost px-4 py-2 rounded-xl text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
                 onClick={() => setAskForm(null)}
               >
                 Batal

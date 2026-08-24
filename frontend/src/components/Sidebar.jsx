@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../theme';
 import {
   Settings,
@@ -10,13 +11,22 @@ import {
   SlidersHorizontal,
   TrendingUp,
   X,
+  BarChart3,
+  ScrollText,
 } from 'lucide-react';
 
 const SECTIONS = [
   {
-    label: 'Navigation',
+    label: 'Telemetry & Analytics',
     items: [
       { to: '/', label: 'Reliability', Icon: Activity, end: true },
+      { to: '/analytics', label: 'Consumer Analytics', Icon: BarChart3 },
+      { to: '/logs', label: 'Request Logs', Icon: ScrollText },
+    ],
+  },
+  {
+    label: 'Operations & Finance',
+    items: [
       { to: '/finance', label: 'Finance & P&L', Icon: TrendingUp },
       { to: '/auto-pricing', label: 'Auto Pricing', Icon: SlidersHorizontal },
       { to: '/pricing', label: 'Pricing', Icon: CircleDollarSign },
@@ -25,24 +35,62 @@ const SECTIONS = [
   },
 ];
 
+export function isSidebarSwipeClose(info) {
+  return (info?.offset?.x ?? 0) < -80 || (info?.velocity?.x ?? 0) < -300;
+}
+
 export default function Sidebar({ isOpen = false, onClose }) {
   const { theme, toggle } = useTheme();
   const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
+  // Keyboard accessibility: dismiss sidebar on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const handleDragEnd = (_e, info) => {
+    // Trigger onClose if user swipes left past distance threshold or with velocity
+    if (isSidebarSwipeClose(info)) {
+      onClose?.();
+    }
+  };
+
   return (
     <>
       {/* Mobile Backdrop */}
-      {isOpen && (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
-        />
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden cursor-pointer"
+          />
+        )}
+      </AnimatePresence>
 
-      <aside
-        className={`sidebar fixed top-0 bottom-0 left-0 z-50 w-72 bg-[var(--nav-bg)] backdrop-blur-3xl border-r border-black/10 dark:border-white/10 text-[var(--text-title)] flex flex-col transition-transform duration-200 ease-in-out ${
-          isOpen ? 'open translate-x-0 shadow-2xl' : '-translate-x-full lg:hidden'
+      <motion.aside
+        className={`sidebar ios-sidebar fixed top-0 bottom-0 left-0 z-50 lg:z-30 w-64 flex flex-col touch-pan-y ${
+          isOpen ? 'open shadow-2xl' : 'pointer-events-none lg:pointer-events-auto'
         }`}
+        initial={false}
+        animate={{ x: isOpen ? 0 : '-100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+        drag={isOpen ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={{ left: 0.8, right: 0 }}
+        dragSnapToOrigin={true}
+        dragDirectionLock={true}
+        onDragEnd={handleDragEnd}
       >
         {/* Brand Header */}
         <div className="h-14 px-5 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
@@ -60,7 +108,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
+            className="ios-icon-btn p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer lg:hidden"
             aria-label="Close menu"
           >
             <X size={16} />
@@ -84,11 +132,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                       end={item.end}
                       onClick={onClose}
                       className={({ isActive }) =>
-                        `group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                          isActive
-                            ? 'active ios-pill-active font-extrabold'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 border border-transparent'
-                        }`
+                        `group ios-sidebar-item text-xs font-semibold ${isActive ? 'active' : ''}`
                       }
                     >
                       <div className="flex items-center gap-3">
@@ -106,19 +150,19 @@ export default function Sidebar({ isOpen = false, onClose }) {
         {/* Footer & Theme Switcher */}
         <div className="p-4 border-t border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
             <span className="text-zinc-600 dark:text-zinc-400 text-[11px] font-mono">Live Stream</span>
           </div>
           <button
             onClick={toggle}
             aria-label={themeLabel}
             title={themeLabel}
-            className="p-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/10 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shadow-sm"
+            className="ios-icon-btn p-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shadow-sm"
           >
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
         </div>
-      </aside>
+      </motion.aside>
     </>
   );
 }

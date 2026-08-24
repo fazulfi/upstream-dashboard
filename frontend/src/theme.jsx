@@ -9,6 +9,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 const THEMES = {
   dark: {
     '--bg': '#07090e',
+    '--bg-base': '#07090e',
     '--layer': 'rgba(18, 20, 29, 0.65)',
     '--card': 'rgba(18, 20, 29, 0.65)',
     '--card-bg': 'rgba(18, 20, 29, 0.65)',
@@ -19,9 +20,13 @@ const THEMES = {
     '--surface2': 'rgba(255, 255, 255, 0.05)',
     '--border': 'rgba(255, 255, 255, 0.14)',
     '--border-strong': 'rgba(255, 255, 255, 0.25)',
-    '--text': '#ffffff',
-    '--text2': '#94a3b8',
-    '--text3': '#64748b',
+    '--text': 'rgba(255, 255, 255, 0.95)',
+    '--text2': 'rgba(235, 235, 245, 0.65)',
+    '--text3': 'rgba(235, 235, 245, 0.38)',
+    '--text-vibrant-primary': 'rgba(255, 255, 255, 0.95)',
+    '--text-vibrant-secondary': 'rgba(235, 235, 245, 0.65)',
+    '--text-vibrant-tertiary': 'rgba(235, 235, 245, 0.38)',
+    '--text-vibrant-quaternary': 'rgba(235, 235, 245, 0.18)',
     '--accent': '#0a84ff',
     '--accent-hover': '#409cff',
     '--accent-soft': 'rgba(10, 132, 255, 0.15)',
@@ -36,9 +41,11 @@ const THEMES = {
     '--on-btn': '#07090e',
     '--btn-hover': '#f1f5f9',
     '--selection': 'rgba(10, 132, 255, 0.30)',
+    '--mesh-opacity': '0.32',
   },
   light: {
-    '--bg': '#e0e7f1',
+    '--bg': '#f2f2f7',
+    '--bg-base': '#f2f2f7',
     '--layer': 'rgba(255, 255, 255, 0.58)',
     '--card': 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.30) 40%, rgba(255, 255, 255, 0.15) 70%, rgba(255, 255, 255, 0.40) 100%)',
     '--card-bg': 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.30) 40%, rgba(255, 255, 255, 0.15) 70%, rgba(255, 255, 255, 0.40) 100%)',
@@ -49,9 +56,13 @@ const THEMES = {
     '--surface2': 'rgba(255, 255, 255, 0.45)',
     '--border': 'rgba(255, 255, 255, 0.45)',
     '--border-strong': 'rgba(255, 255, 255, 0.95)',
-    '--text': '#090d16',
-    '--text2': '#334155',
-    '--text3': '#64748b',
+    '--text': 'rgba(0, 0, 0, 0.88)',
+    '--text2': 'rgba(60, 60, 67, 0.65)',
+    '--text3': 'rgba(60, 60, 67, 0.38)',
+    '--text-vibrant-primary': 'rgba(0, 0, 0, 0.88)',
+    '--text-vibrant-secondary': 'rgba(60, 60, 67, 0.65)',
+    '--text-vibrant-tertiary': 'rgba(60, 60, 67, 0.38)',
+    '--text-vibrant-quaternary': 'rgba(60, 60, 67, 0.18)',
     '--accent': '#0071e3',
     '--accent-hover': '#0077ed',
     '--accent-soft': 'rgba(0, 113, 227, 0.12)',
@@ -66,6 +77,7 @@ const THEMES = {
     '--on-btn': '#FFFFFF',
     '--btn-hover': '#1e293b',
     '--selection': 'rgba(0, 113, 227, 0.20)',
+    '--mesh-opacity': '0.18',
   },
 };
 
@@ -85,7 +97,7 @@ export function ThemeProvider({ children }) {
     Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
     root.classList.remove('theme-light', 'theme-dark');
     root.classList.add('theme-' + theme);
-    document.body.style.background = vars['--bg'];
+    document.body.style.backgroundColor = vars['--bg'];
     window.localStorage?.setItem('upstream-theme', theme);
   }, [theme]);
 

@@ -20,12 +20,15 @@ import {
   Activity,
   ArrowUpRight,
   Lock,
+  Gauge,
 } from 'lucide-react';
 import { reliabilityApi, unwrap } from '../lib/reliabilityApi';
 import { useReliabilityStream } from '../hooks/useReliabilityStream';
 import KpiCard from '../components/KpiCard';
 import Badge from '../components/Badge';
 import ModelDetailDrawer from '../components/ModelDetailDrawer';
+import { SkeletonBlock, SkeletonCard } from '../components/Skeleton';
+import ContextMenu from '../components/ContextMenu';
 
 const value = (obj, ...keys) => keys.reduce((found, key) => found ?? obj?.[key], undefined);
 
@@ -61,7 +64,7 @@ const PROVIDER_COLORS = {
   'cline-pass': 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
   clinepass: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
   commandcode: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
-  'opencode-go': 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  'opencode-go': 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
 };
 
 function State({ status }) {
@@ -74,9 +77,9 @@ function State({ status }) {
   };
   return (
     <span
-      className={`rel-state rel-state-${status} inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
+      className={`ios-badge rel-state rel-state-${status} inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
         status === 'live'
-          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+          ? 'bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-300'
           : status === 'connecting'
           ? 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-400'
           : 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-400'
@@ -86,12 +89,12 @@ function State({ status }) {
       <span className="relative flex h-2 w-2">
         <span
           className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-            status === 'live' ? 'bg-emerald-400' : 'bg-rose-400'
+            status === 'live' ? 'bg-sky-400' : 'bg-rose-400'
           }`}
         />
         <span
           className={`relative inline-flex rounded-full h-2 w-2 ${
-            status === 'live' ? 'bg-emerald-500' : 'bg-rose-500'
+            status === 'live' ? 'bg-sky-500' : 'bg-rose-500'
           }`}
         />
       </span>
@@ -105,25 +108,32 @@ export default function Reliability() {
   const [models, setModels] = useState([]);
   const [cycles, setCycles] = useState([]);
   const [events, setEvents] = useState([]);
+  const [usageWindows, setUsageWindows] = useState({});
   const [filter, setFilter] = useState({ provider: '', action: '', severity: '', search: '' });
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'undercut' | 'leader' | 'hold'
   const [selectedModel, setSelectedModel] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, model: null });
   const [transition, setTransition] = useState(null);
   const [recoveryError, setRecoveryError] = useState(null);
 
   const recover = useCallback(async () => {
     setRecoveryError(null);
     try {
-      const [nextSummary, nextCycles, nextEvents, nextModels] = await Promise.all([
+      const [nextSummary, nextCycles, nextEvents, nextModels, nextWindows] = await Promise.all([
         reliabilityApi.summary(),
         reliabilityApi.cycles({ limit: 25 }),
         reliabilityApi.events({ limit: 25 }),
         reliabilityApi.models({ limit: 50 }),
+        (typeof reliabilityApi.usageWindows === 'function'
+          ? reliabilityApi.usageWindows()
+          : Promise.resolve({})
+        ).catch(() => ({})),
       ]);
       setSummary(unwrap(nextSummary));
       setCycles(rowsFrom(unwrap(nextCycles), 'cycles'));
       setEvents(rowsFrom(unwrap(nextEvents), 'events'));
       setModels(rowsFrom(unwrap(nextModels), 'models'));
+      setUsageWindows(unwrap(nextWindows) || {});
     } catch (err) {
       setRecoveryError(err);
       throw err;
@@ -174,6 +184,17 @@ export default function Reliability() {
     });
   }, [models, filter, activeTab]);
 
+  const providerQuotaList = useMemo(() => {
+    if (!usageWindows || typeof usageWindows !== 'object') return [];
+    if (Array.isArray(usageWindows)) {
+      return usageWindows;
+    }
+    return Object.entries(usageWindows).map(([providerId, windows]) => ({
+      providerId,
+      windows: Array.isArray(windows) ? windows : [windows],
+    }));
+  }, [usageWindows]);
+
   const setArm = async (targetState) => {
     setTransition({ pending: true });
     try {
@@ -196,16 +217,16 @@ export default function Reliability() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="eyebrow inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+            <span className="eyebrow inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
               <Radio size={13} />
               Sistem Operasional
             </span>
             <span className="text-xs text-[var(--text-sub)] font-mono">Loop 60 Detik</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-title)]">
+          <h1 className="text-3xl sm:text-[34px] font-extrabold tracking-tight leading-tight text-[var(--text-title)]">
             Reliability & Operations
           </h1>
-          <p className="faint text-sm text-[var(--text-sub)] mt-1">
+          <p className="faint text-[15px] text-[var(--text-sub)] mt-1 max-w-2xl leading-relaxed">
             Monitoring status daemon harga otomatis, inventaris model upstream, dan log mutasi harga.
           </p>
         </div>
@@ -214,7 +235,7 @@ export default function Reliability() {
           <State status={status} />
           <button
             onClick={() => recover()}
-            className="ios-btn-secondary p-2.5 rounded-2xl shadow-sm cursor-pointer"
+            className="ios-btn-glass p-2.5 rounded-2xl shadow-sm cursor-pointer"
             title="Refresh snapshot"
           >
             <RefreshCw size={16} />
@@ -281,7 +302,7 @@ export default function Reliability() {
             <div
               className={`p-3.5 rounded-2xl border shadow-inner ${
                 armState
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
+                  ? 'bg-sky-500/20 border-sky-500/40 text-sky-700 dark:text-sky-300'
                   : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-500 dark:text-zinc-400'
               }`}
             >
@@ -293,9 +314,9 @@ export default function Reliability() {
                   STATUS DAEMON:
                 </span>
                 <span
-                  className={`text-xs font-mono font-extrabold px-3 py-1 rounded-xl border ${
+                  className={`ios-badge text-xs font-mono font-extrabold px-3 py-1 rounded-xl border ${
                     armState
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                      ? 'bg-sky-500/20 border-sky-500/40 text-sky-800 dark:text-sky-300'
                       : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-[var(--text-title)]'
                   }`}
                 >
@@ -314,7 +335,7 @@ export default function Reliability() {
             <button
               className={`px-6 py-2.5 rounded-2xl font-bold text-sm shadow-lg transition-all cursor-pointer ${
                 armState
-                  ? 'ios-btn-secondary'
+                  ? 'ios-btn-glass'
                   : 'ios-btn-primary'
               } disabled:opacity-50`}
               disabled={transition?.pending || status === 'auth-required'}
@@ -327,34 +348,160 @@ export default function Reliability() {
       </div>
 
       {/* ── 4. Four Specialized FinOps Metric Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="Status Layanan Daemon"
-          value={value(current, 'service_status', 'status') || 'Healthy'}
-          sub="Siklus 60 detik"
-          delta="100% Uptime"
-          deltaDir="up"
-          featured={armState}
-          icon={Zap}
-        />
-        <KpiCard
-          label="Heartbeat & Latensi"
-          value={formatClock(value(current, 'last_heartbeat', 'heartbeat_at'))}
-          sub={`Respon: ${value(current, 'duration_ms', 'cycle_duration_ms') ?? '1.482'} ms`}
-          icon={Clock}
-        />
-        <KpiCard
-          label="Cakupan Model Aktif"
-          value={`${value(current, 'model_count', 'models_processed') ?? models.length} Model`}
-          sub="5 Provider terhubung"
-          icon={Layers}
-        />
-        <KpiCard
-          label="Sinkronisasi Database"
-          value={formatClock(value(current, 'db_freshness', 'db_fresh_at'))}
-          sub={`Holds: ${value(current, 'hold_count') ?? '0'} · Errors: ${value(current, 'error_count') ?? '0'}`}
-          icon={Database}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {!summary ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              label="Status Layanan Daemon"
+              value={value(current, 'service_status', 'status') || 'Healthy'}
+              sub="Siklus 60 detik"
+              delta="100% Uptime"
+              deltaDir="up"
+              featured={armState}
+              icon={Zap}
+            />
+            <KpiCard
+              label="Heartbeat & Latensi"
+              value={formatClock(value(current, 'last_heartbeat', 'heartbeat_at'))}
+              sub={`Respon: ${value(current, 'duration_ms', 'cycle_duration_ms') ?? '1.482'} ms`}
+              icon={Clock}
+            />
+            <KpiCard
+              label="Cakupan Model Aktif"
+              value={`${value(current, 'model_count', 'models_processed') ?? models.length} Model`}
+              sub="5 Provider terhubung"
+              icon={Layers}
+            />
+            <KpiCard
+              label="Sinkronisasi Database"
+              value={formatClock(value(current, 'db_freshness', 'db_fresh_at'))}
+              sub={`Holds: ${value(current, 'hold_count') ?? '0'} · Errors: ${value(current, 'error_count') ?? '0'}`}
+              icon={Database}
+            />
+          </>
+        )}
+      </div>
+
+      {/* ── 4.5. Provider Fleet Quota & Capacity Tracker (R1) ── */}
+      <div className="ios-glass-card p-6 shadow-xl space-y-4" data-testid="provider-quota-tracker">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+              <Gauge size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="eyebrow text-xs font-mono font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                  Fleet Capacity
+                </span>
+              </div>
+              <h2 className="text-lg font-bold text-[var(--text-title)]">
+                Provider Quota & Capacity Tracker
+              </h2>
+            </div>
+          </div>
+          <span className="text-xs text-[var(--text-sub)] font-mono">
+            {providerQuotaList.length} Upstream Providers
+          </span>
+        </div>
+
+        {providerQuotaList.length === 0 ? (
+          <div className="p-6 text-center text-xs text-[var(--text-sub)] font-mono bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+            Tidak ada window kuota aktif yang dilaporkan provider saat ini.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {providerQuotaList.map((item) => {
+              const providerId = item.providerId || item.provider || item.slug || 'Unknown';
+              const windows = Array.isArray(item.windows) ? item.windows : (Array.isArray(item) ? item : [item]);
+              const colorClass = PROVIDER_COLORS[providerId.toLowerCase()] || 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
+
+              return (
+                <div
+                  key={providerId}
+                  className="p-4 rounded-2xl bg-white/40 dark:bg-white/[0.04] border border-black/5 dark:border-white/10 space-y-3 shadow-sm hover:border-sky-500/40 transition-all"
+                  data-testid={`quota-card-${providerId}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold border ${colorClass}`}>
+                      {providerId}
+                    </span>
+                    {windows.some((w) => w.source === 'reactive_429' || w.reactive_429) && (
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 animate-pulse flex items-center gap-1" data-testid="badge-reactive-429">
+                        <AlertTriangle size={11} /> 429 Throttle
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2.5 pt-1">
+                    {windows.map((w, idx) => {
+                      const kind = w.windowKind || w.window_kind || w.kind || `Window ${idx + 1}`;
+                      const used = Number(w.usedTokens ?? w.used_tokens ?? 0);
+                      const limit = Number(w.limitTokens ?? w.limit_tokens ?? 0);
+                      let pct = w.usedPct != null ? Number(w.usedPct) : (w.used_pct != null ? Number(w.used_pct) : (limit > 0 ? (used / limit) * 100 : 0));
+                      if (pct <= 1 && pct > 0 && limit > 0 && used > 1) {
+                        pct = pct * 100;
+                      }
+                      const clampedPct = Math.min(Math.max(pct, 0), 100);
+
+                      const barColor =
+                        clampedPct >= 90
+                          ? 'bg-rose-500'
+                          : clampedPct >= 75
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500';
+
+                      const textColor =
+                        clampedPct >= 90
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : clampedPct >= 75
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400';
+
+                      return (
+                        <div key={`${providerId}-${kind}-${idx}`} className="space-y-1 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-medium text-[var(--text-sub)]">
+                            <span className="font-mono uppercase font-bold text-[var(--text-title)]">{kind}</span>
+                            <span className={`font-mono font-extrabold ${textColor}`}>
+                              {clampedPct.toFixed(1)}%
+                            </span>
+                          </div>
+
+                          <div className="w-full bg-black/10 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                              style={{ width: `${clampedPct}%` }}
+                              role="progressbar"
+                              aria-valuenow={clampedPct}
+                              aria-valuemin="0"
+                              aria-valuemax="100"
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-[var(--text-sub)] font-mono pt-0.5">
+                            <span>
+                              {limit > 0 ? `${used.toLocaleString()} / ${limit.toLocaleString()} tok` : `${used.toLocaleString()} tok`}
+                            </span>
+                            {w.resetAt || w.reset_at ? (
+                              <span>Reset: {formatClock(w.resetAt || w.reset_at)}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── 5. Main Grid: Model Inventory Explorer & Execution Timeline ── */}
@@ -410,68 +557,74 @@ export default function Reliability() {
           </div>
 
           <div className="rel-table-wrap overflow-x-auto max-h-[480px]">
-            <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
-              <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
-                <tr>
-                  <th className="px-5 py-3.5">Provider</th>
-                  <th className="px-5 py-3.5">Model</th>
-                  <th className="px-5 py-3.5 text-center">Action</th>
-                  <th className="px-5 py-3.5 text-right">Our price</th>
-                  <th className="px-5 py-3.5 text-right">Reference</th>
-                  <th className="px-5 py-3.5 text-right">Freshness</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-white/10">
-                {filteredModels.map((model) => {
-                  const act = model.action || model.status || 'hold';
-                  const isUpd = act.toLowerCase().includes('undercut') || act.toLowerCase().includes('update');
-                  const isLead = act.toLowerCase() === 'leader';
-                  const provColor = PROVIDER_COLORS[model.slug] || 'bg-black/5 dark:bg-white/5 text-[var(--text-body)] border-black/10 dark:border-white/10';
+            <SkeletonBlock loading={!models || models.length === 0} rows={5}>
+              <table className="tbl w-full text-left text-xs sm:text-sm border-collapse font-mono">
+                <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] text-xs uppercase border-b border-black/10 dark:border-white/10 font-sans">
+                  <tr>
+                    <th className="px-5 py-3.5">Provider</th>
+                    <th className="px-5 py-3.5">Model</th>
+                    <th className="px-5 py-3.5 text-center">Action</th>
+                    <th className="px-5 py-3.5 text-right">Our price</th>
+                    <th className="px-5 py-3.5 text-right">Reference</th>
+                    <th className="px-5 py-3.5 text-right">Freshness</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-white/10">
+                  {filteredModels.map((model) => {
+                    const act = model.action || model.status || 'hold';
+                    const isUpd = act.toLowerCase().includes('undercut') || act.toLowerCase().includes('update');
+                    const isLead = act.toLowerCase() === 'leader';
+                    const provColor = PROVIDER_COLORS[model.slug] || 'bg-black/5 dark:bg-white/5 text-[var(--text-body)] border-black/10 dark:border-white/10';
 
-                  return (
-                    <tr
-                      key={`${model.slug}-${model.model_id}`}
-                      onClick={() => setSelectedModel(model)}
-                      className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold border font-sans ${provColor}`}>
-                          {model.slug || '—'}
-                        </span>
-                      </td>
-                      <td className="mono px-5 py-3.5 text-[var(--text-title)] font-bold">{model.model_id || '—'}</td>
-                      <td className="px-5 py-3.5 text-center font-sans">
-                        <span
-                          className={`rel-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                            isUpd
-                              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
-                              : isLead
-                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                              : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)]'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isUpd ? 'bg-sky-500 animate-pulse' : isLead ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
-                          {act.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-extrabold text-[var(--text-title)]">
-                        {model.our_price != null ? `$${Number(model.our_price).toFixed(4)}` : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-[var(--text-sub)]">
-                        {model.competitor_price != null
-                          ? `$${Number(model.competitor_price).toFixed(4)}`
-                          : model.reference_price != null
-                          ? `$${Number(model.reference_price).toFixed(4)}`
-                          : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-[var(--text-sub)] text-xs">
-                        {formatClock(model.freshness || model.updated_at)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    return (
+                      <tr
+                        key={`${model.slug}-${model.model_id}`}
+                        onClick={() => setSelectedModel(model)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, model });
+                        }}
+                        className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      >
+                        <td className="px-5 py-3.5">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold border font-sans ${provColor}`}>
+                            {model.slug || '—'}
+                          </span>
+                        </td>
+                        <td className="mono px-5 py-3.5 text-[var(--text-title)] font-bold">{model.model_id || '—'}</td>
+                        <td className="px-5 py-3.5 text-center font-sans">
+                          <span
+                            className={`rel-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                              isUpd
+                                ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
+                                : isLead
+                                ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
+                                : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)]'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isUpd ? 'bg-sky-500 animate-pulse' : isLead ? 'bg-indigo-500' : 'bg-zinc-400'}`} />
+                            {act.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-extrabold text-[var(--text-title)]">
+                          {model.our_price != null ? `$${Number(model.our_price).toFixed(4)}` : '—'}
+                        </td>
+                        <td className="px-5 py-3.5 text-right text-[var(--text-sub)]">
+                          {model.competitor_price != null
+                            ? `$${Number(model.competitor_price).toFixed(4)}`
+                            : model.reference_price != null
+                            ? `$${Number(model.reference_price).toFixed(4)}`
+                            : '—'}
+                        </td>
+                        <td className="px-5 py-3.5 text-right text-[var(--text-sub)] text-xs">
+                          {formatClock(model.freshness || model.updated_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </SkeletonBlock>
           </div>
           {!models.length && (
             <p className="empty py-12 text-center text-sm text-[var(--text-sub)] font-sans">
@@ -599,10 +752,10 @@ export default function Reliability() {
       {/* Transition Success Feedback */}
       {transition && !transition.pending && !transition.error && !transition.unknown && (
         <div
-          className="rel-feedback p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2.5 shadow-md"
+          className="rel-feedback p-4 rounded-2xl border border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-300 text-xs sm:text-sm font-semibold flex items-center gap-2.5 shadow-md"
           role="status"
         >
-          <CheckCircle2 size={18} className="text-emerald-500" />
+          <CheckCircle2 size={18} className="text-sky-500" />
           <span>
             Audit recorded · {transition.operator || 'operator'} · {formatFullDate(transition.timestamp || transition.detected_at)}
           </span>
@@ -624,6 +777,16 @@ export default function Reliability() {
         isOpen={Boolean(selectedModel)}
         onClose={() => setSelectedModel(null)}
         onUpdated={recover}
+      />
+
+      {/* Glass Context Menu */}
+      <ContextMenu
+        isOpen={contextMenu.isOpen}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        model={contextMenu.model}
+        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+        onViewDetails={(model) => setSelectedModel(model)}
       />
     </div>
   );

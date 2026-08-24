@@ -5,6 +5,8 @@ import { ToastProvider } from './components/Toast';
 import Layout from './components/Layout';
 import LoginGate from './components/LoginGate';
 import Reliability from './pages/Reliability';
+import Analytics from './pages/Analytics';
+import Logs from './pages/Logs';
 import Finance from './pages/Finance';
 import Settings from './pages/Settings';
 import AutoPricing from './pages/AutoPricing';
@@ -41,6 +43,8 @@ export default function App({ appChildren } = {}) {
                   }
                 >
                   <Route path="/" element={<Reliability />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/logs" element={<Logs />} />
                   <Route path="/finance" element={<Finance />} />
                   <Route path="/auto-pricing" element={<AutoPricing />} />
                   <Route path="/pricing" element={<PricingRoute />} />

@@ -39,8 +39,18 @@ function authHeaders(extra = {}) {
   return extra;
 }
 
-const FOCUSED_API_PREFIXES = ['/api/auto-pricing', '/api/pricing'];
-const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask']);
+const FOCUSED_API_PREFIXES = [
+  '/api/auto-pricing',
+  '/api/pricing',
+  '/api/usage',
+  '/api/publisher',
+  '/api/budgets',
+  '/api/market',
+  '/api/finance',
+  '/api/payouts',
+  '/api/fleet-health',
+];
+const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask', '/api/breakdown']);
 const RELIABILITY_PREFIX = '/api/reliability';
 const SESSION_EXPIRED_MESSAGE = 'Sesi berakhir. Silakan masuk kembali.';
 
@@ -67,10 +77,11 @@ export function handleSessionExpiry(path, headers, response) {
 
 // Hanya Auto Pricing yang dipoll; orderbook/ask tetap diizinkan untuk Set Manual.
 export function isApiEnabled(path) {
-  return FOCUSED_API_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
-    || path === RELIABILITY_PREFIX
-    || path.startsWith(`${RELIABILITY_PREFIX}/`)
-    || MANUAL_ASK_PATHS.has(path);
+  const cleanPath = path ? path.split('?')[0] : '';
+  return FOCUSED_API_PREFIXES.some(prefix => cleanPath === prefix || cleanPath.startsWith(`${prefix}/`))
+    || cleanPath === RELIABILITY_PREFIX
+    || cleanPath.startsWith(`${RELIABILITY_PREFIX}/`)
+    || MANUAL_ASK_PATHS.has(cleanPath);
 }
 
 export async function apiFetch(path, options = {}) {

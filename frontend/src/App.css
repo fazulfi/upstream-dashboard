@@ -9,6 +9,11 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card {
@@ -16,14 +21,23 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glow-blue {
   box-shadow: 0 0 30px -5px rgba(56, 189, 248, 0.15);
 }
 
-.glow-emerald {
-  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.15);
+.glow-indigo {
+  box-shadow: 0 0 30px -5px rgba(99, 102, 241, 0.18);
+}
+
+.glow-sky {
+  box-shadow: 0 0 30px -5px rgba(56, 189, 248, 0.15);
 }
 
 .glow-rose {
@@ -70,10 +84,10 @@
   background-clip: padding-box, border-box;
 }
 
-.border-gradient-emerald {
+.border-gradient-indigo {
   border: 1px solid transparent;
   background-image: linear-gradient(rgba(18, 18, 22, 0.9), rgba(18, 18, 22, 0.9)),
-                    linear-gradient(to right, rgba(16, 185, 129, 0.4), rgba(56, 189, 248, 0.4));
+                    linear-gradient(to right, rgba(99, 102, 241, 0.4), rgba(56, 189, 248, 0.4));
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }

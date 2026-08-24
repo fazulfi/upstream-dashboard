@@ -181,7 +181,7 @@ export default function DataTable({ columns, data, searchable = true, placeholde
             <button
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
+              className="ios-icon-btn p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
             >
               <ChevronLeft size={14} />
             </button>
@@ -191,7 +191,7 @@ export default function DataTable({ columns, data, searchable = true, placeholde
             <button
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
+              className="ios-icon-btn p-1 rounded bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
             >
               <ChevronRight size={14} />
             </button>

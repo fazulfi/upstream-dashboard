@@ -2,15 +2,24 @@
 
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
 
+@theme {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Pro Rounded", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 @layer base {
   :root,
   .theme-dark {
     --bg-base: #07090e;
-    --text-main: #ffffff;
-    --text-title: #ffffff;
-    --text-body: #f1f5f9;
-    --text-sub: #94a3b8;
-    --text-muted: #64748b;
+    --text-main: rgba(255, 255, 255, 0.95);
+    --text-title: rgba(255, 255, 255, 0.95);
+    --text-body: rgba(241, 245, 249, 0.92);
+    --text-sub: rgba(235, 235, 245, 0.65);
+    --text-muted: rgba(235, 235, 245, 0.38);
+    --text-vibrant-primary: rgba(255, 255, 255, 0.95);
+    --text-vibrant-secondary: rgba(235, 235, 245, 0.65);
+    --text-vibrant-tertiary: rgba(235, 235, 245, 0.38);
+    --text-vibrant-quaternary: rgba(235, 235, 245, 0.18);
     --card-bg: rgba(18, 20, 29, 0.65);
     --card-border: rgba(255, 255, 255, 0.14);
     --card-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65), 0 4px 12px 0 rgba(0, 0, 0, 0.4);
@@ -23,6 +32,10 @@
     --btn-secondary-border: rgba(255, 255, 255, 0.14);
     --btn-secondary-text: #f8fafc;
     --btn-secondary-hover: rgba(255, 255, 255, 0.15);
+    --btn-danger-bg: rgba(244, 63, 94, 0.15);
+    --btn-danger-border: rgba(244, 63, 94, 0.35);
+    --btn-danger-text: #fda4af;
+    --btn-danger-hover: rgba(244, 63, 94, 0.25);
     --pill-active-bg: rgba(255, 255, 255, 0.18);
     --pill-active-border: rgba(255, 255, 255, 0.25);
     --pill-active-text: #ffffff;
@@ -33,35 +46,37 @@
   }
 
   .theme-light {
-    --bg-base: #e0e7f1;
-    --text-main: #090d16;
-    --text-title: #090d16;
-    --text-body: #1e293b;
-    --text-sub: #475569;
-    --text-muted: #64748b;
-    --card-bg: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.65) 0%,
-      rgba(255, 255, 255, 0.30) 40%,
-      rgba(255, 255, 255, 0.15) 70%,
-      rgba(255, 255, 255, 0.40) 100%
-    );
+    --bg-base: #f2f2f7;
+    --text-main: rgba(0, 0, 0, 0.88);
+    --text-title: rgba(0, 0, 0, 0.88);
+    --text-body: rgba(30, 41, 59, 0.92);
+    --text-sub: rgba(60, 60, 67, 0.65);
+    --text-muted: rgba(60, 60, 67, 0.38);
+    --text-vibrant-primary: rgba(0, 0, 0, 0.88);
+    --text-vibrant-secondary: rgba(60, 60, 67, 0.65);
+    --text-vibrant-tertiary: rgba(60, 60, 67, 0.38);
+    --text-vibrant-quaternary: rgba(60, 60, 67, 0.18);
+    --card-bg: rgba(255, 255, 255, 0.55);
     --card-border: rgba(255, 255, 255, 0.45);
-    --card-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.06), 0 16px 36px -4px rgba(0, 0, 0, 0.10);
-    --card-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04);
-    --nav-bg: rgba(255, 255, 255, 0.70);
-    --table-head-bg: rgba(255, 255, 255, 0.40);
-    --input-bg: rgba(255, 255, 255, 0.50);
-    --input-border: rgba(255, 255, 255, 0.85);
-    --btn-secondary-bg: rgba(255, 255, 255, 0.70);
-    --btn-secondary-border: rgba(255, 255, 255, 0.90);
+    --card-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.04), 0 16px 36px -4px rgba(0, 0, 0, 0.08);
+    --card-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.02);
+    --nav-bg: rgba(255, 255, 255, 0.65);
+    --table-head-bg: rgba(255, 255, 255, 0.35);
+    --input-bg: rgba(255, 255, 255, 0.6);
+    --input-border: rgba(255, 255, 255, 0.7);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.6);
+    --btn-secondary-border: rgba(255, 255, 255, 0.8);
     --btn-secondary-text: #090d16;
-    --btn-secondary-hover: rgba(255, 255, 255, 0.90);
-    --pill-active-bg: rgba(255, 255, 255, 0.90);
-    --pill-active-border: rgba(255, 255, 255, 1);
+    --btn-secondary-hover: rgba(255, 255, 255, 0.85);
+    --btn-danger-bg: rgba(244, 63, 94, 0.12);
+    --btn-danger-border: rgba(244, 63, 94, 0.30);
+    --btn-danger-text: #be123c;
+    --btn-danger-hover: rgba(244, 63, 94, 0.20);
+    --pill-active-bg: rgba(255, 255, 255, 0.8);
+    --pill-active-border: rgba(255, 255, 255, 0.9);
     --pill-active-text: #090d16;
     --row-hover: rgba(255, 255, 255, 0.35);
-    --mesh-opacity: 0.45;
+    --mesh-opacity: 0.18;
     --scrollbar-thumb: rgba(15, 23, 42, 0.20);
     --scrollbar-thumb-hover: rgba(15, 23, 42, 0.35);
   }
@@ -69,18 +84,85 @@
   body {
     background-color: var(--bg-base);
     color: var(--text-body);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
+    font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.5;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.015em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     min-height: 100vh;
-    transition: background-color 0.25s ease, color 0.25s ease;
+    transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  h1, h2, h3, h4, h5, h6, .text-title, .font-heading, .login-title {
+    letter-spacing: -0.025em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input, button, select, textarea {
+    font-family: inherit;
+    letter-spacing: inherit;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* iOS 26 Glossy Spatial Liquid Glass Surfaces */
+/* Translucent Vibrant Text Materials (Apple iOS 26 / VisionOS Material System) */
+.text-vibrant-primary {
+  color: var(--text-vibrant-primary);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.text-vibrant-secondary {
+  color: var(--text-vibrant-secondary);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.text-vibrant-tertiary {
+  color: var(--text-vibrant-tertiary);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.text-vibrant-quaternary {
+  color: var(--text-vibrant-quaternary);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-light .text-vibrant-primary {
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.theme-light .text-vibrant-secondary {
+  color: rgba(60, 60, 67, 0.65);
+}
+
+.theme-light .text-vibrant-tertiary {
+  color: rgba(60, 60, 67, 0.38);
+}
+
+.theme-light .text-vibrant-quaternary {
+  color: rgba(60, 60, 67, 0.18);
+}
+
+.theme-dark .text-vibrant-primary {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.theme-dark .text-vibrant-secondary {
+  color: rgba(235, 235, 245, 0.65);
+}
+
+.theme-dark .text-vibrant-tertiary {
+  color: rgba(235, 235, 245, 0.38);
+}
+
+.theme-dark .text-vibrant-quaternary {
+  color: rgba(235, 235, 245, 0.18);
+}
+
+/* iOS 26 Glossy Spatial Liquid Glass Surfaces with 3D Spring Physics */
 .ios-glass-card {
   background: var(--card-bg);
   backdrop-filter: blur(28px) saturate(190%) brightness(105%);
@@ -88,17 +170,25 @@
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow), var(--card-highlight);
   border-radius: 1.5rem;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
+}
+
+.ios-glass-card:hover {
+  transform: translateY(-4px) scale(1.015);
+}
+
+.ios-glass-card:active {
+  transform: translateY(1px) scale(0.97);
+  transition-duration: 0.1s;
 }
 
 .theme-light .ios-glass-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.65) 0%,
-    rgba(255, 255, 255, 0.30) 40%,
-    rgba(255, 255, 255, 0.15) 70%,
-    rgba(255, 255, 255, 0.40) 100%
-  );
   border: 1px solid rgba(255, 255, 255, 0.45);
   box-shadow: 
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.85),
@@ -107,8 +197,36 @@
     0 16px 36px -4px rgba(0, 0, 0, 0.10);
 }
 
+.theme-light .ios-glass-card:hover {
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04),
+    0 8px 24px -2px rgba(0, 0, 0, 0.08),
+    0 20px 44px -4px rgba(0, 0, 0, 0.12);
+}
+
+.theme-light .ios-glass-card:active {
+  box-shadow: 
+    inset 0 2px 4px 0 rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.5),
+    0 2px 8px -1px rgba(0, 0, 0, 0.20),
+    0 1px 3px 0 rgba(0, 0, 0, 0.15);
+}
+
 .theme-dark .ios-glass-card {
   box-shadow: var(--card-shadow), var(--card-highlight);
+}
+
+.theme-dark .ios-glass-card:hover {
+  box-shadow: 0 20px 48px -6px rgba(0, 0, 0, 0.75), 0 8px 18px 0 rgba(0, 0, 0, 0.5), inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.32), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.theme-dark .ios-glass-card:active {
+  box-shadow: 
+    inset 0 3px 6px 0 rgba(0, 0, 0, 0.85),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1),
+    0 2px 6px 0 rgba(0, 0, 0, 0.90),
+    0 1px 2px 0 rgba(0, 0, 0, 0.95);
 }
 
 .ios-glass-nav {
@@ -117,14 +235,14 @@
   -webkit-backdrop-filter: blur(28px) saturate(190%) brightness(105%);
   border-bottom: 1px solid var(--card-border);
   box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.08);
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .theme-light .ios-glass-nav {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.65) 0%,
-    rgba(255, 255, 255, 0.35) 100%
-  );
   border-bottom: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 
     inset 0 -1px 1px 0 rgba(255, 255, 255, 0.8),
@@ -140,14 +258,84 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+/* 3D Spring Physics Navigation, Pills, Badges & Menu items */
 .ios-pill-active {
   background: var(--pill-active-bg);
   border: 1px solid var(--pill-active-border);
   color: var(--pill-active-text) !important;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
 }
 
-.ios-btn-primary {
+.theme-dark .ios-pill-active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.ios-pill-active:hover {
+  transform: translateY(-0.5px) scale(1.02);
+}
+
+.ios-pill-active:active {
+  transform: scale(0.97);
+  transition-duration: 0.1s;
+}
+
+.sidebar nav a,
+.ios-glass-nav nav a,
+.ios-menu-item,
+.menu-btn,
+.ios-icon-btn {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+.sidebar nav a:hover,
+.ios-glass-nav nav a:hover,
+.ios-menu-item:hover,
+.menu-btn:hover,
+.ios-icon-btn:hover {
+  transform: translateY(-0.5px) scale(1.02);
+}
+
+.sidebar nav a:active,
+.ios-glass-nav nav a:active,
+.ios-menu-item:active,
+.menu-btn:active,
+.ios-icon-btn:active {
+  transform: scale(0.97);
+  transition-duration: 0.1s;
+}
+
+/* 3D Spring Physics Badges */
+.ios-badge,
+.rel-badge,
+.badge {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.ios-badge:hover,
+.rel-badge:hover,
+.badge:hover {
+  transform: scale(1.03);
+}
+
+/* 3D Spring Physics Primary Button */
+.ios-btn-primary,
+.btn-primary {
   background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: 
@@ -156,32 +344,156 @@
   color: #ffffff !important;
   font-weight: 700;
   border-radius: 0.85rem;
-  transition: all 0.15s ease;
+  letter-spacing: -0.015em;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              filter 0.2s ease;
+  will-change: transform, box-shadow;
 }
 
-.ios-btn-primary:hover {
+.ios-btn-primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #409cff 0%, #0077ed 100%);
+  transform: translateY(-1.5px) scale(1.02);
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-    0 6px 20px rgba(10, 132, 255, 0.5);
+    0 8px 24px rgba(10, 132, 255, 0.45);
 }
 
-.ios-btn-secondary {
+.ios-btn-primary:active:not(:disabled),
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.96);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(10, 132, 255, 0.3);
+  transition-duration: 0.1s;
+}
+
+/* 3D Spring Physics Secondary Button */
+.ios-btn-secondary,
+.btn-secondary {
   background: var(--btn-secondary-bg);
   border: 1px solid var(--btn-secondary-border);
   color: var(--btn-secondary-text);
   font-weight: 600;
   border-radius: 0.85rem;
+  letter-spacing: -0.015em;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: all 0.15s ease;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
 }
 
-.ios-btn-secondary:hover {
+.theme-dark .ios-btn-secondary,
+.theme-dark .btn-secondary {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.ios-btn-secondary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled) {
   background: var(--btn-secondary-hover);
+  transform: translateY(-1.5px) scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.theme-dark .ios-btn-secondary:hover:not(:disabled),
+.theme-dark .btn-secondary:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.ios-btn-secondary:active:not(:disabled),
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.96);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition-duration: 0.1s;
+}
+
+/* 3D Spring Physics Danger Button */
+.ios-btn-danger,
+.btn-danger {
+  background: var(--btn-danger-bg);
+  border: 1px solid var(--btn-danger-border);
+  color: var(--btn-danger-text);
+  font-weight: 700;
+  border-radius: 0.85rem;
+  letter-spacing: -0.015em;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
+}
+
+.ios-btn-danger:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  background: var(--btn-danger-hover);
+  transform: translateY(-1.5px) scale(1.02);
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.25);
+}
+
+.ios-btn-danger:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.96);
+  transition-duration: 0.1s;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.btn-ghost:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: 0.1s;
+}
+
+/* Apple Focus Rings for Keyboard Accessibility */
+.ios-btn-primary:focus-visible,
+.ios-btn-secondary:focus-visible,
+.ios-btn-danger:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible,
+.btn-ghost:focus-visible,
+.sidebar nav a:focus-visible,
+.ios-glass-nav nav a:focus-visible,
+.ios-menu-item:focus-visible,
+.menu-btn:focus-visible,
+.ios-icon-btn:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Shimmer animation for Skeleton loading states */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* Custom Scrollbar for iOS feel */
@@ -204,4 +516,565 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Apple Motion Preference Safety */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+    scroll-behavior: auto !important;
+    will-change: auto !important;
+  }
+}
+
+
+/* iOS 26 Apple HIG Precise Components */
+
+/* 1. Liquid Glass Button (Figma) */
+.ios-btn-glass {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-radius: 9999px; /* Pill shape */
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 10px 20px -5px rgba(0, 0, 0, 0.15);
+  color: #ffffff !important;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              filter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform, box-shadow;
+}
+
+.ios-btn-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ios-btn-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0) 100%);
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ios-btn-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    rgba(255, 0, 128, 0.4) 0deg,
+    rgba(0, 255, 255, 0.4) 120deg,
+    rgba(255, 255, 0, 0.4) 240deg,
+    rgba(255, 0, 128, 0.4) 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  mix-blend-mode: color-dodge;
+  opacity: 0.6;
+  transition: opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-dark .ios-btn-glass {
+  background: rgba(30, 30, 35, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
+    0 10px 20px -5px rgba(0, 0, 0, 0.35);
+}
+
+.ios-btn-glass:hover,
+.ios-btn-glass:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.9),
+    0 12px 24px -5px rgba(0, 0, 0, 0.2);
+}
+
+.ios-btn-glass:hover::before,
+.ios-btn-glass:hover:not(:disabled)::before {
+  opacity: 1;
+  transform: translateY(-1px) scaleX(1.04);
+}
+
+.ios-btn-glass:hover::after,
+.ios-btn-glass:hover:not(:disabled)::after {
+  opacity: 0.9;
+}
+
+.theme-dark .ios-btn-glass:hover,
+.theme-dark .ios-btn-glass:hover:not(:disabled) {
+  background: rgba(40, 40, 45, 0.55);
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 24px -5px rgba(0, 0, 0, 0.45);
+}
+
+.ios-btn-glass:active,
+.ios-btn-glass:active:not(:disabled) {
+  filter: url(#liquid-lens);
+  transform: translateY(0.5px) scale(0.96);
+  transition-duration: 0.1s;
+}
+
+/* 2. Apple Text Fields (HIG) */
+.ios-input {
+  background: var(--input-bg, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--input-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.2s ease;
+  color: var(--text-body);
+}
+
+.theme-dark .ios-input {
+  background: var(--input-bg, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--input-border, rgba(255, 255, 255, 0.1));
+}
+
+.ios-input:focus {
+  background: var(--input-bg-focus, rgba(0,0,0, 0.02));
+  outline: 2px solid #0a84ff;
+  outline-offset: -1px;
+}
+
+.theme-dark .ios-input:focus {
+  background: var(--input-bg-focus, rgba(0,0,0, 0.3));
+}
+
+/* 3. Apple Spatial Tab Bars (HIG Floating Pill) */
+.ios-tab-bar {
+  background: var(--nav-bg);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 16px 40px -8px rgba(0,0,0, 0.15);
+  border-radius: 9999px;
+  padding: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-light .ios-tab-bar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 -1px 1px 0 rgba(255,255,255,0.8), 0 16px 40px -8px rgba(0,0,0, 0.15);
+}
+
+.theme-dark .ios-tab-bar {
+  background: linear-gradient(180deg, rgba(30, 30, 35, 0.65) 0%, rgba(30, 30, 35, 0.35) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 16px 40px -8px rgba(0,0,0, 0.4);
+}
+
+
+/* Global Apply Apple Input to all text fields */
+input[type="text"], input[type="password"], input[type="number"], input[type="email"], input[type="search"] {
+  background: var(--input-bg, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--input-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.2s ease;
+  color: var(--text-body);
+}
+
+.theme-dark input[type="text"], .theme-dark input[type="password"], .theme-dark input[type="number"], .theme-dark input[type="email"], .theme-dark input[type="search"] {
+  background: var(--input-bg, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--input-border, rgba(255, 255, 255, 0.1));
+}
+
+input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, input[type="email"]:focus, input[type="search"]:focus {
+  background: var(--input-bg-focus, rgba(0,0,0, 0.02));
+  outline: 2px solid #0a84ff;
+  outline-offset: -1px;
+}
+
+.theme-dark input[type="text"]:focus, .theme-dark input[type="password"]:focus, .theme-dark input[type="number"]:focus, .theme-dark input[type="email"]:focus, .theme-dark input[type="search"]:focus {
+  background: var(--input-bg-focus, rgba(0,0,0, 0.3));
+}
+
+
+/* 4. Apple Steppers (HIG) */
+.ios-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--input-bg, rgba(0, 0, 0, 0.05));
+  border-radius: 8px;
+  overflow: hidden;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-stepper {
+  background: var(--input-bg, rgba(255, 255, 255, 0.1));
+}
+
+.ios-stepper button {
+  padding: 0.35rem 0.8rem;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-body, #1c1c1e);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-dark .ios-stepper button {
+  color: #ffffff;
+}
+
+.ios-stepper button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.theme-dark .ios-stepper button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ios-stepper button:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.theme-dark .ios-stepper button:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ios-stepper-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.15);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-stepper-divider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 5. Apple Sliders (HIG) */
+input[type="range"].ios-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  outline: none;
+}
+
+.theme-dark input[type="range"].ios-slider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+input[type="range"].ios-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+input[type="range"].ios-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.theme-dark input[type="range"].ios-slider::-webkit-slider-thumb {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+
+/* 6. Apple Sheets & Modals (HIG) */
+.ios-sheet {
+  background: var(--nav-bg, rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border, rgba(0,0,0,0.1));
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-sheet {
+  background: var(--nav-bg, rgba(20, 20, 25, 0.85));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.15));
+  box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255, 0.1);
+}
+
+.ios-sheet-handle {
+  width: 36px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.2);
+  margin: 10px auto;
+  cursor: grab;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ios-sheet-handle:active {
+  cursor: grabbing;
+}
+
+.theme-dark .ios-sheet-handle {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 7. Apple Sidebars (HIG) */
+.ios-sidebar {
+  background: var(--sidebar-bg, rgba(242, 242, 247, 0.8));
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-sidebar {
+  background: var(--sidebar-bg, rgba(28, 28, 30, 0.8));
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Apple iPad Split View & Desktop Persistent Sidebar (>= 1024px) */
+@media (min-width: 1024px) {
+  .ios-sidebar,
+  .sidebar {
+    transform: none !important;
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 16rem !important; /* w-64 */
+    pointer-events: auto !important;
+    visibility: visible !important;
+    z-index: 30;
+  }
+}
+
+/* Sidebar Menu Items */
+.ios-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  color: var(--text-body);
+  transition: background-color 0.2s ease, color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.ios-sidebar-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.theme-dark .ios-sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ios-sidebar-item.active {
+  background: rgba(0, 0, 0, 0.08);
+  font-weight: 600;
+}
+.theme-dark .ios-sidebar-item.active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+
+/* 9. Apple Notifications (HIG) */
+.ios-notification {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255,255,255,0.8);
+  border-radius: 24px;
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-notification {
+  background: rgba(40, 40, 45, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255,255,255,0.15);
+}
+
+/* 10. Apple Segmented Controls (HIG) */
+.ios-segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 2px;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-dark .ios-segmented-control {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ios-segment {
+  padding: 4px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  color: var(--text-body);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 0.5px solid transparent;
+}
+
+.ios-segment.active {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-weight: 600;
+}
+
+.theme-dark .ios-segment.active {
+  background: rgba(80, 80, 85, 0.9);
+  border-color: rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  color: #ffffff;
+}
+
+/* 11. Pop-up Buttons (HIG) */
+.ios-popup-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.theme-dark .ios-popup-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* ============================================================
+   Apple iOS 26 Ambient Mesh Cross-fade System
+   Smooth 700ms cross-fade between light and dark mesh layers
+   ============================================================ */
+.ambient-mesh-container {
+  opacity: var(--mesh-opacity, 0.32);
+  transition: opacity 0.7s ease;
+  will-change: opacity;
+}
+
+.ambient-mesh {
+  transition: opacity 0.7s ease;
+  will-change: opacity;
+}
+
+.ambient-mesh-dark {
+  opacity: 1;
+}
+
+.ambient-mesh-light {
+  opacity: 0;
+}
+
+.theme-light .ambient-mesh-dark {
+  opacity: 0;
+}
+
+.theme-light .ambient-mesh-light {
+  opacity: 1;
+}
+
+.theme-dark .ambient-mesh-dark {
+  opacity: 1;
+}
+
+.theme-dark .ambient-mesh-light {
+  opacity: 0;
+}
+
+.ambient-mesh-orb {
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  contain: layout paint style;
+}
+
+/* ============================================================
+   Global Theme Transition Engine (~500ms cross-fade)
+   Smooth color, background, border, and shadow transitions
+   without overriding micro-interaction spring physics.
+   ============================================================ */
+*, *::before, *::after {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.4s ease;
 }
