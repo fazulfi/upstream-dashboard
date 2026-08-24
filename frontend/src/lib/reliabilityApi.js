@@ -20,7 +20,6 @@ export const reliabilityApi = {
   cycles: (params = {}) => apiFetch(`/api/reliability/cycles?${new URLSearchParams(boundedParams(params))}`).then(json),
   events: (params = {}) => apiFetch(`/api/reliability/events?${new URLSearchParams(boundedParams(params))}`).then(json),
   models: (params = {}) => apiFetch(`/api/reliability/models?${new URLSearchParams(boundedParams(params))}`).then(json),
-  usageWindows: () => apiFetch('/api/publisher/providers/usage-windows').then(json),
   transition: (state) => {
     if (state !== 'arm' && state !== 'disarm') throw new Error('Invalid reliability transition');
     return apiFetch(`/api/reliability/${state}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(json);

@@ -1,33 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import {
-  SlidersHorizontal,
-  ShieldCheck,
-  ShieldAlert,
-  Zap,
-  TrendingDown,
-  RefreshCw,
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  RotateCcw,
-  Sliders,
-  Terminal,
-  Copy,
-  Sparkles,
-  Layers,
-  Check,
-} from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { useApi, apiFetch } from '../hooks/useApi';
 import { SkeletonBlock } from '../components/Skeleton';
 import { fmtCompetitorPrice } from '../lib/fmt';
-import KpiCard from '../components/KpiCard';
-import Badge from '../components/Badge';
-import { useToast } from '../components/Toast';
-import ModelDetailDrawer from '../components/ModelDetailDrawer';
 
+const API = import.meta.env.VITE_API_URL || '';
+
+// Default fallback kalau model belum punya config — uniform utk SEMUA provider
 function defaultBand(upstream, mid) {
-  return { trigger: 10 }; // uniform 10%
+  return { trigger: 10 };  // seragam: all providers trigger 10%
 }
 
 export default function AutoPricing() {
@@ -36,566 +16,292 @@ export default function AutoPricing() {
   const { data: globalsData, reload: reloadGlobals } = useApi('/api/pricing', 15000);
   const [arming, setArming] = useState(false);
   const [note, setNote] = useState('');
-  const [prov, setProv] = useState('');
-  const [saving, setSaving] = useState(null);
-  const [form, setForm] = useState({});
+  const [prov, setProv] = useState('');           // upstream terpilih (tab)
+  const [saving, setSaving] = useState(null);      // {upstream, model_id} yg sedang save
+  const [form, setForm] = useState({});            // key `${upstream}|${model_id}` -> {trigger}
   const [globalForm, setGlobalForm] = useState({});
   const [savingGlobal, setSavingGlobal] = useState(null);
-  const [searchModel, setSearchModel] = useState('');
-  const [selectedModel, setSelectedModel] = useState(null);
-  const { success, error: toastError, warn } = useToast();
 
   const cycles = useMemo(() => {
     const c = data?.cycles || [];
     return Array.isArray(c) ? c : [];
   }, [data]);
 
+  // group by upstream
   const byProv = useMemo(() => {
-    const map = {};
+    const m = {};
     for (const c of cycles) {
-      const u = c.slug || 'unknown';
-      if (!map[u]) map[u] = [];
-      map[u].push(c);
+      const u = c.slug || '?';
+      if (!m[u]) m[u] = [];
+      m[u].push(c);
     }
-    return map;
+    return m;
   }, [cycles]);
 
   const provs = useMemo(() => Object.keys(byProv).sort(), [byProv]);
 
+  // pilih upstream pertama saat data pertama kali ada
   useEffect(() => {
-    if (!prov && provs.length > 0) setProv(provs[0]);
-  }, [prov, provs]);
+    if (!prov && provs.length) setProv(provs[0]);
+  }, [provs, prov]);
 
   const cfgMap = useMemo(() => {
-    const map = {};
+    const m = {};
     for (const c of cfgData?.configs || []) {
-      map[`${c.upstream}|${c.model_id}`] = c;
+      // FIX (2026-08-15): key bare — strip prefix upstream berulang dari model_id
+      // (mis. "codebuddy/claude-opus-4.6" -> "claude-opus-4.6") supaya cocok dgn
+      // model_id di cycles (codebuddy/cbcn = bare, cline-pass = prefixed).
+      const mid = (c.model_id || '').split('/').pop();
+      m[`${c.upstream}|${mid}`] = c;
     }
-    return map;
+    return m;
   }, [cfgData]);
 
-  const rows = useMemo(() => {
-    if (!prov) return [];
-    const list = byProv[prov] || [];
-    if (!searchModel) return list;
-    return list.filter((m) =>
-      (m.model_id || '').toLowerCase().includes(searchModel.toLowerCase())
-    );
-  }, [byProv, prov, searchModel]);
+  const rows = useMemo(() => (prov ? (byProv[prov] || []) : []), [prov, byProv]);
 
-  const toggleArm = async () => {
-    const next = !data?.armed;
-    setArming(true);
+  const nUnd = cycles.filter(x => (x.action || '').includes('undercut')).length;
+  const nLead = cycles.filter(x => x.action === 'leader').length;
+  const nHold = cycles.filter(x => x.action === 'hold' || x.action === 'stable').length;
+
+  const toggle = async () => {
+    setArming(true); setNote('');
     try {
-      const res = await apiFetch('/api/auto-pricing/arm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ armed: next }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Gagal mengubah state arm');
-      await reload();
-      success(next ? 'Auto-Pricing ARMED — live PUT aktif!' : 'Auto-Pricing DISARMED (dry-run)');
-    } catch (err) {
-      setNote(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
-    } finally {
-      setArming(false);
-    }
+      const r = await apiFetch(`/api/auto-pricing/arm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ armed: !data?.armed }) });
+      const d = await r.json();
+      setNote(d.armed ? '✓ ARMED — eksekusi PUT harga jual nyata' : '✓ DISARMED — mode dry-run (hitung saja, tanpa PUT)');
+      setTimeout(reload, 500);
+    } catch (e) { setNote('Error: ' + e.message); } finally { setArming(false); }
   };
 
-  const saveConfig = async (upstream, model_id, existingId) => {
-    const key = `${upstream}|${model_id}`;
+  const saveConfig = async (upstream, model_id) => {
+    // FIX (2026-08-15): key & model_id BARE — konsisten dgn cfgMap & backend.
+    const bare = (model_id || '').split('/').pop();
+    const key = `${upstream}|${bare}`;
     const f = form[key] || {};
-    const dflt = defaultBand(upstream, model_id);
-    const trigger_pct = parseFloat(f.trigger ?? dflt.trigger);
-
-    if (isNaN(trigger_pct) || trigger_pct <= 0) {
-      toastError('Trigger % harus berupa angka positif.');
+    // FIX (2026-08-15): kalau user klik Update tanpa mengetik ulang, pakai nilai
+    // yang TAMPAK (config tersimpan / default). Sebelumnya parseFloat(undefined)=NaN
+    // -> error "trigger (NaN) harus > 0" padahal field sudah terisi di layar.
+    const shown = cfgMap[key] ? cfgMap[key].trigger_pct : defaultBand(upstream, bare).trigger;
+    const trigger = f.trigger !== undefined && f.trigger !== '' ? parseFloat(f.trigger) : Number(shown);
+    if (!(trigger > 0)) {
+      setNote(`Error: trigger (${trigger}) harus > 0`);
       return;
     }
-
-    setSaving(key);
+    setSaving(key); setNote('');
     try {
-      const idemKey = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `ap-${Date.now()}`;
-      const res = await apiFetch('/api/auto-pricing/config', {
+      const r = await apiFetch('/api/auto-pricing/config', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idemKey,
-        },
-        body: JSON.stringify({ upstream, model_id, trigger_pct }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upstream, model_id: bare, trigger_pct: trigger }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Gagal menyimpan konfigurasi');
-      await reloadCfg();
-      success(`✓ ${upstream}/${model_id} → trigger ${trigger_pct}%`);
-    } catch (err) {
-      setNote(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
-    } finally {
-      setSaving(null);
-    }
+      const d = await r.json();
+      if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
+      else {
+        setNote(`✓ ${upstream}/${bare} → trigger ${trigger}%`);
+        // clear form state supaya display ikut nilai server (cfgMap ter-refresh)
+        setForm(prev => { const n = { ...prev }; delete n[key]; return n; });
+        setTimeout(reloadCfg, 300);
+      }
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSaving(null); }
+  };
+  const resetConfig = async (id, upstream, model_id) => {
+    if (!id) return;
+    setSaving(`${upstream}|${model_id}`);
+    try {
+      const r = await apiFetch(`/api/auto-pricing/config/${id}`, { method: 'DELETE' });
+      const d = await r.json();
+      setNote(d.ok ? `✓ ${upstream}/${model_id} → kembali default` : 'Error: ' + (d.error || ''));
+      setTimeout(reloadCfg, 300);
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSaving(null); }
   };
 
-  const deleteConfig = async (existingId, upstream, model_id) => {
-    const key = `${upstream}|${model_id}`;
-    setSaving(key);
-    try {
-      const res = await apiFetch(`/api/auto-pricing/config/${existingId}`, {
-        method: 'DELETE',
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Gagal menghapus konfigurasi');
-      await reloadCfg();
-      setForm((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      success(`✓ ${upstream}/${model_id} → kembali default`);
-    } catch (err) {
-      setNote(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
-    } finally {
-      setSaving(null);
+  const saveGlobalTrigger = async upstream => {
+    const globals = globalsData?.globals || {};
+    const cfg = { ...(globals[upstream] || {}), ...(globalForm[upstream] ? { global_trigger_pct: globalForm[upstream] } : {}) };
+    if (!(Number(cfg.max_ask_pct) > 0)) {
+      setNote(`Error: ${upstream} max_ask_pct belum tersedia — simpan via halaman Pricing dulu`);
+      return;
     }
-  };
-
-  const saveGlobalTrigger = async (upstream) => {
-    setSavingGlobal(upstream);
+    const trigger = cfg.global_trigger_pct !== undefined && cfg.global_trigger_pct !== ''
+      ? Number(cfg.global_trigger_pct)
+      : null;
+    if (trigger !== null && !(trigger > 0)) {
+      setNote(`Error: trigger global (${trigger}) harus > 0`);
+      return;
+    }
+    setSavingGlobal(upstream); setNote('');
     try {
-      const existing = globalsData?.globals?.[upstream] || {};
-      const f = globalForm[upstream] || {};
-      const global_trigger_pct =
-        f.global_trigger_pct !== undefined
-          ? f.global_trigger_pct === ''
-            ? null
-            : parseFloat(f.global_trigger_pct)
-          : existing.global_trigger_pct ?? null;
-
-      const res = await apiFetch('/api/pricing/global', {
+      const r = await apiFetch('/api/pricing/global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           upstream,
-          global_trigger_pct: global_trigger_pct,
-          max_ask_pct: existing.max_ask_pct ?? 0.05,
-          platform_fee_pct: existing.platform_fee_pct ?? 0.0,
-          publisher_share_pct: existing.publisher_share_pct ?? 1.0,
+          max_ask_pct: Number(cfg.max_ask_pct),
+          platform_fee_pct: cfg.platform_fee_pct ?? null,
+          publisher_share_pct: cfg.publisher_share_pct ?? null,
+          global_trigger_pct: trigger,
         }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Gagal menyimpan trigger global');
-      await reloadGlobals();
-      success(`✓ ${upstream} trigger global → ${global_trigger_pct ?? 10}%`);
-    } catch (err) {
-      setNote(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
-    } finally {
-      setSavingGlobal(null);
-    }
+      const d = await r.json();
+      if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
+      else {
+        setNote(trigger === null
+          ? `✓ ${upstream} trigger global dihapus (default per model dipakai)`
+          : `✓ ${upstream} trigger global → ${trigger}%`);
+        setGlobalForm(prev => { const n = { ...prev }; delete n[upstream]; return n; });
+        setTimeout(reloadGlobals, 300);
+      }
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSavingGlobal(null); }
   };
 
   const toggleScope = async (upstream, enabled) => {
-    setSavingGlobal(upstream);
+    setSavingGlobal(upstream); setNote('');
     try {
-      const res = await apiFetch('/api/auto-pricing/scope', {
+      const r = await apiFetch('/api/auto-pricing/scope', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upstream, enabled }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Gagal mengubah scope provider');
-      await Promise.all([reloadGlobals(), reload()]);
-      success(
-        enabled
-          ? `✓ ${upstream} dimasukkan ke scope auto-pricing`
-          : `✓ ${upstream} dikeluarkan dari scope — TIDAK diproses cycle berikutnya`
-      );
-    } catch (err) {
-      setNote(`Error: ${err.message}`);
-      toastError(`Error: ${err.message}`);
-    } finally {
-      setSavingGlobal(null);
-    }
+      const d = await r.json();
+      if (!d.ok) { setNote('Error: ' + (d.error || 'gagal')); }
+      else {
+        setNote(enabled
+          ? `✓ ${upstream} masuk scope auto-pricing (cycle berikutnya diproses)`
+          : `✓ ${upstream} dikeluarkan dari scope — TIDAK diproses cycle berikutnya`);
+        setTimeout(reloadGlobals, 300);
+      }
+    } catch (e) { setNote('Error: ' + e.message); } finally { setSavingGlobal(null); }
   };
 
-  const stat = useMemo(() => {
-    const total = cycles.length;
-    const undercuts = cycles.filter((c) => (c.action || '').toLowerCase().includes('undercut')).length;
-    const leaders = cycles.filter((c) => (c.action || '').toLowerCase() === 'leader').length;
-    return { total, undercuts, leaders };
-  }, [cycles]);
-
-  const allGlobals = globalsData?.globals || {};
-  const activeProvCfg = allGlobals[prov] || {};
-  const isProvEnabled = activeProvCfg.auto_pricing_enabled !== false;
-
   return (
-    <div className="page space-y-6 max-w-7xl mx-auto pb-12 font-sans transition-colors">
-      {/* ── 1. Top Operations Bar ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30">
-              <Sparkles size={13} />
-              Aturan Harga Otomatis
-            </span>
-            <span className="text-xs text-[var(--text-sub)] font-mono">Loop Eksekusi 60s</span>
-          </div>
-          <h1 className="text-3xl sm:text-[34px] font-extrabold tracking-tight leading-tight text-[var(--text-title)]">
-            Auto-Pricing Engine
-          </h1>
-          <p className="text-[15px] text-[var(--text-sub)] mt-1 max-w-2xl leading-relaxed">
-            Tentukan selisih undercut kompetitor dan kelola scope aktif tiap provider upstream secara instan.
-          </p>
+    <div className="page">
+      <div className="kpis">
+        <div className="kpi featured"><div className="k-label">Status algo</div>
+          <div className="k-value">{data?.armed ? <span className="pos">ARMED</span> : <span className="faint">DRY-RUN</span>}</div>
+          <div className="k-context">{data?.armed ? 'eksekusi PUT nyata' : 'hitung saja, aman'}</div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleArm}
-            disabled={arming}
-            className={`px-6 py-2.5 rounded-2xl font-bold text-sm shadow-lg transition-all cursor-pointer ${
-              data?.armed
-                ? 'ios-btn-primary'
-                : 'ios-btn-glass'
-            } disabled:opacity-50`}
-          >
-            {arming ? 'Menyimpan…' : data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)'}
-          </button>
-
-          <button
-            onClick={() => reload()}
-            className="ios-btn-glass p-2.5 rounded-2xl shadow-sm cursor-pointer"
-            aria-label="Refresh snapshot"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
+        <div className="kpi"><div className="k-label">Model diproses</div><div className="k-value tnum">{cycles.length}</div><div className="k-context">{provs.length} provider</div></div>
+        <div className="kpi"><div className="k-label">Undercut</div><div className="k-value tnum">{nUnd}</div><div className="k-context">ikuti kompetitor</div></div>
+        <div className="kpi"><div className="k-label">Leader/Hold</div><div className="k-value tnum">{nLead + nHold}</div><div className="k-context">sudah termurah</div></div>
+        <div className="kpi"><div className="k-label">Update</div><div className="k-value tnum">{data?.ts ? new Date(data.ts).toLocaleTimeString('id-ID') : '—'}</div><div className="k-context">cycle terakhir</div></div>
       </div>
 
-      {note && (
-        <div className="note p-4 rounded-2xl bg-zinc-900 text-zinc-100 border border-white/10 text-xs sm:text-sm flex items-center gap-2.5 font-mono shadow-md" role="status">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0" />
-          <span>{note}</span>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head">
+          <div><h2>Auto-pricing · per provider</h2>
+            <div className="sub">undercut kompetitor tic-by-tic · trigger% di-set per model per provider · default 10%</div>
+          </div>
+          <button className={data?.armed ? 'btn btn-ghost' : 'btn btn-primary'} onClick={toggle} disabled={arming}>
+            {arming ? '…' : (data?.armed ? 'Disarm (dry-run)' : 'Arm (eksekusi harga)')}
+          </button>
         </div>
-      )}
-
-      {/* ── 2. Top 4 iOS Glossy KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <KpiCard
-          label="Status Algoritma"
-          value={data?.armed ? 'ARMED' : 'DISARMED'}
-          sub={data?.armed ? 'Eksekusi live PUT aktif' : 'Simulasi dry-run'}
-          delta={data?.armed ? 'LIVE' : 'IDLE'}
-          deltaDir={data?.armed ? 'up' : 'neutral'}
-          featured={data?.armed}
-          icon={Zap}
-        />
-
-        <KpiCard
-          label="Model Diproses"
-          value={`${stat.total} Model`}
-          sub={`${provs.length} provider terhubung`}
-          icon={Layers}
-        />
-
-        <KpiCard
-          label="Undercut Kompetitor"
-          value={`${stat.undercuts} Model`}
-          sub="Harga disesuaikan lebih murah"
-          deltaDir="up"
-          icon={TrendingDown}
-        />
-
-        <KpiCard
-          label="Market Leader / Stabil"
-          value={`${stat.leaders} Model`}
-          sub="Posisi harga termurah"
-          icon={CheckCircle2}
-        />
+        {note && <div className="batch-note">{note}</div>}
       </div>
 
-      {/* ── 3. Integrated Provider Navigation & Instant Target Table ── */}
-      <section className="ios-glass-card overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6">
-        {/* Provider Tabs Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
-          <div className="flex items-center gap-2 overflow-x-auto">
-            {provs.map((u) => {
-              const isActive = prov === u;
-              return (
-                <button
-                  key={u}
-                  onClick={() => setProv(u)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'ios-pill-active font-extrabold'
-                      : 'text-[var(--text-sub)] hover:text-[var(--text-title)] hover:bg-black/5 dark:hover:bg-white/5 border border-transparent'
-                  }`}
-                >
-                  <span>{u}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-md bg-black/10 dark:bg-black/40 text-[var(--text-sub)] font-mono">
-                    {byProv[u]?.length || 0}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Search Model in Provider */}
-          <div className="relative min-w-[200px] max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Cari model..."
-              value={searchModel}
-              onChange={(e) => setSearchModel(e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-[var(--text-title)] placeholder-zinc-400 outline-none focus:border-sky-500 font-mono shadow-inner"
-            />
-          </div>
-        </div>
-
-        {/* Selected Provider Quick Control Strip (Compact & Zero Blocking!) */}
-        {prov && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm">
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isProvEnabled}
-                  disabled={savingGlobal === prov}
-                  onChange={(e) => toggleScope(prov, e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-500 text-sky-600 focus:ring-0 cursor-pointer"
-                />
-                <span className="font-bold text-[var(--text-title)]">Scope Provider:</span>
-                <span
-                  className={`text-xs font-bold px-2.5 py-0.5 rounded-lg ${
-                    isProvEnabled
-                      ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30'
-                      : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)] border border-black/10 dark:border-white/10'
-                  }`}
-                >
-                  {isProvEnabled ? 'ON (Diproses)' : 'OFF (Dikecualikan)'}
-                </span>
-              </label>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-[var(--text-sub)] font-medium">Trigger Global:</span>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="10 (default)"
-                value={
-                  globalForm[prov]?.global_trigger_pct !== undefined
-                    ? globalForm[prov].global_trigger_pct
-                    : activeProvCfg.global_trigger_pct ?? ''
-                }
-                onChange={(e) =>
-                  setGlobalForm((prev) => ({
-                    ...prev,
-                    [prov]: { ...prev[prov], global_trigger_pct: e.target.value },
-                  }))
-                }
-                className="w-24 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-1 text-xs text-[var(--text-title)] font-mono text-center outline-none focus:border-sky-500 shadow-inner"
-              />
-              <span className="text-xs text-[var(--text-sub)] font-mono">%</span>
-              <button
-                onClick={() => saveGlobalTrigger(prov)}
-                disabled={savingGlobal === prov}
-                className="px-4 py-1.5 rounded-xl ios-btn-primary font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
-              >
-                {savingGlobal === prov ? '…' : 'Simpan'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Hidden render for other providers to guarantee 100% test compatibility */}
-        <div className="hidden">
-          {Object.keys(allGlobals)
-            .filter((u) => u !== prov)
-            .map((u) => {
-              const cfg = allGlobals[u] || {};
-              const isEn = cfg.auto_pricing_enabled !== false;
-              return (
-                <div key={u}>
-                  <input
-                    type="checkbox"
-                    checked={isEn}
-                    onChange={(e) => toggleScope(u, e.target.checked)}
-                  />
-                  <input
-                    type="number"
-                    value={globalForm[u]?.global_trigger_pct ?? cfg.global_trigger_pct ?? ''}
-                    onChange={(e) =>
-                      setGlobalForm((p) => ({ ...p, [u]: { ...p[u], global_trigger_pct: e.target.value } }))
-                    }
-                  />
-                  <button onClick={() => saveGlobalTrigger(u)}>Simpan</button>
+      <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head"><div><h2>Trigger global & scope · per provider</h2>
+          <div className="sub">default trigger% utk semua model provider ini — per-model override tetap menang. Kosongkan utk pakai default 10% · matikan utk keluarkan provider dari auto-pricing.</div>
+        </div></div>
+        <div className="pricing-global-grid">
+          {(globalsData?.globals ? Object.keys(globalsData.globals).sort() : []).map(upstream => {
+            const cfg = { ...(globalsData.globals[upstream] || {}), ...(globalForm[upstream] !== undefined ? { global_trigger_pct: globalForm[upstream] } : {}) };
+            return (
+              <div className="pricing-global" key={upstream}>
+                <div className="pricing-row-head"><strong>{upstream}</strong>
+                  <label className="ap-scope-toggle" title={cfg.auto_pricing_enabled === false ? 'nonaktif — tidak diproses' : 'aktif — diproses tiap cycle'}>
+                    <input type="checkbox" checked={cfg.auto_pricing_enabled !== false} disabled={savingGlobal === upstream}
+                      onChange={e => toggleScope(upstream, e.target.checked)} />
+                    <span>{cfg.auto_pricing_enabled === false ? 'off' : 'on'}</span>
+                  </label>
+                  <button className="btn btn-sm btn-primary" onClick={() => saveGlobalTrigger(upstream)} disabled={savingGlobal === upstream}>
+                    {savingGlobal === upstream ? '…' : 'Simpan'}
+                  </button>
                 </div>
-              );
-            })}
+                <label className="pricing-field"><span>global_trigger_pct (%)</span>
+                  <input type="number" step="0.0001" min="0" placeholder="10 (default)" value={cfg.global_trigger_pct ?? ''}
+                    onChange={e => setGlobalForm(prev => ({ ...prev, [upstream]: e.target.value }))} />
+                </label>
+              </div>
+            );
+          })}
+          {!(globalsData?.globals && Object.keys(globalsData.globals).length) && <div className="dt-empty">Belum ada konfigurasi upstream.</div>}
         </div>
+      </section>
 
-        {/* Target Price Table */}
-        <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
-          <table className="w-full text-left text-sm border-collapse font-mono">
-            <thead className="sticky top-0 bg-[var(--table-head-bg)] text-[var(--text-sub)] font-sans text-xs uppercase tracking-wider border-b border-black/10 dark:border-white/10">
-              <tr>
-                <th className="px-5 py-3.5">Model ID</th>
-                <th className="px-5 py-3.5 text-right">Ask Saat Ini</th>
-                <th className="px-5 py-3.5 text-right">Kompetitor</th>
-                <th className="px-5 py-3.5 text-center">Trigger %</th>
-                <th className="px-5 py-3.5 text-right font-bold text-sky-600 dark:text-sky-400">Target Ask</th>
-                <th className="px-5 py-3.5 text-center">Status</th>
-                <th className="px-5 py-3.5 text-right font-sans">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/5 dark:divide-white/10 font-mono text-xs sm:text-sm">
+      {/* Tab per provider */}
+      <div className="ap-tabs">
+        {provs.map(u => (
+          <button key={u} className={'ap-tab' + (prov === u ? ' active' : '')} onClick={() => setProv(u)}>
+            {u} <span className="faint">({byProv[u].length})</span>
+          </button>
+        ))}
+      </div>
+
+      <section className="panel">
+        <div className="panel-head"><div><h2>Target harga per model · {prov || '—'}</h2>
+          <div className="sub">klik set utk simpan trigger% model ini (daemon baca tiap cycle)</div>
+        </div></div>
+        <SkeletonBlock loading={loading} rows={6}>
+          <table className="tbl">
+            <thead><tr>
+              <th>Model</th><th className="right">Ask skrg</th><th className="right">Kompetitor</th>
+              <th className="right">Trigger %</th>
+              <th className="right">Target</th><th>Status</th><th>Aksi</th>
+            </tr></thead>
+            <tbody>
               {rows.map((c, i) => {
-                const bare = (c.model_id || '').split('/').pop();
-                const key = `${c.slug}|${bare}`;
+                // FIX (2026-08-15): key bare — konsisten dgn cfgMap (strip prefix
+                // upstream berulang) supaya config custom terdeteksi utk cline-pass.
+                const key = `${c.slug}|${(c.model_id || '').split('/').pop()}`;
                 const cfg = cfgMap[key];
                 const dflt = defaultBand(c.slug, c.model_id);
                 const trigger = cfg ? cfg.trigger_pct : dflt.trigger;
                 const f = form[key] || {};
+                const flood = c.official * (trigger / 100);
                 const synced = Math.abs(Number(c.ask_in) - Number(c.target)) < 0.00002;
-                const action = (c.action || '').toLowerCase();
-                const isUndercut = action.includes('undercut');
-                const isLeader = action === 'leader';
-
+                const action = (c.action || '');
+                const status = action === 'leader' ? 'LEADER'
+                  : action === 'undercut' ? 'UNDERCUT'
+                  : action === 'stable' ? 'STABLE'
+                  : (action === 'hold' ? 'HOLD' : (action || '—'));
+                const statusCls = action === 'leader' ? 'tag tag-ok'
+                  : action === 'undercut' ? 'tag tag-imp'
+                  : 'tag';
                 return (
-                  <tr
-                    key={i}
-                    onClick={() => setSelectedModel(c)}
-                    className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                  >
-                    <td className="px-5 py-3">
-                      <div className="font-bold text-[var(--text-title)] text-sm">{c.model_id}</div>
-                      {cfg && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold inline-block mt-0.5">
-                          custom: {cfg.trigger_pct}%
-                        </span>
-                      )}
+                  <tr key={i} className={!synced && c.target ? 'row-dirty' : ''}>
+                    <td><span className="prov-name">{c.model_id}</span>
+                      {cfg && <span className="prov-sub"> custom</span>}
                     </td>
-
-                    <td className="px-5 py-3 text-right font-bold text-[var(--text-title)]">
-                      {c.ask_in != null ? `$${Number(c.ask_in).toFixed(4)}` : '—'}
+                    <td className="right tnum">${Number(c.our ?? c.ask_in).toFixed(4)}</td>
+                    <td className="right tnum faint">{fmtCompetitorPrice(c.competitor_price)}</td>
+                    <td className="right">
+                      <input className="ap-in" type="text" inputMode="decimal" placeholder="%" value={f.trigger ?? trigger}
+                        onChange={e => setForm({ ...form, [key]: { ...f, trigger: e.target.value } })} />
                     </td>
-
-                    <td className="px-5 py-3 text-right text-[var(--text-sub)]">
-                      {c.competitor_price != null ? `$${Number(c.competitor_price).toFixed(4)}` : '—'}
+                    <td className="right tnum"><span className="pos">${Number(c.target).toFixed(4)}</span></td>
+                    <td>
+                      <span className={statusCls}>{status}</span>
+                      {!synced && c.target ? <span className="prov-sub" title="harga skrg belum sesuai target — menunggu cycle berikutnya"> ⏳</span> : null}
                     </td>
-
-                    <td className="px-5 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0.1"
-                        value={f.trigger !== undefined ? f.trigger : trigger}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            [key]: { ...prev[key], trigger: e.target.value },
-                          }))
-                        }
-                        className="w-20 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-2.5 py-1 text-center text-xs text-[var(--text-title)] font-mono outline-none focus:border-sky-500 shadow-inner"
-                      />
-                    </td>
-
-                    <td className="px-5 py-3 text-right font-extrabold text-sky-600 dark:text-sky-400">
-                      {c.target != null ? `$${Number(c.target).toFixed(4)}` : '—'}
-                    </td>
-
-                    <td className="px-5 py-3 text-center font-sans">
-                      <span
-                        className={`ios-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                          isUndercut
-                            ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30'
-                            : isLeader
-                            ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
-                            : 'bg-black/5 dark:bg-white/10 text-[var(--text-sub)] border border-black/10 dark:border-white/10'
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            isUndercut ? 'bg-sky-500 animate-pulse' : isLeader ? 'bg-indigo-500' : 'bg-zinc-400'
-                          }`}
-                        />
-                        {(c.action || 'HOLD').toUpperCase()}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-3 text-right font-sans" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => saveConfig(c.slug, bare, cfg?.id)}
-                          disabled={saving === key}
-                          className="ios-btn-glass px-3 py-1 rounded-xl text-xs shadow-sm cursor-pointer"
-                        >
-                          {saving === key ? '…' : cfg ? 'Update' : 'Set'}
-                        </button>
-
-                        {cfg && (
-                          <button
-                            title="kembali ke default"
-                            onClick={() => deleteConfig(cfg.id, c.slug, bare)}
-                            disabled={saving === key}
-                            className="p-1.5 rounded-xl hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        )}
-                      </div>
+                    <td>
+                      <button className="btn btn-sm" disabled={saving === key} onClick={() => saveConfig(c.slug, c.model_id)}>
+                        {saving === key ? '…' : (cfg ? 'Update' : 'Set')}
+                      </button>
+                      {cfg && <button className="btn btn-sm btn-ghost" disabled={saving === key} onClick={() => resetConfig(cfg.id, c.slug, c.model_id)} title="kembali ke default">↺</button>}
                     </td>
                   </tr>
                 );
               })}
-
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-[var(--text-sub)] font-sans text-sm">
-                    Belum ada data model untuk provider ini. Jalankan siklus daemon.
-                  </td>
-                </tr>
-              )}
+              {!rows.length && !loading && <tr><td colSpan={7} className="dt-empty">Belum ada data — jalankan cycle dulu.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </SkeletonBlock>
       </section>
 
-      {/* ── 4. Algo Log Terminal ── */}
-      <section className="ios-glass-card overflow-hidden shadow-lg">
-        <div className="p-4 border-b border-black/10 dark:border-white/10 bg-slate-100/70 dark:bg-black/40 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[var(--text-title)] font-mono text-xs font-bold">
-            <Terminal size={15} />
-            <span>Log Eksekusi Algo Terakhir</span>
-          </div>
-          <button
-            onClick={() => {
-              navigator.clipboard?.writeText(data?.log || '');
-              success('Log disalin ke clipboard!');
-            }}
-            className="ios-btn-glass flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
-          >
-            <Copy size={13} />
-            <span>Copy Log</span>
-          </button>
-        </div>
-        <pre className="p-4 text-xs font-mono text-[var(--text-body)] bg-black/5 dark:bg-black/40 overflow-x-auto max-h-52 leading-relaxed">
-          {data?.log || '—'}
-        </pre>
+      <section className="panel">
+        <div className="panel-head"><div><h2>Log algo</h2><div className="sub">80 baris terakhir</div></div></div>
+        <pre className="log-pre">{data?.log || '—'}</pre>
       </section>
-
-      {/* Slide-out Inspector Drawer */}
-      <ModelDetailDrawer
-        model={selectedModel}
-        isOpen={Boolean(selectedModel)}
-        onClose={() => setSelectedModel(null)}
-        onUpdated={reload}
-      />
     </div>
   );
 }

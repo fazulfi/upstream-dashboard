@@ -2040,111 +2040,19 @@ def api_budget_aliases():
         return jsonify([])
 
 
-@app.route("/api/budgets/<path:mid>", methods=["PUT"])
+@app.route("/api/budgets/<mid>", methods=["PUT"])
 def api_budget_put(mid):
     body = request.get_json(silent=True) or {}
     payload = {
-        "maxInputPerMtok": body.get("max_input_per_mtok") if body.get("max_input_per_mtok") is not None else body.get("maxInputPerMtok"),
-        "maxOutputPerMtok": body.get("max_output_per_mtok") if body.get("max_output_per_mtok") is not None else body.get("maxOutputPerMtok"),
-        "minDiscountPct": body.get("min_discount_pct") if body.get("min_discount_pct") is not None else body.get("minDiscountPct"),
+        "maxInputPerMtok": body.get("max_input_per_mtok"),
+        "maxOutputPerMtok": body.get("max_output_per_mtok"),
+        "minDiscountPct": body.get("min_discount_pct"),
         "enabled": body.get("enabled", True),
     }
     d = inferhub_put(f"/budgets/{mid}", payload)
     if d is None:
         return jsonify({"error": "budget update failed"}), 502
     return jsonify({"ok": True})
-
-
-@app.route("/api/publisher/providers/usage-windows")
-def api_publisher_providers_usage_windows():
-    """Batch usage windows per provider from InferHub management API."""
-    d = inferhub_get("/publisher/providers/usage-windows")
-    if d is None:
-        return jsonify({})
-    return jsonify(d)
-
-
-@app.route("/api/publisher/earnings/transfer", methods=["POST"])
-def api_publisher_earnings_transfer():
-    """Transfer publisher earnings to consumer balance."""
-    body = request.get_json(silent=True) or {}
-    amount = body.get("amount")
-    if amount is None or str(amount).strip() == "":
-        return jsonify({"error": "amount required"}), 400
-    try:
-        val = float(amount)
-        if math.isnan(val) or math.isinf(val) or val <= 0:
-            return jsonify({"error": "Amount must be greater than 0"}), 400
-    except (ValueError, TypeError):
-        return jsonify({"error": "invalid numeric amount"}), 400
-
-    payload = {"amount": str(amount).strip()}
-    d = inferhub_post("/publisher/earnings/transfer", payload)
-    if d is None:
-        return jsonify({"error": "transfer failed (network/upstream)"}), 502
-    return jsonify(d if isinstance(d, dict) else {"ok": True})
-
-
-@app.route("/api/publisher/withdrawals/otp", methods=["POST"])
-def api_publisher_withdrawals_otp():
-    """Request OTP for payout withdrawal."""
-    body = request.get_json(silent=True) or {}
-    dest = body.get("destination")
-    amount = body.get("amount") if body.get("amount") is not None else (body.get("amountUsdc") if body.get("amountUsdc") is not None else body.get("amount_usdc"))
-    if not dest or not str(dest).strip() or amount is None or str(amount).strip() == "":
-        return jsonify({"error": "destination and amount required"}), 400
-    try:
-        val = float(amount)
-        if math.isnan(val) or math.isinf(val) or val <= 0:
-            return jsonify({"error": "Amount must be greater than 0"}), 400
-    except (ValueError, TypeError):
-        return jsonify({"error": "invalid numeric amount"}), 400
-
-    payload = {
-        "destination": str(dest).strip(),
-        "amountUsdc": str(amount).strip(),
-    }
-    d = inferhub_post("/publisher/withdrawals/otp", payload)
-    if d is None:
-        return jsonify({"error": "failed to request withdrawal OTP"}), 502
-    return jsonify(d if isinstance(d, dict) else {"ok": True})
-
-
-@app.route("/api/publisher/withdrawals", methods=["POST"])
-def api_publisher_withdrawals_post():
-    """Submit payout withdrawal with OTP verification."""
-    body = request.get_json(silent=True) or {}
-    dest = body.get("destination")
-    amount = body.get("amount") if body.get("amount") is not None else (body.get("amountUsdc") if body.get("amountUsdc") is not None else body.get("amount_usdc"))
-    otp = body.get("otp") if body.get("otp") is not None else body.get("code")
-    if not dest or not str(dest).strip() or amount is None or str(amount).strip() == "" or not otp or not str(otp).strip():
-        return jsonify({"error": "destination, amount, and otp required"}), 400
-    try:
-        val = float(amount)
-        if math.isnan(val) or math.isinf(val) or val <= 0:
-            return jsonify({"error": "Amount must be greater than 0"}), 400
-    except (ValueError, TypeError):
-        return jsonify({"error": "invalid numeric amount"}), 400
-
-    payload = {
-        "destination": str(dest).strip(),
-        "amountUsdc": str(amount).strip(),
-        "otp": str(otp).strip(),
-    }
-    d = inferhub_post("/publisher/withdrawals", payload)
-    if d is None:
-        return jsonify({"error": "withdrawal submission failed"}), 502
-    return jsonify(d if isinstance(d, dict) else {"ok": True})
-
-
-@app.route("/api/publisher/withdrawals/destinations")
-def api_publisher_withdrawals_destinations():
-    """List verified payout destinations."""
-    d = inferhub_get("/publisher/withdrawals/destinations")
-    if d is None:
-        return jsonify([])
-    return jsonify(d)
-
 
 
 @app.route("/api/topups", methods=["POST"])
@@ -2266,7 +2174,6 @@ def api_combos_available():
         return jsonify([])
 
 
-@app.route("/api/usage/breakdown")
 @app.route("/api/breakdown")
 def api_breakdown():
     rng = request.args.get("range", "7d")
@@ -2280,7 +2187,7 @@ def api_breakdown():
 def api_market():
     d = inferhub_get("/market")
     if not d:
-        return jsonify({"models": [], "error": "unavailable"})
+        return jsonify({"error": "unavailable"})
     return jsonify(d)
 
 
@@ -2380,18 +2287,7 @@ def api_usage_cache_stats():
     rng = request.args.get("range", "30d")
     d = inferhub_get("/usage/cache-stats", {"range": rng})
     if not d:
-        return jsonify({
-            "error": "unavailable",
-            "range": rng,
-            "rows": [],
-            "totals": {
-                "reqs": 0,
-                "promptTokens": 0,
-                "cachedTokens": 0,
-                "cacheWriteTokens": 0,
-                "hitRate": 0.0,
-            },
-        })
+        return jsonify({"error": "unavailable", "range": rng})
     return jsonify(d)
 
 
@@ -2411,22 +2307,10 @@ def api_usage_logs():
         params["status"] = status
     d = inferhub_get("/usage/logs", params)
     if not d:
-        return jsonify({
-            "error": "unavailable",
-            "rows": [],
-            "total": 0,
-            "rangeTotal": 0,
-            "page": int(page) if str(page).isdigit() else 1,
-            "pageSize": int(pageSize) if str(pageSize).isdigit() else 25,
-            "totalCostUsdc": "0.00",
-            "totalTokens": 0,
-            "totalSavedUsdc": "0.00",
-            "range": rng,
-        })
+        return jsonify({"error": "unavailable", "rows": [], "range": rng})
     return jsonify(d)
 
 
-@app.route("/api/usage/logs/models")
 @app.route("/api/usage/logs-models")
 def api_usage_logs_models():
     rng = request.args.get("range", "24h")

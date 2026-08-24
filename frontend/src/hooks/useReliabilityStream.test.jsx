@@ -38,7 +38,7 @@ describe('reliability stream contract', () => {
     expect(isApiEnabled('/api/reliability/summary')).toBe(true);
     expect(isApiEnabled('/api/reliability/stream')).toBe(true);
     expect(isApiEnabled('/api/reliability/arm')).toBe(true);
-    expect(isApiEnabled('/api/unknown-endpoint')).toBe(false);
+    expect(isApiEnabled('/api/market')).toBe(false);
   });
 
   it('parses event id, type, multiline data, and ignores keepalive comments', () => {
