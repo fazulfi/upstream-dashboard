@@ -27,6 +27,7 @@ import app  # noqa: E402
 @pytest.fixture()
 def client():
     app.app.config["TESTING"] = True
+    app._rl.clear()
     with mock.patch("app.inferhub_get", return_value=None), \
          mock.patch("app.inferhub_post", return_value=None), \
          mock.patch("app.inferhub_put", return_value=None), \

@@ -34,6 +34,8 @@ def _slug_of(name):
 
 
 def _f(v, default=0.0):
+    if isinstance(v, dict):
+        v = v.get("kurs_usd_idr") or v.get("kurs_ref_usd_idr") or v.get("kurs") or (next(iter(v.values())) if v else default)
     try:
         return float(v)
     except (TypeError, ValueError):
