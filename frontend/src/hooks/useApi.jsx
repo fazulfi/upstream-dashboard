@@ -40,6 +40,7 @@ function authHeaders(extra = {}) {
 }
 
 const FOCUSED_API_PREFIXES = [
+  '/api/data',
   '/api/auto-pricing',
   '/api/pricing',
   '/api/usage',
@@ -49,6 +50,11 @@ const FOCUSED_API_PREFIXES = [
   '/api/finance',
   '/api/payouts',
   '/api/fleet-health',
+  '/api/history',
+  '/api/upstreams',
+  '/api/earnings-log',
+  '/api/earnings-alltime',
+  '/api/catalog',
 ];
 const MANUAL_ASK_PATHS = new Set(['/api/orderbook', '/api/ask', '/api/breakdown']);
 const RELIABILITY_PREFIX = '/api/reliability';

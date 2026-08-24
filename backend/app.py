@@ -338,19 +338,46 @@ def db_read_finance():
         def _norm(rows):
             return [dict(r) for r in rows]
 
+        norm_assets = _norm(assets)
+        norm_providers = _norm(providers)
+        norm_impairments = _norm(impairments)
+        norm_refunds = _norm(refunds)
+        norm_payouts = [{"amount_usdc": p.get("amount_usdc"), "status": p.get("status") or "confirmed",
+                         "date": p.get("date"), "id": p.get("id")} for p in payouts]
+
         res = compute_finance(
-            assets=_norm(assets),
-            payouts=[{"amount_usdc": p.get("amount_usdc"), "status": p.get("status") or "confirmed",
-                      "date": p.get("date"), "id": p.get("id")} for p in payouts],
-            refunds=_norm(refunds),
-            impairments=_norm(impairments),
+            assets=norm_assets,
+            payouts=norm_payouts,
+            refunds=norm_refunds,
+            impairments=norm_impairments,
             kurs_meta=kurs,
-            providers=_norm(providers),
+            providers=norm_providers,
         )
         res["source"] = "db (finance_rules)"
+        res["providers"] = norm_providers
+        res["payout_confirmed"] = res.get("total_payout", 0.0)
+        res["amortization"] = res.get("amort_usd", 0.0)
+        res["impairment"] = res.get("total_imp_loss_usd", 0.0)
+        res["impairments_count"] = len(res.get("impairments", []))
+        res["kurs_meta"] = kurs
         return res
     except Exception as e:
-        return {"error": str(e), "source": "db_read_finance failed"}
+        return {
+            "error": str(e),
+            "source": "db_read_finance failed",
+            "assets": [],
+            "providers": [],
+            "impairments": [],
+            "payouts": [],
+            "refunds": [],
+            "net_income": 0.0,
+            "payout_confirmed": 0.0,
+            "amortization": 0.0,
+            "impairment": 0.0,
+            "impairments_count": 0,
+            "kurs": 17801.17,
+            "kurs_meta": 17801.17,
+        }
 
 
 def db_read_earning_range(range_id):
@@ -641,7 +668,7 @@ def _auth_gate():
 @app.before_request
 def _rate_limit():
     """Rate limit per-IP utk cegah brute-force. Login dikecualikan (punya sendiri)."""
-    if request.path == "/health":
+    if request.path in ("/health", "/api/login") or request.method == "OPTIONS":
         return None
     ip = request.remote_addr or "?"
     if not logic.rate_limit_hit(_rl, ip, RL_LIMIT, RL_WINDOW):
@@ -1363,7 +1390,7 @@ def api_finance():
 @app.route("/api/payouts")
 def api_payouts():
     c = get_cache()
-    wd = c["withdrawals"]
+    wd = c.get("withdrawals", []) or []
     # prefer live API withdrawals; build payout rows
     rows = []
     for i, w in enumerate(wd, 1):
@@ -1372,16 +1399,32 @@ def api_payouts():
             "date": (w.get("requestedAt") or "")[:10],
             "note": "Payout · " + (w.get("status") or ""),
             "usd": float(w.get("amountUsdc") or 0),
-            "status": w.get("status"),
+            "status": w.get("status") or "confirmed",
             "destination": w.get("destination"),
         })
-    # if API empty, fall back to ledger payouts
+    # if API empty, fall back to DB payouts, then ledger payouts
+    if not rows:
+        try:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("SELECT id, date, amount_usdc, status, destination FROM payouts ORDER BY date DESC")
+                db_rows = cur.fetchall()
+                for i, p in enumerate(db_rows, 1):
+                    rows.append({
+                        "ref": p.get("id") or f"payout-{i}",
+                        "date": str(p.get("date") or "")[:10],
+                        "note": "Payout · " + str(p.get("status") or "confirmed"),
+                        "usd": float(p.get("amount_usdc") or 0),
+                        "status": p.get("status") or "confirmed",
+                        "destination": p.get("destination"),
+                    })
+        except Exception:
+            pass
     if not rows:
         ledger = load_json(LEDGER, {})
         data = ledger.get("data", ledger) if isinstance(ledger, dict) else {}
         payouts = data.get("payouts", []) if isinstance(data, dict) else []
         rows = [
-            {"ref": p.get("id") or f"payout-{i+1}", "date": p.get("date", ""), "note": p.get("note", ""), "usd": float(p.get("usd") or 0)}
+            {"ref": p.get("id") or f"payout-{i+1}", "date": p.get("date", ""), "note": p.get("note", ""), "usd": float(p.get("usd") or 0), "status": p.get("status", "confirmed")}
             for i, p in enumerate(payouts)
         ]
     total = round(sum(r["usd"] for r in rows), 2)
@@ -1775,7 +1818,7 @@ def _load_pricing_merged():
         upstream_rows = {r["upstream"]: r for r in cur.fetchall()}
         cur.execute("SELECT id, max_ask_pct, platform_fee_pct, publisher_share_pct FROM pricing_config WHERE id=1")
         pc = cur.fetchone() or {}
-        cur.execute("SELECT upstream, model_id, trigger_pct, rebound_pct, updated_at FROM auto_pricing_config ORDER BY upstream, model_id")
+        cur.execute("SELECT id, upstream, model_id, trigger_pct, rebound_pct, updated_at FROM auto_pricing_config ORDER BY upstream, model_id")
         overrides = [dict(r) for r in cur.fetchall()]
     orderbook = _orderbook_payload()["models"]
     globals_cfg = {}
@@ -2040,7 +2083,7 @@ def api_budget_aliases():
         return jsonify([])
 
 
-@app.route("/api/budgets/<path:mid>", methods=["PUT"])
+@app.route("/api/budgets/<path:mid>", methods=["PUT", "POST"])
 def api_budget_put(mid):
     body = request.get_json(silent=True) or {}
     payload = {
@@ -2281,6 +2324,19 @@ def api_market():
     d = inferhub_get("/market")
     if not d:
         return jsonify({"models": [], "error": "unavailable"})
+    if isinstance(d, list):
+        return jsonify({"models": d})
+    if isinstance(d, dict):
+        if "models" in d and isinstance(d["models"], list):
+            return jsonify(d)
+        if "data" in d and isinstance(d["data"], list):
+            return jsonify({"models": d["data"]})
+        if "items" in d and isinstance(d["items"], list):
+            return jsonify({"models": d["items"]})
+        if not any(k in d for k in ("models", "error", "message")):
+            extracted = [{"model": k, **v} for k, v in d.items() if isinstance(v, dict)]
+            if extracted:
+                return jsonify({"models": extracted})
     return jsonify(d)
 
 
@@ -2290,7 +2346,7 @@ def api_catalog():
     if not d:
         d = inferhub_get("/catalog")
     if not d:
-        return jsonify({"error": "unavailable"})
+        return jsonify({"upstreams": [], "error": "unavailable"})
     if isinstance(d, list):
         return jsonify({"upstreams": d})
     return jsonify(d)
@@ -2390,6 +2446,8 @@ def api_usage_cache_stats():
                 "cachedTokens": 0,
                 "cacheWriteTokens": 0,
                 "hitRate": 0.0,
+                "completionTokens": 0,
+                "estimatedSavingsUsdc": 0.0,
             },
         })
     return jsonify(d)
@@ -2404,11 +2462,14 @@ def api_usage_logs():
     status = request.args.get("status", "all")
     sort = request.args.get("sort", "ts")
     dir_ = request.args.get("dir", "desc")
+    q = request.args.get("q", "").strip()
     params = {"range": rng, "page": page, "pageSize": pageSize, "sort": sort, "dir": dir_}
     if model:
         params["model"] = model
     if status and status != "all":
         params["status"] = status
+    if q:
+        params["q"] = q
     d = inferhub_get("/usage/logs", params)
     if not d:
         return jsonify({
@@ -2529,7 +2590,7 @@ def api_asks():
     return jsonify({"rows": aggregates, "count": len(aggregates)})
 
 
-@app.route("/api/ask", methods=["PUT"])
+@app.route("/api/ask", methods=["PUT", "POST"])
 def api_ask_put():
     """Set ask tab-wide. Body: {upstream_catalog_model_id, ask_input_per_mtok, ask_output_per_mtok}.
     Path: PUT /publisher/upstreams/{slug}/asks/{upstreamCatalogModelId}
@@ -2787,7 +2848,8 @@ def api_auto_pricing_config():
         return jsonify({"configs": []})
 
 
-@app.route("/api/auto-pricing/config", methods=["PUT"])
+@app.route("/api/auto-pricing/config", methods=["PUT", "POST"])
+@app.route("/api/pricing/override", methods=["PUT", "POST"])
 def api_auto_pricing_config_put():
     """Upsert config utk satu upstream×model. Body: {upstream, model_id, trigger_pct}.
     rebound_pct diabaikan (legacy field, dihapus dari permukaan API v2).
@@ -2832,6 +2894,7 @@ def api_auto_pricing_config_put():
 
 
 @app.route("/api/auto-pricing/config/<int:cid>", methods=["DELETE"])
+@app.route("/api/pricing/override/<int:cid>", methods=["DELETE"])
 def api_auto_pricing_config_delete(cid):
     """Hapus config → kembali ke default. Saat ini config kosong = default."""
     conn = db_connect()
