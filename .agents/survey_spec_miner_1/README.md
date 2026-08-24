@@ -1,1 +1,0 @@
-# Survey Spec Miner 1 Working Directory

@@ -5,13 +5,10 @@ import LoginGate from './LoginGate'
 import { setSessionToken } from '../hooks/useApi'
 
 describe('LoginGate', () => {
-  it('renders the login form and ambient mesh when there is no token', () => {
+  it('renders the login form when there is no token', () => {
     render(<LoginGate><div>protected content</div></LoginGate>)
     expect(screen.getByRole('heading', { name: 'Upstream — Operations' })).toBeInTheDocument()
     expect(screen.queryByText('protected content')).not.toBeInTheDocument()
-    expect(document.querySelector('.ambient-mesh-container')).toBeInTheDocument()
-    expect(document.querySelector('.ambient-mesh-dark')).toBeInTheDocument()
-    expect(document.querySelector('.ambient-mesh-light')).toBeInTheDocument()
   })
 
   it('disables submit for an empty password', () => {
@@ -19,11 +16,10 @@ describe('LoginGate', () => {
     expect(screen.getByRole('button', { name: 'Masuk' })).toBeDisabled()
   })
 
-  it('stores the token and reveals children after successful login with operator name', async () => {
+  it('stores the token and reveals children after successful login', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: 'token-1' }) }))
     render(<LoginGate><div>protected content</div></LoginGate>)
     fireEvent.change(screen.getByPlaceholderText('Dashboard password'), { target: { value: 'secret' } })
-    fireEvent.change(screen.getByPlaceholderText(/Operator name/i), { target: { value: 'Operator John' } })
     fireEvent.click(screen.getByRole('button', { name: 'Masuk' }))
     await waitFor(() => expect(screen.getByText('protected content')).toBeInTheDocument())
     setSessionToken('token-1')
