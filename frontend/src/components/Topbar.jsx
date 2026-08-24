@@ -83,29 +83,7 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
           </div>
         </div>
 
-        {/* Center: Desktop Segmented Navigation Tabs (Apple Spatial Tab Bar) */}
-        <nav aria-label="Topbar Tabs" className="hidden lg:flex ios-tab-bar">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.Icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    isActive
-                      ? 'active ios-pill-active font-extrabold'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5'
-                  }`
-                }
-              >
-                <Icon size={14} className="opacity-80" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+        
 
         {/* Right: Quick Search, Status Pill & Theme Switcher */}
         <div className="flex items-center gap-2.5">
@@ -143,3 +121,4 @@ export default function Topbar({ onOpenSearch, onToggleSidebar, streamStatus = '
     </header>
   );
 }
+
