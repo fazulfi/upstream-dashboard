@@ -108,10 +108,10 @@ export default function Layout() {
       </div>
 
       {/* Mobile Drawer & Desktop Persistent Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {/* Sidebar removed */}
 
       {/* Main App Content Column (Offset right on desktop for persistent w-64 sidebar) */}
-      <div className="flex-1 flex flex-col lg:pl-64 min-w-0 transition-all duration-300">
+      <div className="flex-1 flex flex-col  min-w-0 transition-all duration-300">
         {/* Topbar Header */}
         <div className="sticky top-0 z-40">
           <Topbar
