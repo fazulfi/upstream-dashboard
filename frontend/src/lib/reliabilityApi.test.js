@@ -15,6 +15,10 @@ describe('reliabilityApi', () => {
     apiFetch.mockResolvedValue(ok({ data: { heartbeat: 'fresh' } }))
     await expect(reliabilityApi.summary()).resolves.toEqual({ data: { heartbeat: 'fresh' } })
     expect(apiFetch).toHaveBeenCalledWith('/api/reliability/summary')
+
+    apiFetch.mockResolvedValue(ok({ 'prov-1': [] }))
+    await expect(reliabilityApi.usageWindows()).resolves.toEqual({ 'prov-1': [] })
+    expect(apiFetch).toHaveBeenCalledWith('/api/publisher/providers/usage-windows')
   })
 
   it('bounds list limits and builds query strings', async () => {

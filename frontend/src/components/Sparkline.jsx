@@ -1,35 +1,68 @@
 /**
- * Sparkline — mini area/line chart satu warna, tanpa axis. Untuk konteks tren di KPI.
- * Data: array angka. Render native SVG (ringan, cepat, tadinya honky — ganti pakai recharts utk besar).
+ * Sparkline — mini area/line chart with Apple HIG gradient volume and crisp stroke.
+ * Data: array of numeric values. Renders native SVG for maximum lightweight performance.
  */
+import React, { useId } from 'react';
 
-export default function Sparkline({ data, color = 'var(--accent)', height = 32, width = 120 }) {
+export default function Sparkline({
+  data,
+  color = 'var(--accent)',
+  height = 32,
+  width = 120,
+  className = '',
+}) {
+  const gradientId = useId();
+  const cleanGradId = `sp-${gradientId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+
   if (!data || data.length < 2) {
-    return <div className="sparkline empty" style={{ height, width }} />;
+    return (
+      <div
+        className={`sparkline empty flex items-center justify-center rounded-lg bg-black/[0.02] dark:bg-white/[0.02] ${className}`}
+        style={{ height, width }}
+        aria-hidden="true"
+      />
+    );
   }
+
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
   const step = Math.max(1, Math.floor(data.length / 60));
-  const pts = data.filter((_, i) => i % step === 0)
-    .map((v, i, arr) => {
-      const x = (i / (arr.length - 1)) * width;
-      const y = height - 3 - ((v - min) / range) * (height - 6);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
+
+  const filtered = data.filter((_, i) => i % step === 0);
+  const pts = filtered.map((v, i, arr) => {
+    const x = (i / (arr.length - 1)) * width;
+    const y = height - 3 - ((v - min) / range) * (height - 6);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
   const line = pts.join(' ');
   const area = `0,${height} ${line} ${width},${height}`;
-  const gradId = 'sp-' + (color + '').replace(/[^a-zA-Z0-9]/g, '');
+
   return (
-    <svg className="sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg
+      className={`sparkline overflow-visible ${className}`}
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
       <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        <linearGradient id={cleanGradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.30" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
         </linearGradient>
       </defs>
-      <polygon points={area} fill={`url(#${gradId})`} />
-      <polyline points={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <polygon points={area} fill={`url(#${cleanGradId})`} />
+      <polyline
+        points={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
